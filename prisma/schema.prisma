@@ -1,0 +1,123 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id        Int      @id @default(autoincrement())
+  name      String
+  email     String   @unique
+  password  String
+  role      String   @default("user")
+  status    String   @default("pending")
+  createdAt DateTime @default(now())
+
+  logs       DayLog[]
+  pomodoros  PomodoroSession[]
+  roadmap    RoadmapItem[]
+  lessons    Lesson[]
+  english    EnglishLesson[]
+  mission    MissionConfig?
+  aiReports  AIReport[]
+  codeSessions CodeSession[]
+}
+
+model DayLog {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date      String
+  hours     Float    @default(0)
+  topic     String   @default("")
+  notes     String   @default("")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, date])
+}
+
+model PomodoroSession {
+  id             Int      @id @default(autoincrement())
+  userId         Int
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date           String
+  sessions       Int      @default(0)
+  currentEndTime BigInt?  @default(0)
+  currentMode    String   @default("work")
+  updatedAt      DateTime @updatedAt
+
+  @@unique([userId, date])
+}
+
+model RoadmapItem {
+  id        String   @id
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  completed Boolean  @default(false)
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, id])
+}
+
+model MissionConfig {
+  id          Int      @id @default(autoincrement())
+  userId      Int      @unique
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  startDate   DateTime @default(now())
+  totalHours  Float    @default(0)
+}
+
+model Lesson {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  track     String   @default("javascript")
+  topic     String
+  content   String
+  order     Int      @default(0)
+  completed Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+model EnglishLesson {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      String
+  title     String   @default("")
+  content   String
+  metadata  String   @default("{}")
+  order     Int      @default(0)
+  completed Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+model AIReport {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date      String   @default("")
+  content   String
+  createdAt DateTime @default(now())
+}
+
+model CodeSession {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      String   @default("explain")
+  track     String   @default("javascript")
+  input     String
+  output    String
+  createdAt DateTime @default(now())
+}
+
+model Settings {
+  id        Int      @id @default(1)
+  aiServer  String   @default("http://100.69.50.64:8080")
+  aiHost    String   @default("100.69.50.64")
+  updatedAt DateTime @updatedAt @default(now())
+}
