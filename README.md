@@ -101,7 +101,7 @@ cd LuxTTS && pip install -e . && pip install faster-whisper librosa soundfile
 ## 🔑 Biến môi trường (.env.local)
 
 ```
-DATABASE_URL=postgresql://newhat_user:newhat123@localhost:5432/newhat
+DATABASE_URL=postgresql://user:password@localhost:5432/dbname
 AI_SERVER=http://192.168.1.9:8080
 LUXTTS_SERVER=http://localhost:8880
 JWT_SECRET=your-secret-key
