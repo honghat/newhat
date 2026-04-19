@@ -128,4 +128,4 @@ HTML/CSS, JavaScript, TypeScript, React, Next.js, Node.js, Python, FastAPI, Java
 
 ## 📄 License
 
-Private project
+Hạt
