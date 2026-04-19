@@ -108,11 +108,7 @@ JWT_SECRET=your-secret-key
 WHISPER_MODEL=medium
 ```
 
-## 💻 Máy AI Local (192.168.1.9)
 
-- Wake-on-LAN MAC: `9c:6b:00:17:93:7a`
-- SSH: `hatnguyen@192.168.1.9`
-- Tắt/bật qua nút trên trang chủ
 
 ## 📖 Routes chính
 
