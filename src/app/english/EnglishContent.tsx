@@ -258,7 +258,6 @@ export default function EnglishContent() {
       data.forEach((h: any) => {
         if (h.type.endsWith('_pending')) {
           // Skip if task is older than 5 mins
-          const ageS = (Date.now() - new Promise(()=>{})) / 1000; // placeholder for real date
           const createdAt = new Date(h.createdAt || Date.now()).getTime();
           if (Date.now() - createdAt > 300000) return; 
 
