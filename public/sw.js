@@ -1,5 +1,5 @@
-const CACHE = 'newhat-v1';
-const STATIC = ['/', '/timer', '/learn', '/english', '/roadmap', '/manifest.json', '/icon-192.png', '/icon-512.png'];
+const CACHE = 'newhat-v2';
+const STATIC = ['/', '/timer', '/learn', '/english', '/roadmap', '/manifest.json'];
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(STATIC)).catch(() => {}));
@@ -18,8 +18,8 @@ self.addEventListener('fetch', (e) => {
   if (request.method !== 'GET') return;
   const url = new URL(request.url);
 
-  // Never cache API calls
-  if (url.pathname.startsWith('/api/')) return;
+  // Never cache API calls or Next.js internal chunks (fixes stale factory error)
+  if (url.pathname.startsWith('/api/') || url.pathname.includes('/_next/')) return;
 
   // Network-first for HTML (so new deploys work)
   if (request.mode === 'navigate' || request.headers.get('accept')?.includes('text/html')) {

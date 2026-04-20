@@ -143,29 +143,65 @@ export default function BottomNav({ session }: { session: AuthUser | null }) {
       </aside>
 
       {/* Mobile Bottom Nav */}
-      <nav className="bottom-nav" style={{ position: 'fixed', bottom: 0, left: 0, right: 0, background: 'var(--surface)', borderTop: '1px solid var(--border)', zIndex: 50, paddingBottom: 'env(safe-area-inset-bottom)', flexDirection: 'column' }}>
+      <nav className="bottom-nav" style={{ 
+        position: 'fixed', bottom: 0, left: 0, right: 0, 
+        background: 'var(--surface)', borderTop: '1px solid var(--border)', 
+        zIndex: 1000, // Đảm bảo luôn ở trên cùng
+        paddingBottom: 'max(12px, env(safe-area-inset-bottom))', 
+        flexDirection: 'column',
+        boxShadow: '0 -4px 20px rgba(0,0,0,0.3)',
+        touchAction: 'manipulation' // Khử delay 300ms trên iOS
+      }}>
         {/* Timer strip */}
-        <div suppressHydrationWarning style={{ display: 'flex', alignItems: 'center', padding: '4px 10px', gap: 8, borderBottom: '1px solid var(--border)', background: !mounted ? '#1a080844' : (isWork ? '#1a080844' : '#081a0a44') }}>
+        <div suppressHydrationWarning style={{ display: 'flex', alignItems: 'center', padding: '8px 12px', gap: 10, borderBottom: '1px solid var(--border)', background: !mounted ? 'rgba(0,0,0,0.2)' : (isWork ? '#1a0808' : '#081a0a') }}>
           <div suppressHydrationWarning style={{ fontSize: 13, fontWeight: 900, color: !mounted ? '#f85149' : (isWork ? '#f85149' : '#3fb950'), fontVariantNumeric: 'tabular-nums', minWidth: 52 }}>{mounted ? `${mm}:${ss}` : '--:--'}</div>
-          <div className="progress-bar" style={{ flex: 1, height: 4 }}>
+          
+          <div className="progress-bar" style={{ flex: 1, height: 6, background: 'rgba(255,255,255,0.05)' }}>
             <div suppressHydrationWarning className="progress-fill" style={{ width: mounted ? `${Math.round(pct * 10) / 10}%` : '0%', background: !mounted ? '#f85149' : (isWork ? '#f85149' : '#3fb950') }} />
           </div>
-          <button onClick={toggle} suppressHydrationWarning style={{ padding: '4px 12px', borderRadius: 6, cursor: 'pointer', fontWeight: 700, fontSize: 11, background: !mounted ? 'transparent' : (running ? 'transparent' : (isWork ? '#f85149' : '#3fb950')), color: !mounted ? 'var(--muted)' : (running ? (isWork ? '#f85149' : '#3fb950') : '#000'), border: !mounted ? '1px solid var(--border)' : (running ? `1px solid ${isWork ? '#f85149' : '#3fb950'}` : 'none') }}>
-            {!mounted ? '...' : (running ? '⏸' : '▶')}
-          </button>
-          <button onClick={reset} suppressHydrationWarning style={{ padding: '4px 8px', borderRadius: 6, border: '1px solid var(--border)', background: 'transparent', color: 'var(--muted)', cursor: 'pointer', fontSize: 11 }}>↺</button>
-          {mounted && <button onClick={() => router.refresh()} style={{ padding: '4px 8px', borderRadius: 6, border: '1px solid var(--border)', background: 'transparent', color: 'var(--muted)', cursor: 'pointer', fontSize: 11 }}>🔄</button>}
-          {session?.role === 'admin' && (
-            <Link href="/admin" style={{ padding: '4px 8px', borderRadius: 6, border: '1px solid var(--accent)', background: 'transparent', color: 'var(--accent)', fontSize: 11, textDecoration: 'none', fontWeight: 700 }}>👥</Link>
-          )}
+
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button onClick={toggle} suppressHydrationWarning style={{ 
+              width: 34, height: 34, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center',
+              cursor: 'pointer', fontWeight: 700, fontSize: 12, 
+              background: !mounted ? 'var(--surface2)' : (running ? 'transparent' : (isWork ? '#f85149' : '#3fb950')), 
+              color: !mounted ? 'var(--muted)' : (running ? (isWork ? '#f85149' : '#3fb950') : '#000'), 
+              border: !mounted ? '1px solid var(--border)' : (running ? `2px solid ${isWork ? '#f85149' : '#3fb950'}` : 'none') 
+            }}>
+              {!mounted ? '...' : (running ? '⏸' : '▶')}
+            </button>
+            
+            <button onClick={reset} suppressHydrationWarning style={{ width: 34, height: 34, borderRadius: 10, border: '1px solid var(--border)', background: 'var(--surface2)', color: 'var(--muted)', cursor: 'pointer', fontSize: 12, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>↺</button>
+            
+            {mounted && (
+              <button onClick={() => {
+                const btn = document.getElementById('refresh-icon');
+                if (btn) btn.style.transform = 'rotate(360deg)';
+                router.refresh();
+                setTimeout(() => { if (btn) btn.style.transform = 'rotate(0deg)'; }, 1000);
+              }} style={{ width: 34, height: 34, borderRadius: 10, border: '1px solid var(--border)', background: 'var(--surface2)', color: 'var(--muted)', cursor: 'pointer', fontSize: 12, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <span id="refresh-icon" style={{ transition: 'transform 0.8s ease' }}>🔄</span>
+              </button>
+            )}
+          </div>
         </div>
-        <div style={{ display: 'flex' }}>
+
+        {/* Main Nav Tabs */}
+        <div style={{ display: 'flex', width: '100%' }}>
           {tabs.map(t => {
             const active = path === t.href;
             return (
-              <Link key={t.href} href={t.href} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '8px 0', gap: 2, textDecoration: 'none', color: active ? 'var(--accent)' : 'var(--muted)', fontSize: 9, fontWeight: active ? 700 : 400 }}>
-                <span style={{ fontSize: 18 }}>{t.icon}</span>
-                {t.label}
+              <Link key={t.href} href={t.href} style={{ 
+                flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', 
+                padding: '10px 0 6px', gap: 4, textDecoration: 'none', 
+                color: active ? 'var(--accent)' : 'var(--muted)', 
+                fontSize: 10, fontWeight: active ? 800 : 500,
+                transition: 'background 0.2s',
+                WebkitTapHighlightColor: 'transparent' // Tắt highlight xanh khi chạm trên iOS
+              }}>
+                <span style={{ fontSize: 22, filter: active ? 'none' : 'grayscale(1) opacity(0.7)' }}>{t.icon}</span>
+                <span style={{ letterSpacing: '0.2px' }}>{t.label}</span>
+                {active && <div style={{ width: 4, height: 4, borderRadius: 99, background: 'var(--accent)', marginTop: 2 }} />}
               </Link>
             );
           })}

@@ -399,27 +399,33 @@ ${codeInput}` }] }),
 
       {mode === 'lesson' && (
         <>
-        {/* Track selector */}
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 16 }}>
+        {/* Track selector - Horizontal Scroll on Mobile */}
+        <div style={{ 
+          display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 8, marginBottom: 12,
+          scrollbarWidth: 'none', msOverflowStyle: 'none', WebkitOverflowScrolling: 'touch'
+        }} className="no-scrollbar">
           {TRACKS.map(t => (
             <button key={t.id} onClick={() => setTrack(t.id)} style={{
-              padding: '7px 14px', borderRadius: 8, border: '1px solid',
+              padding: '10px 18px', borderRadius: 10, border: '1px solid',
               borderColor: track === t.id ? t.color : 'var(--border)',
               background: track === t.id ? t.color + '22' : 'var(--surface)',
               color: track === t.id ? t.color : 'var(--muted)',
               fontSize: 13, cursor: 'pointer', fontWeight: track === t.id ? 700 : 400,
+              whiteSpace: 'nowrap',
+              flexShrink: 0,
+              touchAction: 'manipulation'
             }}>{t.label}</button>
           ))}
         </div>
 
         {trackLessons.length > 0 && (
-          <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 12, padding: '6px 10px', background: 'var(--surface2)', borderRadius: 6 }}>
-            ✅ Đã học {trackLessons.length} bài {trackObj?.label}: {trackLessons.slice(0,5).map(l=>l.topic).join(' · ')}{trackLessons.length>5?'...':''}
+          <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 12, padding: '8px 12px', background: 'var(--surface2)', borderRadius: 8, border: '1px solid var(--border)' }}>
+            ✅ Đã học {trackLessons.length} bài {trackObj?.label}
           </div>
         )}
 
-        <button className="btn btn-primary" style={{ width: '100%', marginBottom: 20, height: 52, fontSize: 15 }} onClick={genLesson} disabled={loading}>
-          {loading ? '⏳ AI đang soạn bài mới...' : `🤖 Tạo bài ${trackObj?.label} mới`}
+        <button className="btn btn-primary" style={{ width: '100%', marginBottom: 20, height: 56, fontSize: 16, boxShadow: '0 4px 12px rgba(88,166,255,0.2)', touchAction: 'manipulation' }} onClick={genLesson} disabled={loading}>
+          {loading ? '⏳ AI đang soạn bài...' : `🤖 Tạo bài ${trackObj?.label} mới`}
         </button>
         </>
       )}
