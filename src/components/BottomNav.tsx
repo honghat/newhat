@@ -195,13 +195,15 @@ export default function BottomNav({ session }: { session: AuthUser | null }) {
           {tabs.map(t => {
             const active = path === t.href;
             return (
-              <Link key={t.href} href={t.href} style={{ 
+              <Link key={t.href} href={t.href} prefetch={false} style={{ 
                 flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', 
                 padding: '10px 0 6px', gap: 4, textDecoration: 'none', 
                 color: active ? 'var(--accent)' : 'var(--muted)', 
                 fontSize: 10, fontWeight: active ? 800 : 500,
-                transition: 'background 0.2s',
-                WebkitTapHighlightColor: 'transparent' // Tắt highlight xanh khi chạm trên iOS
+                transition: 'background 0.2s, transform 0.1s',
+                WebkitTapHighlightColor: 'transparent',
+                // Hiệu ứng Active ngay khi chạm (iPhone)
+                background: active ? 'rgba(88, 166, 255, 0.05)' : 'transparent'
               }}>
                 <span style={{ fontSize: 22, filter: active ? 'none' : 'grayscale(1) opacity(0.7)' }}>{t.icon}</span>
                 <span style={{ letterSpacing: '0.2px' }}>{t.label}</span>
