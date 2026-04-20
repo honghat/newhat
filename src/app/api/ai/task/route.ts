@@ -58,10 +58,6 @@ export async function POST(req: Request) {
       const data = await res.json();
       const rawContent = data.choices?.[0]?.message?.content || '';
       const cleaned = cleanTopic(rawContent);
-      // Xoá marker pending, lưu kết quả thật
-      await prisma.englishLesson.deleteMany({
-        where: { userId: user.id, type: `${type}_pending`, content: taskId },
-      });
       if (cleaned && cleaned.length > 10) {
         await prisma.englishLesson.create({
           data: {
@@ -72,6 +68,10 @@ export async function POST(req: Request) {
           },
         });
       }
+      // Xoá marker pending SAU KHI đã lưu kết quả thành công
+      await prisma.englishLesson.deleteMany({
+        where: { userId: user.id, type: `${type}_pending`, content: taskId },
+      });
     } catch (e) {
       // Đánh dấu lỗi trong marker
       await prisma.englishLesson.updateMany({
