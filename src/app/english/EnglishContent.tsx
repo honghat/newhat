@@ -287,7 +287,7 @@ export default function EnglishContent() {
   }, []);
 
   const getGenMessage = useCallback((elapsed: number, action = 'tạo') => {
-    return `⏳ Bi đang làm...`;
+    return `⏳ AI đang làm...`;
   }, []);
 
   useEffect(() => { loadHistory(); }, [loadHistory]);
