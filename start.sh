@@ -84,4 +84,24 @@ echo ""
   echo -e "  ${GREEN}└─────────────────────────────────────────┘${NC}"
 echo ""
 
-npm run dev
+# Chạy app trong background
+nohup npm run dev > /tmp/newhat_app.log 2>&1 &
+
+echo -n "  Đang kiểm tra kết nối... "
+for i in {1..30}; do
+  if curl -s http://localhost:8006 > /dev/null; then
+    echo -e "${GREEN}✓ OK${NC}"
+    echo ""
+    echo -e "  ${YELLOW}Đã khởi động thành công!${NC}"
+    echo -e "  ${YELLOW}Cửa sổ Terminal này sẽ tự động đóng sau 3 giây...${NC}"
+    sleep 3
+    # Lệnh AppleScript để tắt Terminal window
+    osascript -e 'tell application "Terminal" to close (every window whose name contains "start.sh")' &
+    exit 0
+  fi
+  echo -n "."
+  sleep 1
+done
+
+echo -e "\n  ${RED}✗ App chưa sẵn sàng sau 30 giây.${NC}"
+echo -e "  Vui lòng kiểm tra log: ${BOLD}tail -f /tmp/newhat_app.log${NC}"
