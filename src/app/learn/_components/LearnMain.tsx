@@ -1,7 +1,7 @@
 'use client';
 import { useState, useEffect, useCallback, useRef } from 'react';
 
-interface Lesson { id: number; track: string; topic: string; content: string; order: number; completed: boolean; createdAt: string; }
+interface Lesson { id: number; track: string; topic: string; content: string; order: number; completed: boolean; learnCount: number; createdAt: string; }
 
 const TRACKS = [
   { id: 'html-css', label: '🎨 HTML/CSS', color: '#f78166' },
@@ -85,19 +85,34 @@ export default function LearnMain() {
   useEffect(() => { if (mode === 'code') { loadCodeSessions(); } }, [mode]);
 
   async function markComplete(lessonId: number) {
-    await fetch('/api/lessons', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: lessonId, completed: true }) });
+    await fetch('/api/lessons', { 
+      method: 'PATCH', 
+      headers: { 'Content-Type': 'application/json' }, 
+      body: JSON.stringify({ id: lessonId, completed: true, incrementLearnCount: true }) 
+    });
     const updatedLessons = await fetch('/api/lessons').then(res => res.json());
     setLessons(updatedLessons);
 
-    // Tìm bài tiếp theo chưa học trong cùng track
     const currentLesson = lessons.find(l => l.id === lessonId);
     if (currentLesson) {
       const next = updatedLessons
         .filter((l: any) => l.track === currentLesson.track && !l.completed)
         .sort((a: any, b: any) => a.order - b.order)[0];
       
+      const newCurrent = updatedLessons.find((l: any) => l.id === lessonId);
+      setCurrent(newCurrent);
+
+      // Nhật ký trang chủ
+      if (newCurrent) {
+        const today = new Date().toLocaleDateString('en-CA'); // yyyy-mm-dd
+        fetch('/api/logs', { 
+          method: 'PATCH', 
+          headers: { 'Content-Type': 'application/json' }, 
+          body: JSON.stringify({ date: today, addTopic: '💻 ' + newCurrent.topic }) 
+        });
+      }
+
       if (next) {
-        setCurrent(next);
         // Reset quiz for next lesson
         setQuizMode(false); setQuizSubmitted(false); setUserAnswers([]);
         const answers: string[] = [];
@@ -105,10 +120,6 @@ export default function LearnMain() {
         for (const m of ms) answers.push(m[1]);
         setQuizAnswers(answers);
         setUserAnswers(answers.map(() => ''));
-        contentRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      } else {
-        // Nếu hết bài, chỉ cần update lại bài hiện tại (để hiện nút "Đã hoàn thành")
-        setCurrent(updatedLessons.find((l: any) => l.id === lessonId));
       }
     }
   }
@@ -182,9 +193,6 @@ A) [nội dung đáp án A] B) [nội dung đáp án B] C) [nội dung đáp án
         setLoading(false);
         return;
       }
-      // Tự động ghi nhật ký học hôm nay
-      const today = new Date().toISOString().slice(0,10);
-      fetch('/api/logs', { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ date: today, addTopic: topic }) });
       setCurrent(saved);
       setError(null);
 
@@ -533,20 +541,32 @@ ${codeInput}` }] }),
         <div>
           {current && (
             <div className="card" style={{ marginBottom: 16 }} ref={contentRef}>
-              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:12 }}>
-                <div style={{ fontSize:13, fontWeight:700, color:'var(--accent)' }}>{current.topic}</div>
-                <div style={{ display:'flex', gap:6 }}>
-                  {!current.completed && (
-                    <button onClick={() => markComplete(current.id)} style={{ fontSize:11, color:'#3fb950', background:'#3fb95011', border:'1px solid #3fb95033', borderRadius:6, padding:'4px 10px', cursor:'pointer' }}>
-                      ✓ Đánh dấu đã học
+              <div style={{ display:'flex', flexDirection:'column', gap:10, marginBottom:16 }}>
+                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', gap:12 }}>
+                  <div style={{ flex:1 }}>
+                    <div style={{ fontSize:18, fontWeight:900, color:'var(--accent)', lineHeight:1.3 }}>{current.topic}</div>
+                    <div style={{ display:'flex', gap:6, marginTop:8, alignItems:'center' }}>
+                      <span style={{ fontSize:10, padding:'2px 8px', borderRadius:99, background:'var(--surface2)', color:'var(--muted)', fontWeight:600, border:'1px solid var(--border)' }}>
+                        {current.track.toUpperCase()}
+                      </span>
+                      {current.learnCount > 0 && (
+                        <span style={{ fontSize:10, padding:'2px 8px', borderRadius:99, background:'#3fb95022', color:'#3fb950', fontWeight:700, border:'1px solid #3fb95044' }}>
+                          ✓ Đã học {current.learnCount} lần
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <div style={{ display:'flex', gap:6, flexShrink:0 }}>
+                    <button onClick={() => markComplete(current.id)} style={{ padding:'6px 12px', borderRadius:8, background:'#3fb950', color:'#000', border:'none', fontSize:12, fontWeight:700, cursor:'pointer', display:'flex', alignItems:'center', gap:4, boxShadow:'0 2px 8px rgba(63,185,80,0.3)' }}>
+                      <span>📚</span> {current.learnCount > 0 ? 'Học lại' : 'Đã học'}
                     </button>
-                  )}
-                  <button onClick={async () => {
-                    await fetch('/api/lessons', { method:'DELETE', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ id: current.id }) });
-                    setCurrent(null); setQuizAnswers([]); setUserAnswers([]); await load();
-                  }} style={{ fontSize:11, color:'#f85149', background:'#f8514911', border:'1px solid #f8514933', borderRadius:6, padding:'4px 10px', cursor:'pointer' }}>
-                    🗑 Xóa
-                  </button>
+                    <button onClick={async () => {
+                        await fetch('/api/lessons', { method:'DELETE', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ id: current.id }) });
+                        setCurrent(null); setQuizAnswers([]); setUserAnswers([]); await load();
+                    }} style={{ width:32, height:32, borderRadius:8, background:'var(--surface2)', color:'#f85149', border:'1px solid var(--border)', fontSize:14, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center' }} title="Xóa">
+                      🗑
+                    </button>
+                  </div>
                 </div>
               </div>
               <div style={{ textAlign: 'left' }} dangerouslySetInnerHTML={{ __html: renderContent(current.content.replace(/## 🧠 Quiz[\s\S]*/,''), 'lesson') }} />
@@ -601,9 +621,13 @@ ${codeInput}` }] }),
                       <div style={{ fontSize:12, color:'var(--muted)', marginTop:6, marginBottom:12 }}>
                         {score===quizAnswers.length?'Xuất sắc! Học bài tiếp nhé.':'Xem lại và thử bài khác.'}
                       </div>
-                      {score===quizAnswers.length && !current.completed && (
+                      {!current.completed || current.learnCount < 1 ? (
                         <button className="btn btn-green" style={{ width:'100%' }} onClick={() => markComplete(current.id)}>
                           ✓ Hoàn thành bài này
+                        </button>
+                      ) : (
+                        <button className="btn btn-ghost" style={{ width:'100%', color: '#3fb950' }} onClick={() => markComplete(current.id)}>
+                          ✓ Học thêm lần nữa (Lần {current.learnCount})
                         </button>
                       )}
                       {current.completed && (
@@ -664,7 +688,9 @@ ${codeInput}` }] }),
                         </div>
                         <div style={{ flex:1, minWidth:0 }}>
                           <div style={{ color: current?.id===l.id ? 'var(--accent)' : 'var(--text)', fontSize: 13, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis', fontWeight: 600 }}>{l.topic}</div>
-                          <div style={{ fontSize:11, color:'var(--muted)' }}>{l.completed ? '✅ Hoàn thành' : '⏳ Chưa học'}</div>
+                          <div style={{ fontSize:11, color:'var(--muted)' }}>
+                            {l.completed ? `✅ Đã học lần ${l.learnCount || 1}` : '⏳ Chưa học'}
+                          </div>
                         </div>
                       </div>
                     ))}

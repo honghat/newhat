@@ -34,11 +34,13 @@ export async function PATCH(req: Request) {
   try {
     const user = await getSession();
     if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
-    const { id, completed, content, metadata } = await req.json();
+    const { id, completed, content, metadata, incrementLearnCount } = await req.json();
     const data: any = {};
     if (completed !== undefined) data.completed = completed;
     if (content !== undefined) data.content = content;
     if (metadata !== undefined) data.metadata = JSON.stringify(metadata);
+    if (incrementLearnCount) data.learnCount = { increment: 1 };
+    
     const lesson = await prisma.englishLesson.update({
       where: { id, userId: user.id },
       data,

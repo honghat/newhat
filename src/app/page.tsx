@@ -355,8 +355,8 @@ Trả lời bằng tiếng Việt, chuyên sâu và cá nhân hóa.`;
                 <div className="progress-fill" style={{ width:`${(form.hours/16)*100}%`, background:'var(--green)' }} />
               </div>
             </div>
-            <input className="input" placeholder="Học gì hôm nay? (Next.js, SQL, vocab...)" value={form.topic}
-              onChange={e=>setForm(f=>({...f,topic:e.target.value}))} style={{ marginBottom:10 }} />
+            <textarea className="input" placeholder="Học gì hôm nay? (Next.js, SQL, vocab...)" value={form.topic} rows={2}
+              onChange={e=>setForm(f=>({...f,topic:e.target.value}))} style={{ marginBottom:10, fontSize:12 }} />
             <textarea className="input" placeholder="Ghi chú, vướng mắc, điều cần nhớ..." value={form.notes} rows={3}
               onChange={e=>setForm(f=>({...f,notes:e.target.value}))} style={{ marginBottom:12 }} />
             <button className="btn btn-green" style={{ width:'100%' }} onClick={save}>
@@ -413,10 +413,39 @@ Trả lời bằng tiếng Việt, chuyên sâu và cá nhân hóa.`;
                     <div style={{ fontSize:9, color:'var(--muted)', fontWeight:700 }}>GIỜ</div>
                   </div>
                   <div style={{ flex:1, minWidth:0 }}>
-                    <div style={{ fontSize:13, fontWeight:600, color:'var(--text)', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis', marginBottom:2 }}>{l.topic || 'Học tập tự do'}</div>
-                    <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-                      <div style={{ fontSize:11, color:'var(--muted)' }}>{l.date}</div>
-                      {l.hours >= 10 && <span style={{ fontSize:10, color:'var(--orange)', background:'rgba(210,153,34,0.1)', padding:'1px 6px', borderRadius:99, border:'1px solid var(--orange)' }}>🏆 Master</span>}
+                    <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+                      {l.topic ? l.topic.split(', ').map((t, idx) => {
+                        const isCode = t.includes('💻');
+                        const isListen = t.includes('🎧');
+                        const isRead = t.includes('📖');
+                        const isSpeak = t.includes('🗣️');
+                        const isWrite = t.includes('✍️');
+                        const isVocab = t.includes('🗂️');
+                        
+                        let color = 'var(--accent)';
+                        if (isListen) color = '#58a6ff';
+                        if (isRead) color = '#d2a8ff';
+                        if (isSpeak) color = '#3fb950';
+                        if (isWrite) color = '#ff7b72';
+                        
+                        return (
+                          <div key={idx} style={{ display:'flex', alignItems:'center', gap:8, padding:'4px 10px', borderRadius:8, background:'var(--surface2)', border:'1px solid var(--border)' }}>
+                            <div style={{ fontSize:16 }}>{isCode?'💻':isListen?'🎧':isRead?'📖':isSpeak?'🗣️':isWrite?'✍️':isVocab?'🗂️':'📚'}</div>
+                            <div style={{ fontSize:12, fontWeight:600, color: 'var(--text)', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis', flex:1 }}>
+                              {t.replace(/^[💻🎧📖🗣️✍️🗂️📚]\s*/, '')}
+                            </div>
+                            <div style={{ fontSize:9, fontWeight:800, color, textTransform:'uppercase', opacity:0.8 }}>
+                              {isCode?'CODE':isListen?'LISTEN':isRead?'READ':isSpeak?'SPEAK':isWrite?'WRITE':isVocab?'VOCAB':'LEARN'}
+                            </div>
+                          </div>
+                        );
+                      }) : (
+                        <div style={{ fontSize:12, color:'var(--muted)', fontStyle:'italic' }}>Học tập tự do (Chưa có ghi chú chi tiết)</div>
+                      )}
+                    </div>
+                    <div style={{ display:'flex', alignItems:'center', gap:8, marginTop:10 }}>
+                      <div style={{ fontSize:11, color:'var(--muted)', fontWeight:500 }}>{l.date}</div>
+                      {l.hours >= 8 && <span style={{ fontSize:9, color:'var(--green)', background:'rgba(63,185,80,0.1)', padding:'1px 6px', borderRadius:99, border:'1px solid #3fb95044', fontWeight:800 }}>🔥 ĐÃ ĐẠT KPI</span>}
                     </div>
                   </div>
                   {l.notes && (

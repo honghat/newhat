@@ -8,10 +8,11 @@ export async function GET() {
     const lessons = await prisma.lesson.findMany({
       where: { userId: user.id },
       orderBy: { order: 'asc' },
-      select: { id: true, track: true, topic: true, content: true, order: true, completed: true, createdAt: true },
+      select: { id: true, track: true, topic: true, content: true, order: true, completed: true, learnCount: true, createdAt: true },
     });
     return Response.json(lessons);
-  } catch {
+  } catch (e: unknown) {
+    console.error('[lessons GET error]', e);
     return Response.json([]);
   }
 }
@@ -50,11 +51,15 @@ export async function PATCH(req: Request) {
   try {
     const user = await getSession();
     if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
-    const { id, completed } = await req.json();
+    const { id, completed, incrementLearnCount } = await req.json();
+    const data: any = {};
+    if (completed !== undefined) data.completed = completed;
+    if (incrementLearnCount) data.learnCount = { increment: 1 };
+
     const lesson = await prisma.lesson.update({
       where: { id, userId: user.id },
-      data: { completed },
-      select: { id: true, completed: true, order: true },
+      data,
+      select: { id: true, completed: true, learnCount: true, order: true },
     });
     return Response.json(lesson);
   } catch (e: unknown) {

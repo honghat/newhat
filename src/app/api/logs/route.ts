@@ -47,10 +47,7 @@ export async function PATCH(req: Request) {
     const existing = await prisma.dayLog.findUnique({ where: { userId_date: { userId: user.id, date } } });
     const newHours = Math.round(Math.min(16, (existing?.hours ?? 0) + (addHours ?? 0)) * 10) / 10;
     const existingTopics = existing?.topic ? existing.topic.split(', ') : [];
-    let newTopics = existingTopics;
-    if (addTopic && !existingTopics.includes(addTopic)) {
-      newTopics = [...existingTopics, addTopic].slice(-5);
-    }
+    let newTopics = [...existingTopics, addTopic].slice(-50);
     const log = await prisma.dayLog.upsert({
       where: { userId_date: { userId: user.id, date } },
       update: { hours: newHours, topic: newTopics.join(', ') },

@@ -70,17 +70,15 @@ function cleanTopic(raw: string): string {
 }
 
 async function saveToDb(type: string, content: string, metadata = {}, mode = 'coder') {
-  await fetch('/api/english', {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ type, content, metadata: { ...metadata, mode } }),
-  });
-  // Ghi nhật ký hàng ngày
-  const labels: Record<string, string> = { listen: 'Nghe tiếng Anh', speak: 'Luyện nói tiếng Anh', writing: 'Viết tiếng Anh', vocab: 'Học từ vựng', reading: 'Đọc tiếng Anh' };
-  const today = new Date().toISOString().slice(0, 10);
-  fetch('/api/logs', {
-    method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ date: today, addHours: 0.25, addTopic: labels[type] || 'Tiếng Anh' }),
-  }).catch(() => { });
+  try {
+    const res = await fetch('/api/english', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type, content, metadata: { ...metadata, mode } }),
+    });
+    if (!res.ok) return null;
+    return await res.json();
+  } catch { return null; }
 }
 
 async function speak(text: string, speed = 1.0, voice = 'en_female') {
@@ -177,7 +175,7 @@ const SPEAKING_TOPICS = [
   "Why did you decide to become a programmer?"
 ];
 
-interface EngLesson { id: number; type: string; content: string; metadata: string; createdAt: string; }
+interface EngLesson { id: number; type: string; content: string; metadata: string; completed: boolean; learnCount: number; createdAt: string; }
 
 const READ_LEVELS = [{ id: 'A2', label: 'A2' }, { id: 'B1', label: 'B1' }, { id: 'B2', label: 'B2' }];
 const READ_TOPICS = ['Web Development', 'Career & Jobs', 'Technology', 'Daily Life', 'Science', 'Business'];
@@ -265,6 +263,7 @@ export default function EnglishContent() {
   const [readTopic, setReadTopic] = useState('Web Development');
   const [readLoading, setReadLoading] = useState(false);
   const [readArticle, setReadArticle] = useState<{ title: string; body: string; wordCount: number } | null>(null);
+  const [readRecordId, setReadRecordId] = useState<number | null>(null);
   const [readQuestions, setReadQuestions] = useState<{ q: string; options: string[]; answer: number }[]>([]);
   const [readAnswers, setReadAnswers] = useState<number[]>([]);
   const [readSubmitted, setReadSubmitted] = useState(false);
@@ -300,6 +299,63 @@ export default function EnglishContent() {
   const activeTaskIds = useRef<Set<string>>(new Set());
   const abortTasks = useRef<Record<string, () => void>>({});
 
+  const loadHistory = useCallback(async () => {
+    setHistoryLoading(true);
+    try {
+      const res = await fetch('/api/english');
+      const data = await res.json();
+      setHistory(data.filter((h: any) => !h.type.endsWith('_pending')));
+    } catch { }
+    setHistoryLoading(false);
+  }, []);
+
+  const getGenMessage = useCallback((elapsed: number, action = 'tạo') => {
+    return `⏳ AI đang làm...`;
+  }, []);
+
+  useEffect(() => { loadHistory(); }, [loadHistory]);
+
+  const markLessonLearned = useCallback(async (lessonId: number) => {
+    await fetch('/api/english', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: lessonId, completed: true, incrementLearnCount: true })
+    });
+    
+    // Nhật ký trang chủ
+    const item = history.find(h => h.id === lessonId);
+    if (item) {
+      let topic = '';
+      if (item.type === 'reading') {
+        try { topic = '📖 Đọc: ' + (JSON.parse(item.metadata || '{}').title || 'Bài đọc'); } catch { topic = '📖 Bài đọc'; }
+      } else if (item.type === 'listen') {
+        try { 
+          const m = JSON.parse(item.metadata || '{}');
+          topic = '🎧 Nghe: ' + (m.title || item.content.slice(0, 30) + '...');
+        } catch { topic = '🎧 Nghe: ' + item.content.slice(0, 30) + '...'; }
+      } else if (item.type === 'speak') {
+        try { 
+          const m = JSON.parse(item.metadata || '{}');
+          topic = '🗣️ Nói: ' + (m.topic || item.content.slice(0, 30) + '...');
+        } catch { topic = '🗣️ Nói: ' + item.content.slice(0, 30) + '...'; }
+      } else if (item.type === 'writing') {
+        try { topic = '✍️ Viết: ' + (JSON.parse(item.metadata || '{}').topic || 'Bài viết'); } catch { topic = '✍️ Bài viết'; }
+      } else if (item.type === 'vocab') {
+        topic = '🗂️ Từ vựng: ' + item.content.slice(0, 30) + '...';
+      } else {
+        topic = '📚 Học ' + item.type;
+      }
+      const today = new Date().toLocaleDateString('en-CA');
+      fetch('/api/logs', { 
+        method: 'PATCH', 
+        headers: { 'Content-Type': 'application/json' }, 
+        body: JSON.stringify({ date: today, addTopic: topic }) 
+      });
+    }
+
+    loadHistory();
+  }, [history, loadHistory]);
+
   const stopTask = useCallback(async (type: string, taskId?: string) => {
     // Clear interval/loop if exists
     if (abortTasks.current[type]) {
@@ -323,21 +379,6 @@ export default function EnglishContent() {
     if (type === 'writing_sample') setWriteSampleLoading(false);
   }, []);
 
-  const loadHistory = useCallback(async () => {
-    setHistoryLoading(true);
-    try {
-      const res = await fetch('/api/english');
-      const data = await res.json();
-      setHistory(data.filter((h: any) => !h.type.endsWith('_pending')));
-    } catch { }
-    setHistoryLoading(false);
-  }, []);
-
-  const getGenMessage = useCallback((elapsed: number, action = 'tạo') => {
-    return `⏳ AI đang làm...`;
-  }, []);
-
-  useEffect(() => { loadHistory(); }, [loadHistory]);
 
   // LISTEN
   async function genListenText() {
@@ -345,6 +386,7 @@ export default function EnglishContent() {
     const p = `Generate a short English listening exercise (4-6 sentences) for a B1 learner. Context: ${modeDesc}. 
 Return JSON format ONLY:
 {
+  "title": "A short descriptive title",
   "en": "English text...",
   "vi": "Bản dịch tiếng Việt...",
   "vocab": [{"w": "từ/cụm từ", "m": "nghĩa & cách dùng"}]
@@ -358,7 +400,11 @@ Return JSON format ONLY:
           setListenText(d.en || '');
           setListenVi(d.vi || '');
           setListenVocab(d.vocab || []);
-          await saveToDb('listen', d.en, { vi: d.vi, vocab: d.vocab, topic: 'listening' }, mode);
+          const d2 = await saveToDb('listen', d.en, { title: d.title, vi: d.vi, vocab: d.vocab, topic: 'listening' }, mode);
+          if (d2?.id) {
+            setListenRecordId(d2.id);
+            loadHistory();
+          }
         } else {
           setListenText(raw);
         }
@@ -389,7 +435,7 @@ Return JSON format ONLY:
       fetch('/api/english', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ type: 'speak', content: '', metadata: { topic: clean, mode } }),
-      }).then(r => r.json()).then(d => setSpkRecordId(d.id)).catch(() => setSpkRecordId(null));
+      }).then(r => r.json()).then(d => { setSpkRecordId(d.id); loadHistory(); }).catch(() => setSpkRecordId(null));
     }
     setSpkTopicLoading(false);
   }
@@ -490,7 +536,8 @@ Hãy trình bày theo định dạng Markdown sau:
           body: JSON.stringify({ id: spkRecordId, content: transcript, metadata: { topic: spkTopic, feedback: fb, sample: spkSample, mode } }),
         });
       } else {
-        await saveToDb('speak', transcript, { topic: spkTopic, feedback: fb, sample: spkSample }, mode);
+        const d2 = await saveToDb('speak', transcript, { topic: spkTopic, feedback: fb, sample: spkSample }, mode);
+        if (d2?.id) setSpkRecordId(d2.id);
       }
     }
     setSpkLoading(false); loadHistory();
@@ -509,7 +556,7 @@ Hãy trình bày theo định dạng Markdown sau:
       fetch('/api/english', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ type: 'writing', content: '', metadata: { prompt: clean, mode } }),
-      }).then(r => r.json()).then(d => setWriteRecordId(d.id)).catch(() => setWriteRecordId(null));
+      }).then(r => r.json()).then(d => { setWriteRecordId(d.id); loadHistory(); }).catch(() => setWriteRecordId(null));
     }
     setWriteTopicLoading(false);
   }
@@ -532,7 +579,8 @@ Reply in Markdown (concise):
           body: JSON.stringify({ id: writeRecordId, content: writeText, metadata: { prompt: writePrompt, feedback: fb, sample: writeSample, words: writeText.split(/\s+/).filter(Boolean).length, mode } }),
         });
       } else {
-        await saveToDb('writing', writeText, { prompt: writePrompt, feedback: fb, sample: writeSample, words: writeText.split(/\s+/).filter(Boolean).length }, mode);
+        const d2 = await saveToDb('writing', writeText, { prompt: writePrompt, feedback: fb, sample: writeSample, words: writeText.split(/\s+/).filter(Boolean).length }, mode);
+        if (d2?.id) setWriteRecordId(d2.id);
       }
     }
     setWriteLoading(false); loadHistory();
@@ -584,7 +632,8 @@ Return JSON ONLY (no markdown code blocks, just raw json):
           setReadArticle({ title: parsed.title, body: parsed.body, wordCount: parsed.body.split(/\s+/).length });
           setReadQuestions(parsed.questions || []);
           setReadAnswers((parsed.questions || []).map(() => -1));
-          await saveToDb('reading', parsed.body, { title: parsed.title, level: readLevel, topic: readTopic, questions: parsed.questions }, mode);
+          const saved = await saveToDb('reading', parsed.body, { title: parsed.title, level: readLevel, topic: readTopic, questions: parsed.questions }, mode);
+          if (saved) setReadRecordId(saved.id);
         }
       }
     }
@@ -667,7 +716,33 @@ Return JSON ONLY (no markdown code blocks, just raw json):
             <div className="desktop-2col">
               <div>
                 <div className="card" style={{ marginBottom: 12 }}>
-                  <div className="section-title">Văn bản</div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, marginBottom: 16 }}>
+                    <div style={{ flex: 1 }}>
+                      <div className="section-title" style={{ margin: 0, fontSize: 16, fontWeight: 800 }}>🎧 Bài Nghe</div>
+                      {(() => {
+                        const item = history.find(h => h.type === 'listen' && h.content === listenText);
+                        if (item && item.learnCount > 0) {
+                          return (
+                            <div style={{ marginTop: 6, display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 8px', borderRadius: 8, background: '#3fb95022', color: '#3fb950', fontSize: 10, fontWeight: 700, border: '1px solid #3fb95044' }}>
+                              ✓ Đã học {item.learnCount} lần
+                            </div>
+                          );
+                        }
+                        return null;
+                      })()}
+                    </div>
+                    {history.find(h => h.type === 'listen' && h.content === listenText) && (
+                      <button 
+                        onClick={() => {
+                          const item = history.find(h => h.type === 'listen' && h.content === listenText);
+                          if (item) markLessonLearned(item.id);
+                        }} 
+                        style={{ padding: '6px 12px', borderRadius: 8, background: '#3fb950', color: '#000', border: 'none', fontSize: 11, fontWeight: 700, cursor: 'pointer', boxShadow: '0 2px 8px rgba(63,185,80,0.2)' }}
+                      >
+                        ✓ Đánh dấu đã học
+                      </button>
+                    )}
+                  </div>
                   <textarea className="input" value={listenText} onChange={e => setListenText(e.target.value)} rows={6}
                     placeholder="Bấm 'AI tạo đoạn nghe' hoặc tự nhập tiếng Anh..." style={{ marginBottom: 12 }} />
                   {/* Voice selector */}
@@ -750,15 +825,42 @@ Return JSON ONLY (no markdown code blocks, just raw json):
               <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                 <div className="card" style={{ borderLeft: '4px solid var(--purple)', position: 'relative' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
-                    <div>
-                      <div className="section-title" style={{ marginBottom: 4 }}>Chủ đề nói</div>
-                      <div style={{ fontSize: 15, color: 'var(--purple)', fontWeight: 700, lineHeight: 1.4, display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <span>{spkTopicLoading ? getGenMessage(genElapsed) : spkTopic}</span>
-                        {spkTopicLoading && <button onClick={() => stopTask('speak')} style={{ color: 'var(--orange)', background: 'none', border: 'none', fontSize: 10, cursor: 'pointer', fontWeight: 800 }}>[Dừng]</button>}
+                    <div style={{ flex: 1 }}>
+                      <div className="section-title" style={{ marginBottom: 4 }}>Chủ đề luyện nói</div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                        <div style={{ fontSize: 15, color: 'var(--purple)', fontWeight: 800, lineHeight: 1.4 }}>
+                          {spkTopicLoading ? getGenMessage(genElapsed) : spkTopic}
+                          {spkTopicLoading && <button onClick={() => stopTask('speak')} style={{ color: 'var(--orange)', background: 'none', border: 'none', fontSize: 10, cursor: 'pointer', fontWeight: 800, marginLeft: 6 }}>[Dừng]</button>}
+                        </div>
+                        {(() => {
+                          const item = history.find(h => h.id === spkRecordId);
+                          if (item && item.learnCount > 0) {
+                            return (
+                              <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 4, background: '#3fb95022', color: '#3fb950', fontWeight: 700, border: '1px solid #3fb95044' }}>
+                                ✓ {item.learnCount} lần
+                              </span>
+                            );
+                          }
+                          return null;
+                        })()}
                       </div>
+                      {(() => {
+                        const activeId = spkRecordId || history.find(h => h.type === 'speak' && h.content === transcript)?.id;
+                        if (activeId) {
+                          return (
+                            <button 
+                              onClick={() => markLessonLearned(activeId)}
+                              style={{ marginTop: 10, padding: '6px 14px', borderRadius: 8, background: '#3fb950', color: '#000', border: 'none', fontSize: 11, fontWeight: 700, cursor: 'pointer', boxShadow: '0 2px 8px rgba(63,185,80,0.2)' }}
+                            >
+                              ✓ Đã luyện nói xong
+                            </button>
+                          );
+                        }
+                        return null;
+                      })()}
                     </div>
                     <button onClick={genSpkTopic} disabled={spkTopicLoading || spkLoading} style={{ padding: '6px 12px', borderRadius: 8, border: 'none', background: 'var(--accent)', color: '#000', fontSize: 11, fontWeight: 800, cursor: 'pointer', flexShrink: 0, display: 'flex', alignItems: 'center', gap: 4, boxShadow: '0 2px 8px rgba(0,0,0,0.2)' }}>
-                      {spkTopicLoading ? '⏳...' : '🤖 Tạo đoạn nói mới'}
+                      {spkTopicLoading ? '⏳...' : '🤖 Đổi chủ đề'}
                     </button>
                   </div>
                   <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
@@ -803,8 +905,22 @@ Return JSON ONLY (no markdown code blocks, just raw json):
                 )}
                 {spkFeedback && (
                   <div className="card" style={{ borderLeft: '4px solid var(--green)', background: 'var(--surface2)' }}>
-                    <div className="section-title" style={{ color: 'var(--green)', display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <span>📋</span> Nhận xét bài nói
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, marginBottom: 16 }}>
+                      <div style={{ flex: 1 }}>
+                        <div className="section-title" style={{ color: 'var(--green)', display: 'flex', alignItems: 'center', gap: 8, margin: 0, fontSize: 16, fontWeight: 800 }}>
+                          <span>📋</span> Nhận xét bài nói
+                        </div>
+                        {spkRecordId && history.find(h => h.id === spkRecordId)?.learnCount && history.find(h => h.id === spkRecordId)!.learnCount > 0 && (
+                          <div style={{ marginTop: 6, display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 8px', borderRadius: 8, background: '#3fb95022', color: '#3fb950', fontSize: 10, fontWeight: 700, border: '1px solid #3fb95044' }}>
+                            ✓ Đã học {history.find(h => h.id === spkRecordId)!.learnCount} lần
+                          </div>
+                        )}
+                      </div>
+                      {spkRecordId && (
+                        <button onClick={() => markLessonLearned(spkRecordId)} style={{ padding: '6px 12px', borderRadius: 8, background: '#3fb950', color: '#000', border: 'none', fontSize: 11, fontWeight: 700, cursor: 'pointer', boxShadow: '0 2px 8px rgba(63,185,80,0.2)' }}>
+                          ✓ Đánh dấu đã học
+                        </button>
+                      )}
                     </div>
                     <div style={{ fontSize: 13, lineHeight: 1.7, color: 'var(--text-main)', opacity: 0.95 }}
                       dangerouslySetInnerHTML={{ __html: parseMarkdown(spkFeedback) }}></div>
@@ -820,12 +936,39 @@ Return JSON ONLY (no markdown code blocks, just raw json):
               <div>
                 <div className="card" style={{ marginBottom: 12, borderLeft: '4px solid var(--orange)', position: 'relative' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
-                    <div>
+                    <div style={{ flex: 1 }}>
                       <div className="section-title" style={{ marginBottom: 4 }}>Đề tài viết</div>
-                      <div style={{ fontSize: 14, color: 'var(--orange)', fontWeight: 700, lineHeight: 1.4, display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <span>{writeTopicLoading ? getGenMessage(genElapsed, 'soạn bài') : writePrompt}</span>
-                        {writeTopicLoading && <button onClick={() => stopTask('writing')} style={{ color: 'var(--red)', background: 'none', border: 'none', fontSize: 10, cursor: 'pointer', fontWeight: 800 }}>[Dừng]</button>}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                        <div style={{ fontSize: 14, color: 'var(--orange)', fontWeight: 700, lineHeight: 1.4 }}>
+                          {writeTopicLoading ? getGenMessage(genElapsed, 'soạn bài') : writePrompt}
+                          {writeTopicLoading && <button onClick={() => stopTask('writing')} style={{ color: 'var(--red)', background: 'none', border: 'none', fontSize: 10, cursor: 'pointer', fontWeight: 800, marginLeft: 6 }}>[Dừng]</button>}
+                        </div>
+                        {(() => {
+                          const item = history.find(h => h.id === writeRecordId);
+                          if (item && item.learnCount > 0) {
+                            return (
+                              <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 4, background: '#3fb95022', color: '#3fb950', fontWeight: 700, border: '1px solid #3fb95044' }}>
+                                ✓ {item.learnCount} lần
+                              </span>
+                            );
+                          }
+                          return null;
+                        })()}
                       </div>
+                      {(() => {
+                        const activeId = writeRecordId || history.find(h => h.type === 'writing' && h.content === writeText)?.id;
+                        if (activeId) {
+                          return (
+                            <button 
+                              onClick={() => markLessonLearned(activeId)}
+                              style={{ marginTop: 10, padding: '8px 16px', borderRadius: 8, background: '#3fb950', color: '#000', border: 'none', fontSize: 11, fontWeight: 700, cursor: 'pointer', boxShadow: '0 2px 8px rgba(63,185,80,0.3)' }}
+                            >
+                              ✓ Đã viết xong
+                            </button>
+                          );
+                        }
+                        return null;
+                      })()}
                     </div>
                     <button onClick={genWriteTopic} disabled={writeTopicLoading || writeLoading} style={{ padding: '6px 12px', borderRadius: 8, border: 'none', background: 'var(--accent)', color: '#000', fontSize: 11, fontWeight: 800, cursor: 'pointer', flexShrink: 0, display: 'flex', alignItems: 'center', gap: 4, boxShadow: '0 2px 8px rgba(0,0,0,0.2)' }}>
                       {writeTopicLoading ? '⏳...' : '🤖 Tạo đoạn viết mới'}
@@ -867,8 +1010,22 @@ Return JSON ONLY (no markdown code blocks, just raw json):
               <div>
                 {writeFeedback && (
                   <div className="card" style={{ borderLeft: '4px solid var(--accent)', background: 'var(--surface2)' }}>
-                    <div className="section-title" style={{ color: 'var(--accent)', display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <span>🔍</span> Chi tiết sửa bài
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, marginBottom: 16 }}>
+                      <div style={{ flex: 1 }}>
+                        <div className="section-title" style={{ color: 'var(--accent)', display: 'flex', alignItems: 'center', gap: 8, margin: 0, fontSize: 16, fontWeight: 800 }}>
+                          <span>🔍</span> Chi tiết sửa bài
+                        </div>
+                        {writeRecordId && history.find(h => h.id === writeRecordId)?.learnCount && history.find(h => h.id === writeRecordId)!.learnCount > 0 && (
+                          <div style={{ marginTop: 6, display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 8px', borderRadius: 8, background: '#3fb95022', color: '#3fb950', fontSize: 10, fontWeight: 700, border: '1px solid #3fb95044' }}>
+                            ✓ Đã học {history.find(h => h.id === writeRecordId)!.learnCount} lần
+                          </div>
+                        )}
+                      </div>
+                      {writeRecordId && (
+                        <button onClick={() => markLessonLearned(writeRecordId)} style={{ padding: '6px 12px', borderRadius: 8, background: '#3fb950', color: '#000', border: 'none', fontSize: 11, fontWeight: 700, cursor: 'pointer', boxShadow: '0 2px 8px rgba(63,185,80,0.2)' }}>
+                          ✓ Đánh dấu đã học
+                        </button>
+                      )}
                     </div>
                     <div style={{ fontSize: 13, lineHeight: 1.7, color: 'var(--text-main)', opacity: 0.95 }}
                       dangerouslySetInnerHTML={{ __html: parseMarkdown(writeFeedback) }}></div>
@@ -910,11 +1067,21 @@ Return JSON ONLY (no markdown code blocks, just raw json):
                         </div>
                       </div>
                     </div>
-                    <div style={{ display: 'flex', gap: 8 }}>
+                    <div style={{ display: 'flex', justifyContent: 'center', gap: 10, flexWrap: 'wrap', marginTop: 16 }}>
                       <button className="btn btn-ghost" style={{ flex: 1 }} onClick={() => { setFlipped(false); setCardIdx(i => Math.max(0, i - 1)); }}>← Trước</button>
-                      <button onClick={() => setKnown(k => k.includes(cardIdx) ? k.filter(x => x !== cardIdx) : [...k, cardIdx])} style={{ flex: 1, borderRadius: 8, border: '1px solid', cursor: 'pointer', fontWeight: 600, fontSize: 13, borderColor: known.includes(cardIdx) ? 'var(--green)' : 'var(--border)', background: known.includes(cardIdx) ? '#3fb95022' : 'var(--surface2)', color: known.includes(cardIdx) ? 'var(--green)' : 'var(--muted)' }}>
-                        {known.includes(cardIdx) ? '✓ Đã biết' : 'Đánh dấu biết'}
-                      </button>
+                      
+                      {cardIdx === cards.length - 1 && (
+                        <button onClick={() => {
+                          // Đánh dấu đã học cho tất cả các từ trong bộ này
+                          cards.forEach(async (c) => {
+                             const item = history.find(h => h.type === 'vocab' && h.content === c.word);
+                             if (item) markLessonLearned(item.id);
+                          });
+                        }} style={{ flex: 2, borderRadius: 8, background: '#3fb950', color: '#000', border: 'none', fontWeight: 700, fontSize: 13, cursor: 'pointer', boxShadow: '0 2px 8px rgba(63,185,80,0.3)' }}>
+                          ✓ Đã học xong bộ này
+                        </button>
+                      )}
+
                       <button className="btn btn-ghost" style={{ flex: 1 }} onClick={() => { setFlipped(false); setCardIdx(i => Math.min(cards.length - 1, i + 1)); }}>Tiếp →</button>
                     </div>
                   </>
@@ -947,21 +1114,55 @@ Return JSON ONLY (no markdown code blocks, just raw json):
 
                 {readArticle && (
                   <div className="card">
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14 }}>
-                      <div style={{ fontSize: 16, fontWeight: 800, lineHeight: 1.4, flex: 1 }}>{readArticle.title}</div>
-                      <div style={{ fontSize: 10, color: 'var(--muted)', flexShrink: 0, marginLeft: 8, textAlign: 'right' }}>
-                        <div>{readArticle.wordCount} words · {readLevel}</div>
-                        <button 
-                          onClick={() => speak(`${readArticle.title}. ${readArticle.body}`, 1.0)}
-                          style={{ marginTop: 6, padding: '4px 8px', borderRadius: 4, border: '1px solid var(--border)', background: 'var(--surface2)', color: 'var(--accent)', cursor: 'pointer', fontSize: 11, fontWeight: 700 }}
-                        >
-                          🔊 Nghe cả bài
-                        </button>
+                    <div style={{ marginBottom: 16 }}>
+                      <div style={{ fontSize: 22, fontWeight: 900, lineHeight: 1.3, color: 'var(--accent)', marginBottom: 12 }}>{readArticle.title}</div>
+                      
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10, padding: '10px 0', borderTop: '1px solid var(--border)', borderBottom: '1px solid var(--border)' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <span style={{ fontSize: 11, background: 'var(--surface2)', padding: '3px 8px', borderRadius: 4, color: 'var(--muted)', fontWeight: 600 }}>{readArticle.wordCount} words</span>
+                          <span style={{ fontSize: 11, background: 'var(--surface2)', padding: '3px 8px', borderRadius: 4, color: 'var(--muted)', fontWeight: 600 }}>Level {readLevel}</span>
+                          {(() => {
+                            const itemId = readRecordId || history.find(h => h.type === 'reading' && h.content === readArticle.body)?.id;
+                            const item = history.find(h => h.id === itemId);
+                            if (item && item.learnCount > 0) {
+                              return (
+                                <span style={{ fontSize: 10, padding: '3px 8px', borderRadius: 4, background: '#3fb95022', color: '#3fb950', fontWeight: 700, border: '1px solid #3fb95044' }}>
+                                  ✓ Đã học {item.learnCount} lần
+                                </span>
+                              );
+                            }
+                            return null;
+                          })()}
+                        </div>
+                        
+                        <div style={{ display: 'flex', gap: 6 }}>
+                          <button 
+                            onClick={() => speak(`${readArticle.title}. ${readArticle.body}`, 1.0)}
+                            style={{ padding: '6px 12px', borderRadius: 8, background: 'var(--surface2)', border: '1px solid var(--border)', color: 'var(--accent)', cursor: 'pointer', fontSize: 12, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 4 }}
+                          >
+                            🔊 Nghe bài
+                          </button>
+                          {(() => {
+                            const itemId = readRecordId || history.find(h => h.type === 'reading' && h.content === readArticle.body)?.id;
+                            if (itemId) {
+                              return (
+                                <button 
+                                  onClick={() => markLessonLearned(itemId)} 
+                                  style={{ padding: '6px 12px', borderRadius: 8, background: '#3fb950', color: '#000', border: 'none', fontSize: 12, fontWeight: 700, cursor: 'pointer', boxShadow: '0 2px 8px rgba(63,185,80,0.3)', display: 'flex', alignItems: 'center', gap: 4 }}
+                                >
+                                  📚 Đã học xong
+                                </button>
+                              );
+                            }
+                            return null;
+                          })()}
+                        </div>
                       </div>
                     </div>
-                    <div style={{ fontSize: 14, lineHeight: 2, color: 'var(--text)', userSelect: 'text' }}
+
+                    <div style={{ fontSize: 15, lineHeight: 1.9, color: 'var(--text-main)', userSelect: 'text', letterSpacing: '0.01em' }}
                       onMouseUp={() => { const s = window.getSelection()?.toString().trim(); if (s && s.length > 0 && s.length < 300) setReadSelected(s); }}>
-                      {readArticle.body.split('\n\n').map((p, i) => <p key={i} style={{ marginBottom: 14, marginTop: 0 }}>{p}</p>)}
+                      {readArticle.body.split('\n\n').map((p, i) => <p key={i} style={{ marginBottom: 16, marginTop: 0 }}>{p}</p>)}
                     </div>
                     <div style={{ fontSize: 11, color: 'var(--muted)', fontStyle: 'italic' }}>💡 Bôi đen từ hoặc câu để tra nghĩa</div>
                   </div>
@@ -1091,7 +1292,7 @@ Return JSON ONLY (no markdown code blocks, just raw json):
                                 <div style={{ fontSize: 10, color: 'var(--muted)' }}>{new Date(item.createdAt).toLocaleString('vi')}</div>
                               </div>
                               <button onClick={e => { e.stopPropagation(); speak(word, 1.0); }} style={{ fontSize: 12, color: 'var(--muted)', background: 'none', border: 'none', cursor: 'pointer' }}>🔊</button>
-                              <button onClick={async e => { e.stopPropagation(); if (!confirm('Xóa?')) return; await fetch('/api/english', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: item.id }) }); loadHistory(); }} style={{ fontSize: 11, color: '#f85149', background: '#f8514915', border: 'none', cursor: 'pointer', padding: '3px 7px', borderRadius: 5 }}>🗑</button>
+                              <button onClick={async e => { e.stopPropagation(); await fetch('/api/english', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: item.id }) }); loadHistory(); }} style={{ fontSize: 11, color: '#f85149', background: '#f8514915', border: 'none', cursor: 'pointer', padding: '3px 7px', borderRadius: 5 }}>🗑</button>
                             </div>
                           );
                         })}
@@ -1140,6 +1341,7 @@ Return JSON ONLY (no markdown code blocks, just raw json):
                         setShowListenVi(false);
                       } else if (mapType === 'speak') {
                         setTranscript(item.content);
+                        setSpkRecordId(item.id);
                         try {
                           const m = JSON.parse(item.metadata || '{}');
                           if (m.topic) setSpkTopic(m.topic);
@@ -1147,6 +1349,7 @@ Return JSON ONLY (no markdown code blocks, just raw json):
                         } catch { /**/ }
                       } else if (mapType === 'writing') {
                         setWriteText(item.content);
+                        setWriteRecordId(item.id);
                         try {
                           const m = JSON.parse(item.metadata || '{}');
                           if (m.prompt) setWritePrompt(m.prompt);
@@ -1174,6 +1377,7 @@ Return JSON ONLY (no markdown code blocks, just raw json):
                           }
                         } catch { /**/ }
                       } else if (mapType === 'reading') {
+                        setReadRecordId(item.id);
                         try { const m = JSON.parse(item.metadata || '{}'); setReadTopic(m.topic || ''); setReadLevel(m.level || 'B1'); setReadQuestions(m.questions || []); setReadAnswers([]); setReadSubmitted(false); setReadArticle({ title: m.title || '', body: item.content, wordCount: item.content.split(/\s+/).length }); } catch { /**/ }
                         setReadSelected(''); setReadLookup(''); setReadChat([]);
                       }
@@ -1189,12 +1393,27 @@ Return JSON ONLY (no markdown code blocks, just raw json):
                             : (mapType === 'reading') ? (() => { try { return JSON.parse(item.metadata || '{}').title; } catch { return item.content.slice(0, 50); } })()
                               : item.content.slice(0, 60)}
                       </div>
-                      <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 4 }}>
-                        {new Date(item.createdAt).toLocaleString('vi')} · <span style={{ color: 'var(--accent)' }}>Sửa/Học lại →</span>
+                      <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 4, display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span>{new Date(item.createdAt).toLocaleString('vi')}</span>
+                        <span style={{ 
+                          padding: '1px 6px', 
+                          borderRadius: 4, 
+                          background: item.learnCount > 0 ? '#3fb95022' : 'var(--surface2)', 
+                          color: item.learnCount > 0 ? '#3fb950' : 'var(--muted)', 
+                          fontWeight: 700,
+                          fontSize: 9
+                        }}>
+                          {item.learnCount > 0 ? `✓ Lần ${item.learnCount}` : '⏳ Chưa học'}
+                        </span>
                       </div>
                     </div>
 
                     <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                      {(mapType === 'speak' || mapType === 'writing' || mapType === 'reading') && (
+                        <button onClick={(e) => { e.stopPropagation(); markLessonLearned(item.id); }} style={{ fontSize: 12, background: item.learnCount > 0 ? '#3fb95033' : 'var(--surface2)', border: '1px solid var(--border)', cursor: 'pointer', padding: '4px 8px', borderRadius: 6, color: item.learnCount > 0 ? '#3fb950' : 'var(--muted)', fontWeight: 700 }}>
+                          ✓
+                        </button>
+                      )}
                       {mapType === 'vocab' && (
                         <button onClick={(e) => { e.stopPropagation(); speak(item.content, 1.0); }} style={{ fontSize: 14, background: 'var(--accent)15', border: 'none', cursor: 'pointer', padding: '4px 8px', borderRadius: 6, color: 'var(--accent)' }}>
                           🔊
@@ -1202,11 +1421,10 @@ Return JSON ONLY (no markdown code blocks, just raw json):
                       )}
                       <button onClick={async (e) => {
                         e.stopPropagation();
-                        if (!confirm('Bạn chắc chắn muốn xóa lịch sử này?')) return;
                         await fetch('/api/english', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: item.id }) });
                         loadHistory();
                       }} style={{ fontSize: 12, color: '#f85149', background: '#f8514915', border: 'none', cursor: 'pointer', padding: '4px 8px', borderRadius: 6, transition: 'all 0.15s' }} onMouseEnter={e => { e.currentTarget.style.background = '#f8514930' }} onMouseLeave={e => { e.currentTarget.style.background = '#f8514915' }}>
-                        🗑 Xóa
+                        🗑
                       </button>
                     </div>
 
