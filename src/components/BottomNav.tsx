@@ -195,7 +195,7 @@ export default function BottomNav({ session }: { session: AuthUser | null }) {
           {tabs.map(t => {
             const active = path === t.href;
             return (
-              <Link key={t.href} href={t.href} prefetch={false} style={{ 
+              <Link key={t.href} href={t.href} style={{ 
                 flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', 
                 padding: '10px 0 6px', gap: 4, textDecoration: 'none', 
                 color: active ? 'var(--accent)' : 'var(--muted)', 
