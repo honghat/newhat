@@ -89,8 +89,13 @@ export function TimerProvider({ children }: { children: ReactNode }) {
       if (serverEndTime > now) {
         const rem = Math.round((serverEndTime - now) / 1000);
 
-        // Chỉ cập nhật nếu: Local đang tắt, hoặc khác mode, hoặc thời gian lệch > 10s
-        const needsUpdate = !running || (isWork !== serverMode) || Math.abs(secs - rem) > 10;
+        // LOGIC ƯU TIÊN THỜI GIAN THẤP HƠN:
+        // Cập nhật nếu:
+        // - Khác chế độ (Work/Break)
+        // - Hoặc Local đang tắt
+        // - Hoặc Server báo thời gian CÒN LẠI THẤP HƠN (nhanh hơn) Local đáng kể (> 5s)
+        const isFasterOnServer = rem < secs - 5;
+        const needsUpdate = !running || (isWork !== serverMode) || isFasterOnServer;
 
         if (needsUpdate) {
           setIsWork(serverMode);
