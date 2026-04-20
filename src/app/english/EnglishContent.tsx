@@ -1104,7 +1104,26 @@ Return JSON ONLY (no markdown code blocks, just raw json):
                           setWriteFeedback(m.feedback || '');
                         } catch { /**/ }
                       } else if (mapType === 'vocab') {
-                        try { const parsed = JSON.parse(item.content); setCards(parsed); setCardIdx(0); setFlipped(false); setKnown([]); } catch { /**/ }
+                        try { 
+                          const m = JSON.parse(item.metadata||'{}');
+                          setTab('vocab'); // Chuyển/Giữ ở tab Từ vựng
+                          if (m.def) {
+                            // Nếu là từ lưu riêng lẻ, biến nó thành 1 bộ thẻ chỉ có 1 từ
+                            setCards([{
+                              word: item.content,
+                              def: m.def,
+                              ex: m.ex,
+                              vi: m.vi
+                            }]);
+                            setCardIdx(0);
+                            setFlipped(true); // Hiển thị mặt sau (thông tin) luôn
+                            setKnown([]);
+                          } else {
+                            // Nếu là nhóm từ (kiểu cũ)
+                            const parsed = JSON.parse(item.content); 
+                            setCards(parsed); setCardIdx(0); setFlipped(false); setKnown([]);
+                          }
+                        } catch { /**/ }
                       } else if (mapType === 'reading') {
                         try { const m = JSON.parse(item.metadata||'{}'); setReadTopic(m.topic||''); setReadLevel(m.level||'B1'); setReadQuestions(m.questions||[]); setReadAnswers([]); setReadSubmitted(false); setReadArticle({ title: m.title||'', body: item.content, wordCount: item.content.split(/\s+/).length }); } catch { /**/ }
                         setReadSelected(''); setReadLookup(''); setReadChat([]);
