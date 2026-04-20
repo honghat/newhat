@@ -248,6 +248,8 @@ export default function EnglishContent() {
     fetch('/api/stt').then(r => r.json()).catch(() => {});
   }, []);
 
+  const activeTaskIds = useRef<Set<string>>(new Set());
+
   const loadHistory = useCallback(async () => {
     setHistoryLoading(true);
     try {
@@ -257,13 +259,14 @@ export default function EnglishContent() {
       // Resume tasks
       data.forEach((h: any) => {
         if (h.type.endsWith('_pending')) {
-          // Skip if task is older than 5 mins
           const createdAt = new Date(h.createdAt || Date.now()).getTime();
           if (Date.now() - createdAt > 300000) return; 
 
           const baseType = h.type.replace('_pending', '');
           const taskId = h.content;
-          resumeTask(baseType, taskId);
+          if (!activeTaskIds.current.has(taskId)) {
+            resumeTask(baseType, taskId);
+          }
         }
       });
     } catch {}
@@ -296,6 +299,8 @@ export default function EnglishContent() {
   }
 
   async function pollAndSet(type: string, taskId: string, setter: (val: string)=>void, loader: (b: boolean)=>void) {
+    if (activeTaskIds.current.has(taskId)) return;
+    activeTaskIds.current.add(taskId);
     const start = Date.now();
     setGenElapsed(0);
     const intv = setInterval(() => setGenElapsed(e => e + 1), 1000);
@@ -306,11 +311,15 @@ export default function EnglishContent() {
         if (data.status === 'done') {
           setter(data.content); break;
         }
-        if (data.status === 'error') break;
+        if (data.status === 'error' || data.status === 'unknown') break;
         await new Promise(r => setTimeout(r, 2000));
       }
     } finally {
-      clearInterval(intv); loader(false); loadHistory();
+      clearInterval(intv); 
+      activeTaskIds.current.delete(taskId);
+      loader(false); 
+      // Only refresh history if it was successful or we know it's done
+      fetch('/api/english').then(r => r.json()).then(d => setHistory(d.filter((h: any) => !h.type.endsWith('_pending'))));
     }
   }
 
