@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 
 interface Lesson { id: number; track: string; topic: string; content: string; order: number; completed: boolean; createdAt: string; }
 
@@ -49,6 +49,7 @@ export default function LearnMain() {
   const [codeLang, setCodeLang] = useState('javascript');
   const [activeCodeMode, setActiveCodeMode] = useState<'explain'|'generate'>('explain');
   const [codeSessions, setCodeSessions] = useState<any[]>([]);
+  const contentRef = useRef<HTMLDivElement>(null);
   useEffect(() => setMounted(true), []);
 
   const load = useCallback(async () => {
@@ -80,6 +81,35 @@ export default function LearnMain() {
 
   useEffect(() => { load(); }, [load]);
   useEffect(() => { if (mode === 'code') { loadCodeSessions(); } }, [mode]);
+
+  async function markComplete(lessonId: number) {
+    await fetch('/api/lessons', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: lessonId, completed: true }) });
+    const updatedLessons = await fetch('/api/lessons').then(res => res.json());
+    setLessons(updatedLessons);
+
+    // Tìm bài tiếp theo chưa học trong cùng track
+    const currentLesson = lessons.find(l => l.id === lessonId);
+    if (currentLesson) {
+      const next = updatedLessons
+        .filter((l: any) => l.track === currentLesson.track && !l.completed)
+        .sort((a: any, b: any) => a.order - b.order)[0];
+      
+      if (next) {
+        setCurrent(next);
+        // Reset quiz for next lesson
+        setQuizMode(false); setQuizSubmitted(false); setUserAnswers([]);
+        const answers: string[] = [];
+        const ms = next.content.matchAll(/ĐÁPÁN:([ABC])/g);
+        for (const m of ms) answers.push(m[1]);
+        setQuizAnswers(answers);
+        setUserAnswers(answers.map(() => ''));
+        contentRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      } else {
+        // Nếu hết bài, chỉ cần update lại bài hiện tại (để hiện nút "Đã hoàn thành")
+        setCurrent(updatedLessons.find((l: any) => l.id === lessonId));
+      }
+    }
+  }
 
   async function genLesson() {
     setLoading(true); setCurrent(null); setQuizMode(false); setQuizAnswers([]); setUserAnswers([]); setQuizSubmitted(false);
@@ -461,6 +491,7 @@ ${codeInput}` }] }),
                         setCodeExample(session.output);
                       }
                       window.scrollTo({ top: 0, behavior: 'smooth' });
+                      contentRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
                     }} style={{ flex:1, minWidth:0, cursor:'pointer', display:'flex', alignItems:'center', gap:6 }}>
                       <div style={{ width:28, height:28, borderRadius:6, display:'flex', alignItems:'center', justifyContent:'center', fontWeight:700, fontSize:12,
                         background: 'var(--surface2)',
@@ -493,15 +524,12 @@ ${codeInput}` }] }),
         {/* LEFT: Current lesson */}
         <div>
           {current && (
-            <div className="card" style={{ marginBottom: 16 }}>
+            <div className="card" style={{ marginBottom: 16 }} ref={contentRef}>
               <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:12 }}>
                 <div style={{ fontSize:13, fontWeight:700, color:'var(--accent)' }}>{current.topic}</div>
                 <div style={{ display:'flex', gap:6 }}>
                   {!current.completed && (
-                    <button onClick={async () => {
-                      await fetch('/api/lessons', { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ id: current.id, completed: true }) });
-                      await load();
-                    }} style={{ fontSize:11, color:'#3fb950', background:'#3fb95011', border:'1px solid #3fb95033', borderRadius:6, padding:'4px 10px', cursor:'pointer' }}>
+                    <button onClick={() => markComplete(current.id)} style={{ fontSize:11, color:'#3fb950', background:'#3fb95011', border:'1px solid #3fb95033', borderRadius:6, padding:'4px 10px', cursor:'pointer' }}>
                       ✓ Đánh dấu đã học
                     </button>
                   )}
@@ -566,10 +594,7 @@ ${codeInput}` }] }),
                         {score===quizAnswers.length?'Xuất sắc! Học bài tiếp nhé.':'Xem lại và thử bài khác.'}
                       </div>
                       {score===quizAnswers.length && !current.completed && (
-                        <button className="btn btn-green" style={{ width:'100%' }} onClick={async () => {
-                          await fetch('/api/lessons', { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ id: current.id, completed: true }) });
-                          await load();
-                        }}>
+                        <button className="btn btn-green" style={{ width:'100%' }} onClick={() => markComplete(current.id)}>
                           ✓ Hoàn thành bài này
                         </button>
                       )}
@@ -620,6 +645,7 @@ ${codeInput}` }] }),
                         setQuizAnswers(answers);
                         setUserAnswers(answers.map(() => ''));
                         window.scrollTo({ top: 0, behavior: 'smooth' });
+                        contentRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
                       }} style={{ display:'flex', alignItems:'center', gap:8, padding:'10px 8px', borderBottom:'1px solid var(--surface2)', cursor:'pointer', borderRadius:8, transition:'background 0.15s' }}
                         onMouseEnter={e=>(e.currentTarget.style.background='var(--surface2)')}
                         onMouseLeave={e=>(e.currentTarget.style.background='transparent')}>
