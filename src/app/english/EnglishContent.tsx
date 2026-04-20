@@ -217,6 +217,9 @@ export default function EnglishContent() {
 
   // Listening
   const [listenText, setListenText] = useState('');
+  const [listenVi, setListenVi] = useState('');
+  const [listenVocab, setListenVocab] = useState<{ w: string; m: string }[]>([]);
+  const [showListenVi, setShowListenVi] = useState(false);
   const [listenSpeed, setListenSpeed] = useState(1.0);
   const [listenVoice, setListenVoice] = useState('en_female');
   const [listenLoading, setListenLoading] = useState(false);
@@ -338,12 +341,30 @@ export default function EnglishContent() {
 
   // LISTEN
   async function genListenText() {
-    setListenLoading(true);
-    const p = `Generate a short English listening exercise (4-6 sentences) for a B1 learner. Context: ${modeDesc}. Return ONLY the English text, no explanation, no label.`;
-    const t = await askAI(p);
-    if (t) {
-      setListenText(t);
-      await saveToDb('listen', t, { topic: 'dev life' }, mode);
+    setListenLoading(true); setListenVi(''); setListenVocab([]); setShowListenVi(false);
+    const p = `Generate a short English listening exercise (4-6 sentences) for a B1 learner. Context: ${modeDesc}. 
+Return JSON format ONLY:
+{
+  "en": "English text...",
+  "vi": "Bản dịch tiếng Việt...",
+  "vocab": [{"w": "từ/cụm từ", "m": "nghĩa & cách dùng"}]
+}`;
+    const raw = await askAI(p);
+    if (raw) {
+      try {
+        const m = raw.match(/\{[\s\S]*\}/);
+        if (m) {
+          const d = JSON.parse(m[0]);
+          setListenText(d.en || '');
+          setListenVi(d.vi || '');
+          setListenVocab(d.vocab || []);
+          await saveToDb('listen', d.en, { vi: d.vi, vocab: d.vocab, topic: 'listening' }, mode);
+        } else {
+          setListenText(raw);
+        }
+      } catch {
+        setListenText(raw);
+      }
     }
     setListenLoading(false); loadHistory();
   }
@@ -690,6 +711,33 @@ Return JSON ONLY (no markdown code blocks, just raw json):
                         <span style={{ color: 'var(--muted)', marginRight: 8 }}>{i + 1}.</span>{s}
                       </button>
                     ))}
+
+                    {listenVi && (
+                      <div style={{ marginTop: 16, borderTop: '1px solid var(--border)', paddingTop: 12 }}>
+                        <button onClick={() => setShowListenVi(!showListenVi)} style={{ background: 'none', border: 'none', color: 'var(--orange)', fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+                          {showListenVi ? '🔽 Ẩn bản dịch' : '▶ Hiện bản dịch tiếng Việt'}
+                        </button>
+                        {showListenVi && (
+                          <div style={{ fontSize: 13, color: 'var(--muted)', lineHeight: 1.6, padding: '8px 12px', background: 'rgba(210, 153, 34, 0.05)', borderRadius: 8, fontStyle: 'italic' }}>
+                            {listenVi}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {listenVocab && listenVocab.length > 0 && (
+                      <div style={{ marginTop: 16 }}>
+                        <div className="section-title" style={{ fontSize: 12, color: 'var(--green)', marginBottom: 8 }}>📚 Từ vựng cần lưu ý</div>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                          {listenVocab.map((v, i) => (
+                            <div key={i} style={{ padding: '8px 10px', background: 'var(--surface2)', borderRadius: 8, border: '1px solid var(--border)' }}>
+                              <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--accent)' }}>{v.w}</div>
+                              <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>{v.m}</div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -1082,6 +1130,14 @@ Return JSON ONLY (no markdown code blocks, just raw json):
                     onClick={() => {
                       if (mapType === 'listen') {
                         setListenText(item.content);
+                        try {
+                          const m = JSON.parse(item.metadata || '{}');
+                          setListenVi(m.vi || '');
+                          setListenVocab(m.vocab || []);
+                        } catch { 
+                          setListenVi(''); setListenVocab([]);
+                        }
+                        setShowListenVi(false);
                       } else if (mapType === 'speak') {
                         setTranscript(item.content);
                         try {
