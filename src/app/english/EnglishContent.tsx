@@ -222,6 +222,8 @@ export default function EnglishContent() {
   const [listenVoice, setListenVoice] = useState('en_female');
   const [listenLoading, setListenLoading] = useState(false);
   const [playing, setPlaying] = useState(false);
+  const [listenRecordId, setListenRecordId] = useState<number | null>(null);
+  const [listenElapsed, setListenElapsed] = useState(0);
 
   // Speaking
   const [spkTopic, setSpkTopic] = useState('Tell me about your typical day as a software developer.');
@@ -881,9 +883,25 @@ Return JSON ONLY (no markdown code blocks, just raw json):
                         <button 
                           onClick={(e) => {
                             const btn = e.currentTarget;
-                            // Extract plain text from Markdown for better copy
-                            const text = spkSample.replace(/(\*\*|##|#|>\s)/g, '');
+                            let text = spkSample;
+                            
+                            // 1. Try to slice between English and Vietnamese/Vocab markers
+                            const enStartMatch = text.match(/English:?\s*/i);
+                            const enStartIdx = enStartMatch ? enStartMatch.index! + enStartMatch[0].length : 0;
+                            
+                            const viMarkers = [/Tiếng Việt/i, /Bản dịch/i, /Dịch/i, /Từ hay/i, /Từ vựng/i];
+                            let firstViIdx = text.length;
+                            viMarkers.forEach(regex => {
+                              const m = text.match(regex);
+                              if (m && m.index! > enStartIdx && m.index! < firstViIdx) firstViIdx = m.index!;
+                            });
+                            
+                            text = text.slice(enStartIdx, firstViIdx);
+                            
+                            // 2. Final cleanup of markdown and stray stars
+                            text = text.replace(/(\*\*|##|#|>\s|[:])/g, '').trim();
                             navigator.clipboard.writeText(text);
+                            
                             const old = btn.innerText;
                             btn.innerText = '✓ Đã copy';
                             setTimeout(() => btn.innerText = old, 2000);
@@ -1009,15 +1027,30 @@ Return JSON ONLY (no markdown code blocks, just raw json):
                         <button 
                           onClick={(e) => {
                             const btn = e.currentTarget;
-                            const text = writeSample.replace(/(\*\*|##|#|>\s)/g, '');
+                            let text = writeSample;
+                            
+                            const enStartMatch = text.match(/English:?\s*/i);
+                            const enStartIdx = enStartMatch ? enStartMatch.index! + enStartMatch[0].length : 0;
+                            
+                            const viMarkers = [/Tiếng Việt/i, /Bản dịch/i, /Dịch/i, /Từ hay/i, /Từ vựng/i];
+                            let firstViIdx = text.length;
+                            viMarkers.forEach(regex => {
+                              const m = text.match(regex);
+                              if (m && m.index! > enStartIdx && m.index! < firstViIdx) firstViIdx = m.index!;
+                            });
+                            
+                            text = text.slice(enStartIdx, firstViIdx);
+
+                            text = text.replace(/(\*\*|##|#|>\s|[:])/g, '').trim();
                             navigator.clipboard.writeText(text);
+                            
                             const old = btn.innerText;
                             btn.innerText = '✓ Đã copy';
                             setTimeout(() => btn.innerText = old, 2000);
                           }} 
                           style={{ fontSize: 11, color: 'var(--accent)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700 }}
                         >
-                          📋 Copy bài mẫu
+                          📋 Copy tiếng Anh
                         </button>
                         <button onClick={() => setWriteSample('')} style={{ fontSize: 11, color: 'var(--muted)', background: 'none', border: 'none', cursor: 'pointer' }}>✕ Đóng</button>
                       </div>
@@ -1046,11 +1079,17 @@ Return JSON ONLY (no markdown code blocks, just raw json):
                         <div className="section-title" style={{ color: 'var(--accent)', display: 'flex', alignItems: 'center', gap: 8, margin: 0, fontSize: 16, fontWeight: 800 }}>
                           <span>🔍</span> Chi tiết sửa bài
                         </div>
-                        {writeRecordId && history.find(h => h.id === writeRecordId)?.learnCount && history.find(h => h.id === writeRecordId)!.learnCount > 0 && (
-                          <div style={{ marginTop: 6, display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 8px', borderRadius: 8, background: '#3fb95022', color: '#3fb950', fontSize: 10, fontWeight: 700, border: '1px solid #3fb95044' }}>
-                            ✓ Đã học {history.find(h => h.id === writeRecordId)!.learnCount} lần
-                          </div>
-                        )}
+                        {(() => {
+                          const item = history.find(h => h.id === writeRecordId);
+                          if (item && item.learnCount > 0) {
+                            return (
+                              <div style={{ marginTop: 6, display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 8px', borderRadius: 8, background: '#3fb95022', color: '#3fb950', fontSize: 10, fontWeight: 700, border: '1px solid #3fb95044' }}>
+                                ✓ Đã học {item.learnCount} lần
+                              </div>
+                            );
+                          }
+                          return null;
+                        })()}
                       </div>
                       {writeRecordId && (
                         <button onClick={() => markLessonLearned(writeRecordId)} style={{ padding: '6px 12px', borderRadius: 8, background: '#3fb950', color: '#000', border: 'none', fontSize: 11, fontWeight: 700, cursor: 'pointer', boxShadow: '0 2px 8px rgba(63,185,80,0.2)' }}>
