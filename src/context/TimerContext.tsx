@@ -51,53 +51,59 @@ export function TimerProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState(0);
   const [todaySessions, setTodaySessions] = useState(0);
   const ref = useRef<NodeJS.Timeout|null>(null);
-  const today = new Date().toISOString().slice(0,10);
+  const syncRef = useRef<NodeJS.Timeout|null>(null);
 
-  // Load from DB on mount
-  useEffect(() => {
-    async function init() {
-      try {
-        const res = await fetch(`/api/pomodoro?date=${today}`);
+  const getToday = () => new Date().toLocaleDateString('en-CA'); // 'YYYY-MM-DD'
+
+  const fetchLatest = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/pomodoro?date=${getToday()}`);
+      if (res.ok) {
         const data = await res.json();
         setTodaySessions(data.sessions || 0);
+        return data;
+      }
+    } catch { /**/ }
+    return null;
+  }, []);
 
-        if (data.currentEndTime && data.currentEndTime > Date.now()) {
-          const rem = Math.max(0, Math.floor((data.currentEndTime - Date.now()) / 1000));
-          if (rem > 0) {
-            setIsWork(data.currentMode === 'work');
-            setSecs(rem);
-            setRunning(true);
-            return;
-          }
+  // Load from DB on mount and start polling
+  useEffect(() => {
+    const init = async () => {
+      const data = await fetchLatest();
+      if (data && data.currentEndTime && data.currentEndTime > Date.now()) {
+        const rem = Math.max(0, Math.floor((data.currentEndTime - Date.now()) / 1000));
+        if (rem > 0) {
+          setIsWork(data.currentMode === 'work');
+          setSecs(rem);
+          setRunning(true);
         }
-        setRunning(true); // fresh start
-      } catch { setRunning(true); }
-    }
+      } else {
+        // No active timer
+      }
+    };
     init();
-  }, [today]);
+    const id = setInterval(fetchLatest, 30000);
+    return () => clearInterval(id);
+  }, [fetchLatest]);
 
-  // Save state to DB when timer state changes
-  const saveState = useCallback(async (w: boolean, r: boolean) => {
+  // Save state to DB
+  const saveState = useCallback(async (w: boolean, r: boolean, sCount?: number) => {
+    const date = getToday();
     const endTime = r ? Date.now() + (w ? WORK_MIN : BREAK_MIN) * 60 * 1000 : 0;
     try {
       await fetch('/api/pomodoro', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          date: today,
-          sessions: todaySessions,
+          date,
+          sessions: sCount !== undefined ? sCount : undefined, // Only send if explicitly changed
           currentEndTime: endTime,
           currentMode: w ? 'work' : 'break',
         }),
       });
     } catch { /**/ }
-  }, [today, todaySessions]);
-
-  const saveSessions = useCallback(async (n:number) => {
-    try {
-      await fetch('/api/pomodoro',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({date:today,sessions:n,currentEndTime:0,currentMode:'work'})});
-    } catch { /**/ }
-  }, [today]);
+  }, []);
 
   const switchMode = useCallback((toWork:boolean) => {
     setIsWork(toWork); setSecs(toWork?WORK_MIN*60:BREAK_MIN*60); setRunning(false);
@@ -117,19 +123,29 @@ export function TimerProvider({ children }: { children: ReactNode }) {
         if (s<=1) {
           if (isWork) {
             beep('work');
-            setTodaySessions(p=>{const n=p+1; saveSessions(n); return n;});
+            // Fetch latest from DB to ensure no overwrite
+            fetchLatest().then(data => {
+              const nextCount = (data?.sessions || todaySessions) + 1;
+              setTodaySessions(nextCount);
+              saveState(false, false, nextCount); // Switch to break (false), stop timer (false), and SAVE NEW COUNT
+
+              const d = getToday();
+              fetch('/api/logs', { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ date: d, addHours: WORK_MIN/60, addTopic: 'Pomodoro' }) });
+            });
+            setIsWork(false); setSecs(BREAK_MIN*60); setRunning(false);
             setSession(p=>p+1);
-            const d = new Date().toISOString().slice(0,10);
-            fetch('/api/logs', { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ date: d, addHours: WORK_MIN/60, addTopic: 'Pomodoro' }) });
-            switchMode(false);
-          } else { beep('break'); switchMode(true); }
+          } else { 
+            beep('break'); 
+            setIsWork(true); setSecs(WORK_MIN*60); setRunning(false);
+            saveState(true, false);
+          }
           return 0;
         }
         return s-1;
       });
     },1000);
     return ()=>{ if(ref.current) clearInterval(ref.current); };
-  },[running,isWork,saveSessions,switchMode]);
+  },[running,isWork,saveState,fetchLatest,todaySessions]);
 
   useEffect(() => {
     if (running) {

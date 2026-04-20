@@ -26,8 +26,12 @@ export async function POST(req: Request) {
     const { date, sessions, currentEndTime, currentMode } = await req.json();
     const row = await prisma.pomodoroSession.upsert({
       where: { userId_date: { userId: user.id, date } },
-      update: { sessions, currentEndTime: currentEndTime || undefined, currentMode: currentMode || 'work' },
-      create: { userId: user.id, date, sessions, currentEndTime: currentEndTime || 0, currentMode: currentMode || 'work' },
+      update: { 
+        sessions: sessions !== undefined ? sessions : undefined, 
+        currentEndTime: currentEndTime !== undefined ? currentEndTime : undefined, 
+        currentMode: currentMode || undefined 
+      },
+      create: { userId: user.id, date, sessions: sessions || 0, currentEndTime: currentEndTime || 0, currentMode: currentMode || 'work' },
     });
     return Response.json({
       ...row,
