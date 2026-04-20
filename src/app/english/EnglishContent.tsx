@@ -420,9 +420,8 @@ export default function EnglishContent() {
   }
 
   async function genSpkSample() {
-    setSpkSampleLoading(true); setGenElapsed(0);
-    try {
-      const p = `You are a fluent English speaker. Give a natural 30-45 second spoken response to this question: "${spkTopic}".
+    setSpkSampleLoading(true);
+    const raw = await askAI(`You are a fluent English speaker. Give a natural 30-45 second spoken response to this question: "${spkTopic}".
 Respond in Markdown format:
 # Gợi ý trả lời mẫu
 ## English
@@ -431,26 +430,20 @@ Respond in Markdown format:
 (Bản dịch tiếng Việt để học viên hiểu)
 ## Từ vựng quan trọng
 - word1: nghĩa
-- word2: nghĩa`;
-      const raw = await genTopicTask('speak_sample', p, setGenElapsed);
-      setSpkSample(raw || '');
-      if (raw && spkRecordId) {
-        await fetch('/api/english', {
-          method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ id: spkRecordId, metadata: { topic: spkTopic, sample: raw } }),
-        });
-      }
-    } catch (e) {
-      alert(`⚠️ Lỗi AI: ${e}`);
-    } finally {
-      setSpkSampleLoading(false);
+- word2: nghĩa`);
+    setSpkSample(raw || '');
+    if (spkRecordId) {
+      await fetch('/api/english', {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: spkRecordId, metadata: { topic: spkTopic, sample: raw || '' } }),
+      });
     }
+    setSpkSampleLoading(false);
   }
 
   async function genWriteSample() {
-    setWriteSampleLoading(true); setGenElapsed(0);
-    try {
-      const p = `You are a professional English writer. Write a sample response (~150-200 words) for: "${writePrompt}".
+    setWriteSampleLoading(true);
+    const raw = await askAI(`You are a professional English writer. Write a sample response (~150-200 words) for: "${writePrompt}".
 Format in Markdown:
 # Bài mẫu
 ## Sample Essay (English)
@@ -459,20 +452,15 @@ Format in Markdown:
 (Bản dịch để học viên tham khảo)
 ## Cấu trúc & Từ vựng tốt
 - **Từ hay:** ...
-- **Cấu trúc:** ...`;
-      const raw = await genTopicTask('writing_sample', p, setGenElapsed);
-      setWriteSample(raw || '');
-      if (raw && writeRecordId) {
-        await fetch('/api/english', {
-          method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ id: writeRecordId, metadata: { prompt: writePrompt, sample: raw } }),
-        });
-      }
-    } catch (e) {
-       alert(`⚠️ Lỗi AI: ${e}`);
-    } finally {
-      setWriteSampleLoading(false);
+- **Cấu trúc:** ...`);
+    setWriteSample(raw || '');
+    if (writeRecordId) {
+      await fetch('/api/english', {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: writeRecordId, metadata: { prompt: writePrompt, sample: raw || '' } }),
+      });
     }
+    setWriteSampleLoading(false);
   }
 
   async function startRec() {
@@ -827,7 +815,7 @@ Return JSON ONLY (no markdown code blocks, just raw json):
                   <span>🔊</span> Nghe câu hỏi
                 </button>
                 <button onClick={genSpkSample} disabled={spkSampleLoading || recognizing} style={{ fontSize:12, color:'var(--green)', background:'none', border:'none', cursor:'pointer', fontWeight:600 }}>
-                  {spkSampleLoading ? getGenMessage(genElapsed, 'soạn mẫu') : '💡 Gợi ý trả lời mẫu'}
+                  {spkSampleLoading ? '⏳ Đang tạo bài mẫu...' : '💡 Gợi ý trả lời mẫu'}
                 </button>
               </div>
               {spkTopicError && <div style={{ fontSize:11, color:'#f85149', marginTop:8 }}>{spkTopicError}</div>}
@@ -899,7 +887,7 @@ Return JSON ONLY (no markdown code blocks, just raw json):
               </div>
               <div style={{ display:'flex', gap:10, flexWrap:'wrap', alignItems:'center' }}>
                 <button onClick={genWriteSample} disabled={writeSampleLoading} style={{ fontSize:12, color:'var(--green)', background:'none', border:'none', cursor:'pointer', fontWeight:600 }}>
-                  {writeSampleLoading ? getGenMessage(genElapsed, 'soạn mẫu') : '💡 Gợi ý bài viết mẫu'}
+                  {writeSampleLoading ? '⏳ Đang soạn bài mẫu...' : '💡 Gợi ý bài viết mẫu'}
                 </button>
                 <span style={{ fontSize:11, color:'var(--muted)' }}>| Mẫu: </span>
                 {WRITING_PROMPTS.slice(0,3).map((p,i) => (
