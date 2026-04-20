@@ -187,10 +187,6 @@ export default function BottomNav({ session }: { session: AuthUser | null }) {
             {session?.role === 'admin' && (
               <Link href="/admin" style={{ width: 34, height: 34, borderRadius: 10, border: '1px solid var(--accent)', background: 'transparent', color: 'var(--accent)', fontSize: 12, textDecoration: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>👥</Link>
             )}
-
-            <Link href="/profile" style={{ width: 34, height: 34, borderRadius: 10, border: '1px solid var(--border)', background: 'var(--surface2)', color: 'var(--muted)', fontSize: 12, textDecoration: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold' }}>
-              {session?.name[0]?.toUpperCase() || '👤'}
-            </Link>
           </div>
         </div>
 
