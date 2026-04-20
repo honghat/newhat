@@ -256,6 +256,14 @@ export default function EnglishContent() {
     setHistoryLoading(false);
   }, []);
 
+  const getGenMessage = useCallback((elapsed: number, action = 'tạo') => {
+    if (elapsed < 3) return `🤖 AI đang tiếp nhận yêu cầu ${action}...`;
+    if (elapsed < 8) return `🧠 AI đang suy nghĩ nội dung ${action}...`;
+    if (elapsed < 15) return `✍️ AI đang soạn thảo chi tiết...`;
+    if (elapsed < 25) return `⚙️ AI đang kiểm tra lại câu chữ...`;
+    return `✨ AI đang hoàn thiện bản cuối (${elapsed}s)...`;
+  }, []);
+
   useEffect(() => { loadHistory(); }, [loadHistory]);
 
   // LISTEN
@@ -386,8 +394,9 @@ Format in Markdown:
   }
   async function getFeedback() {
     if (!transcript) return;
-    setSpkLoading(true);
-    const fb = await askAI(`Bạn là giáo viên tiếng Anh chuyên nghiệp. Phân tích bài nói của học viên: "${transcript}".
+    setSpkLoading(true); setGenElapsed(0);
+    try {
+      const p = `Bạn là giáo viên tiếng Anh chuyên nghiệp. Phân tích bài nói của học viên: "${transcript}".
 Hãy trình bày theo định dạng Markdown sau:
 # Nhận xét bài nói và Gợi ý
 ## Phân tích lỗi
@@ -402,17 +411,24 @@ Hãy trình bày theo định dạng Markdown sau:
 **"Câu tiếng Anh hoàn chỉnh và tự nhiên hơn"**
 ---
 ## Dịch sang tiếng Việt
-> Bản dịch của câu gợi ý.`);
-    setSpkFeedback(fb);
-    if (spkRecordId) {
-      await fetch('/api/english', {
-        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: spkRecordId, content: transcript, metadata: { topic: spkTopic, feedback: fb, sample: spkSample } }),
-      });
-    } else {
-      await saveToDb('speak', transcript, { topic: spkTopic, feedback: fb, sample: spkSample }, mode);
+> Bản dịch của câu gợi ý.`;
+      const fb = await genTopicTask('speak_feedback', p, setGenElapsed);
+      if (fb) {
+        setSpkFeedback(fb);
+        if (spkRecordId) {
+          await fetch('/api/english', {
+            method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: spkRecordId, content: transcript, metadata: { topic: spkTopic, feedback: fb, sample: spkSample } }),
+          });
+        } else {
+          await saveToDb('speak', transcript, { topic: spkTopic, feedback: fb, sample: spkSample }, mode);
+        }
+      }
+    } catch (e) {
+      alert(`⚠️ Lỗi: ${e}`);
+    } finally {
+      setSpkLoading(false); loadHistory();
     }
-    setSpkLoading(false); loadHistory();
   }
 
   // WRITE
@@ -442,8 +458,9 @@ Hãy trình bày theo định dạng Markdown sau:
 
   async function checkWriting() {
     if (!writeText.trim()) return;
-    setWriteLoading(true);
-    const fb = await askAI(`Bạn là giáo viên tiếng Anh chuyên nghiệp. Chữa bài viết cho học viên.
+    setWriteLoading(true); setGenElapsed(0);
+    try {
+      const p = `Bạn là giáo viên tiếng Anh chuyên nghiệp. Chữa bài viết cho học viên.
 Chủ đề: "${writePrompt}"
 Bài viết gốc: "${writeText}"
 
@@ -471,17 +488,24 @@ Hãy trình bày theo định dạng Markdown sau:
 
 ## Dịch sang tiếng Việt
 
-> Bản dịch của phần gợi ý viết lại phía trên.`);
-    setWriteFeedback(fb);
-    if (writeRecordId) {
-      await fetch('/api/english', {
-        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: writeRecordId, content: writeText, metadata: { prompt: writePrompt, feedback: fb, sample: writeSample, words: writeText.split(/\s+/).filter(Boolean).length } }),
-      });
-    } else {
-      await saveToDb('writing', writeText, { prompt: writePrompt, feedback: fb, sample: writeSample, words: writeText.split(/\s+/).filter(Boolean).length }, mode);
+> Bản dịch của phần gợi ý viết lại phía trên.`;
+      const fb = await genTopicTask('writing_check', p, setGenElapsed);
+      if (fb) {
+        setWriteFeedback(fb);
+        if (writeRecordId) {
+          await fetch('/api/english', {
+            method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: writeRecordId, content: writeText, metadata: { prompt: writePrompt, feedback: fb, sample: writeSample, words: writeText.split(/\s+/).filter(Boolean).length } }),
+          });
+        } else {
+          await saveToDb('writing', writeText, { prompt: writePrompt, feedback: fb, sample: writeSample, words: writeText.split(/\s+/).filter(Boolean).length }, mode);
+        }
+      }
+    } catch (e) {
+      alert(`⚠️ Lỗi: ${e}`);
+    } finally {
+      setWriteLoading(false); loadHistory();
     }
-    setWriteLoading(false); loadHistory();
   }
 
   // VOCAB
@@ -699,7 +723,7 @@ Trả lời theo Markdown:
                 <div>
                   <div className="section-title" style={{ marginBottom:4 }}>Chủ đề nói</div>
                   <div style={{ fontSize:15, color:'var(--purple)', fontWeight:700, lineHeight:1.4 }}>
-                    {spkTopicLoading ? `⏳ AI đang tạo chủ đề mới (${genElapsed}s)...` : spkTopic}
+                    {spkTopicLoading ? getGenMessage(genElapsed) : spkTopic}
                   </div>
                 </div>
                 <button onClick={genSpkTopic} disabled={spkTopicLoading || spkLoading} style={{ padding:'6px 12px', borderRadius:8, border:'none', background:'var(--accent)', color:'#000', fontSize:11, fontWeight:800, cursor:'pointer', flexShrink:0, display:'flex', alignItems:'center', gap:4, boxShadow:'0 2px 8px rgba(0,0,0,0.2)' }}>
@@ -741,8 +765,8 @@ Trả lời theo Markdown:
               <div className="card">
                 <div className="section-title">Bạn vừa nói</div>
                 <div style={{ fontSize:14, fontStyle:'italic', lineHeight:1.7, color:'var(--text)', marginBottom:12 }}>"{transcript}"</div>
-                <button className="btn btn-ghost" style={{ width:'100%' }} onClick={getFeedback} disabled={spkLoading}>
-                  {spkLoading ? '⏳ AI đang nhận xét...' : '🤖 AI nhận xét ngữ pháp & phát âm'}
+                <button className="btn btn-ghost" style={{ width:'100%' }} onClick={getFeedback} disabled={spkLoading || recognizing}>
+                  {spkLoading ? getGenMessage(genElapsed, 'nhận xét') : '🤖 AI nhận xét ngữ pháp & phát âm'}
                 </button>
               </div>
             )}
@@ -768,7 +792,7 @@ Trả lời theo Markdown:
                 <div>
                   <div className="section-title" style={{ marginBottom:4 }}>Đề tài viết</div>
                   <div style={{ fontSize:14, color:'var(--orange)', fontWeight:700, lineHeight:1.4 }}>
-                    {writeTopicLoading ? `⏳ AI đang soạn đề tài mới (${genElapsed}s)...` : writePrompt}
+                    {writeTopicLoading ? getGenMessage(genElapsed, 'soạn bài') : writePrompt}
                   </div>
                 </div>
                 <button onClick={genWriteTopic} disabled={writeTopicLoading || writeLoading} style={{ padding:'6px 12px', borderRadius:8, border:'none', background:'var(--accent)', color:'#000', fontSize:11, fontWeight:800, cursor:'pointer', flexShrink:0, display:'flex', alignItems:'center', gap:4, boxShadow:'0 2px 8px rgba(0,0,0,0.2)' }}>
@@ -803,7 +827,7 @@ Trả lời theo Markdown:
                 <button onClick={()=>{setWriteText('');setWriteFeedback('');}} style={{ fontSize:12, color:'var(--muted)', background:'none', border:'none', cursor:'pointer' }}>Xóa</button>
               </div>
               <button className="btn btn-primary" style={{ width:'100%' }} onClick={checkWriting} disabled={writeLoading||!writeText.trim()}>
-                {writeLoading ? '⏳ AI đang chấm bài...' : '🤖 AI chấm bài viết'}
+                {writeLoading ? getGenMessage(genElapsed, 'chấm bài') : '🤖 AI chấm bài viết'}
               </button>
             </div>
           </div>
