@@ -315,8 +315,9 @@ export default function EnglishContent() {
   }
 
   async function genSpkSample() {
-    setSpkSampleLoading(true);
-    const raw = await askAI(`You are a fluent English speaker. Give a natural 30-45 second spoken response to this question: "${spkTopic}".
+    setSpkSampleLoading(true); setGenElapsed(0);
+    try {
+      const p = `You are a fluent English speaker. Give a natural 30-45 second spoken response to this question: "${spkTopic}".
 Respond in Markdown format:
 # Gợi ý trả lời mẫu
 ## English
@@ -325,20 +326,26 @@ Respond in Markdown format:
 (Bản dịch tiếng Việt để học viên hiểu)
 ## Từ vựng quan trọng
 - word1: nghĩa
-- word2: nghĩa`);
-    setSpkSample(raw || '');
-    if (spkRecordId) {
-      await fetch('/api/english', {
-        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: spkRecordId, metadata: { topic: spkTopic, sample: raw || '' } }),
-      });
+- word2: nghĩa`;
+      const raw = await genTopicTask('speak_sample', p, setGenElapsed);
+      setSpkSample(raw || '');
+      if (raw && spkRecordId) {
+        await fetch('/api/english', {
+          method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: spkRecordId, metadata: { topic: spkTopic, sample: raw } }),
+        });
+      }
+    } catch (e) {
+      alert(`⚠️ Lỗi AI: ${e}`);
+    } finally {
+      setSpkSampleLoading(false);
     }
-    setSpkSampleLoading(false);
   }
 
   async function genWriteSample() {
-    setWriteSampleLoading(true);
-    const raw = await askAI(`You are a professional English writer. Write a sample response (~150-200 words) for: "${writePrompt}".
+    setWriteSampleLoading(true); setGenElapsed(0);
+    try {
+      const p = `You are a professional English writer. Write a sample response (~150-200 words) for: "${writePrompt}".
 Format in Markdown:
 # Bài mẫu
 ## Sample Essay (English)
@@ -347,15 +354,20 @@ Format in Markdown:
 (Bản dịch để học viên tham khảo)
 ## Cấu trúc & Từ vựng tốt
 - **Từ hay:** ...
-- **Cấu trúc:** ...`);
-    setWriteSample(raw || '');
-    if (writeRecordId) {
-      await fetch('/api/english', {
-        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: writeRecordId, metadata: { prompt: writePrompt, sample: raw || '' } }),
-      });
+- **Cấu trúc:** ...`;
+      const raw = await genTopicTask('writing_sample', p, setGenElapsed);
+      setWriteSample(raw || '');
+      if (raw && writeRecordId) {
+        await fetch('/api/english', {
+          method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: writeRecordId, metadata: { prompt: writePrompt, sample: raw } }),
+        });
+      }
+    } catch (e) {
+       alert(`⚠️ Lỗi AI: ${e}`);
+    } finally {
+      setWriteSampleLoading(false);
     }
-    setWriteSampleLoading(false);
   }
 
   async function startRec() {
@@ -510,57 +522,52 @@ Hãy trình bày theo định dạng Markdown sau:
 
   // VOCAB
   async function loadVocab() {
-    setVocabLoading(true); setCards([]); setCardIdx(0); setFlipped(false); setKnown([]);
-    const raw = await askAI(`Give 8 English vocabulary words for a Vietnamese learner. Context: ${modeDesc}. Topic: ${vocabTopic}. Return JSON array ONLY: [{"word":"...","def":"short English definition","ex":"Example sentence","vi":"Vietnamese meaning"}]`);
-    if (!raw || raw === AI_OFFLINE || raw.startsWith('Error') || raw.startsWith('Timeout')) {
-      alert(`⚠️ Lỗi AI: ${raw}`);
-      setVocabLoading(false); return;
-    }
+    setVocabLoading(true); setCards([]); setCardIdx(0); setFlipped(false); setKnown([]); setGenElapsed(0);
     try {
-      const m = raw.match(/\[[\s\S]*\]/);
-      if (m) {
-        const parsed = JSON.parse(m[0]);
-        setCards(parsed);
-        await saveToDb('vocab', JSON.stringify(parsed), { topic: vocabTopic, count: parsed.length }, mode);
+      const p = `Give 8 English vocabulary words for a Vietnamese learner. Context: ${modeDesc}. Topic: ${vocabTopic}. Return JSON array ONLY: [{"word":"...","def":"short English definition","ex":"Example sentence","vi":"Vietnamese meaning"}]`;
+      const raw = await genTopicTask('vocab', p, setGenElapsed);
+      if (raw) {
+        const m = raw.match(/\[[\s\S]*\]/);
+        if (m) {
+          const parsed = JSON.parse(m[0]);
+          setCards(parsed);
+          await saveToDb('vocab', JSON.stringify(parsed), { topic: vocabTopic, count: parsed.length }, mode);
+        }
       }
-    } catch (e) { alert(`⚠️ Lỗi JSON: ${e}`); }
+    } catch (e) { alert(`⚠️ Lỗi: ${e}`); }
     setVocabLoading(false); loadHistory();
   }
 
   const card = cards[cardIdx];
   const wordCount = writeText.split(/\s+/).filter(Boolean).length;
   async function generateReading() {
-    setReadLoading(true); setReadError('');
+    setReadLoading(true); setReadError(''); setGenElapsed(0);
     setReadArticle(null); setReadQuestions([]); setReadAnswers([]); setReadSubmitted(false);
     setReadSelected(''); setReadLookup(''); setReadChat([]);
     
-    const prompt = `You are an English reading teacher. Create a reading passage for a Vietnamese learner. Context: ${modeDesc}.
+    const p = `You are an English reading teacher. Create a reading passage for a Vietnamese learner. Context: ${modeDesc}.
 Level: ${readLevel}
 Topic: ${readTopic}
 Return JSON ONLY (no markdown code blocks, just raw json):
 {"title":"...","body":"4-6 paragraphs separated by \\n\\n, ${readLevel==='A2'?'80-120':readLevel==='B1'?'150-200':'200-280'} words","questions":[{"q":"...","options":["A","B","C","D"],"answer":0},{"q":"...","options":["A","B","C","D"],"answer":2},{"q":"...","options":["A","B","C","D"],"answer":1},{"q":"...","options":["A","B","C","D"],"answer":3}]}`;
 
-    const raw = await askAI(prompt);
-    if (!raw || raw === AI_OFFLINE || raw.startsWith('Error') || raw.startsWith('Timeout') || raw.includes('AI offline')) {
-      setReadError(`⚠️ ${raw || 'Không nhận được phản hồi từ AI'}`);
-      setReadLoading(false); return;
-    }
-
     try {
-      const m = raw.match(/\{[\s\S]*\}/);
-      if (m) {
-        const p = JSON.parse(m[0]);
-        if (!p.title || !p.body) throw new Error('Dữ liệu AI thiếu title/body');
-        
-        setReadArticle({ title: p.title, body: p.body, wordCount: p.body.split(/\s+/).length });
-        setReadQuestions(p.questions || []);
-        setReadAnswers((p.questions||[]).map(()=>-1));
-        await saveToDb('reading', p.body, { title: p.title, level: readLevel, topic: readTopic, questions: p.questions }, mode);
-      } else {
-        throw new Error('AI trả về định dạng không đúng');
+      const raw = await genTopicTask('reading', p, setGenElapsed);
+      if (raw) {
+        const m = raw.match(/\{[\s\S]*\}/);
+        if (m) {
+          const parsed = JSON.parse(m[0]);
+          if (!parsed.title || !parsed.body) throw new Error('Dữ liệu AI thiếu title/body');
+          setReadArticle({ title: parsed.title, body: parsed.body, wordCount: parsed.body.split(/\s+/).length });
+          setReadQuestions(parsed.questions || []);
+          setReadAnswers((parsed.questions||[]).map(()=>-1));
+          await saveToDb('reading', parsed.body, { title: parsed.title, level: readLevel, topic: readTopic, questions: parsed.questions }, mode);
+        } else {
+          throw new Error('AI trả về định dạng không đúng');
+        }
       }
     } catch (e) { 
-      setReadError('⚠️ Lỗi xử lý bài đọc: ' + (e instanceof Error ? e.message : String(e)));
+      setReadError('⚠️ Lỗi: ' + (e instanceof Error ? e.message : String(e)));
     }
     setReadLoading(false); loadHistory();
   }
@@ -589,40 +596,19 @@ Return JSON ONLY (no markdown code blocks, just raw json):
   async function lookupWord() {
     const w = dictInput.trim();
     if (!w || dictLoading) return;
-    setDictLoading(true); setDictResult('');
+    setDictLoading(true); setDictResult(''); setGenElapsed(0);
     const isPhrase = w.split(/\s+/).length > 3;
-    const raw = await askAI(isPhrase
-      ? `Giải thích cụm từ/câu tiếng Anh: "${w}"
-Trả lời theo Markdown:
-# "${w}"
-## Nghĩa tiếng Việt
-(Dịch nghĩa)
-## Giải thích
-(Giải thích ý nghĩa, ngữ cảnh dùng)
-## Ví dụ tương tự
-- Câu ví dụ 1
-- Câu ví dụ 2`
-      : `Tra từ tiếng Anh: "${w}"
-Trả lời theo Markdown:
-# ${w}
-## Phiên âm
-/.../ (IPA)
-## Từ loại & Nghĩa
-- **(noun/verb/adj/adv):** Nghĩa tiếng Việt chính
-- Nghĩa 2 nếu có
-## Ví dụ
-- **(English):** Câu ví dụ tự nhiên
-- **(Tiếng Việt):** Dịch câu ví dụ
-## Collocations phổ biến
-- ${w} + ... (ví dụ)
-## Từ liên quan
-- synonym1, synonym2
-- Antonym: ...`
-    );
-    setDictResult(raw || '');
-    await saveToDb('dict', raw || '', { word: w }, mode);
-    setDictLoading(false);
-    loadHistory();
+    const p = isPhrase
+      ? `Giải thích cụm từ/câu tiếng Anh: "${w}". Trả lời Markdown # "${w}" \n## Nghĩa tiếng Việt...`
+      : `Tra từ tiếng Anh: "${w}". Trả lời Markdown # ${w} \n## Phiên âm...`;
+    try {
+      const raw = await genTopicTask('dict', p, setGenElapsed);
+      if (raw) {
+        setDictResult(raw);
+        await saveToDb('dict', raw, { word: w }, mode);
+      }
+    } catch (e) { alert(`⚠️ Lỗi: ${e}`); }
+    setDictLoading(false); loadHistory();
   }
 
   return (
@@ -734,8 +720,8 @@ Trả lời theo Markdown:
                 <button onClick={()=>speak(spkTopic, 1.0)} style={{ fontSize:12, color:'var(--muted)', background:'none', border:'none', cursor:'pointer', display:'flex', alignItems:'center', gap:4 }}>
                   <span>🔊</span> Nghe câu hỏi
                 </button>
-                <button onClick={genSpkSample} disabled={spkSampleLoading} style={{ fontSize:12, color:'var(--green)', background:'none', border:'none', cursor:'pointer', fontWeight:600 }}>
-                  {spkSampleLoading ? '⏳ Đang tạo...' : '💡 Gợi ý trả lời mẫu'}
+                <button onClick={genSpkSample} disabled={spkSampleLoading || recognizing} style={{ fontSize:12, color:'var(--green)', background:'none', border:'none', cursor:'pointer', fontWeight:600 }}>
+                  {spkSampleLoading ? getGenMessage(genElapsed, 'soạn mẫu') : '💡 Gợi ý trả lời mẫu'}
                 </button>
               </div>
               {spkTopicError && <div style={{ fontSize:11, color:'#f85149', marginTop:8 }}>{spkTopicError}</div>}
@@ -801,7 +787,7 @@ Trả lời theo Markdown:
               </div>
               <div style={{ display:'flex', gap:10, flexWrap:'wrap', alignItems:'center' }}>
                 <button onClick={genWriteSample} disabled={writeSampleLoading} style={{ fontSize:12, color:'var(--green)', background:'none', border:'none', cursor:'pointer', fontWeight:600 }}>
-                  {writeSampleLoading ? '⏳ Đang tạo...' : '💡 Gợi ý bài viết mẫu'}
+                  {writeSampleLoading ? getGenMessage(genElapsed, 'soạn mẫu') : '💡 Gợi ý bài viết mẫu'}
                 </button>
                 <span style={{ fontSize:11, color:'var(--muted)' }}>| Mẫu: </span>
                 {WRITING_PROMPTS.slice(0,3).map((p,i) => (
