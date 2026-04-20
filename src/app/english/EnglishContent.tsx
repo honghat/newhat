@@ -877,7 +877,23 @@ Return JSON ONLY (no markdown code blocks, just raw json):
                   <div className="card" style={{ borderLeft: '4px solid var(--green)', background: 'var(--surface2)' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                       <div className="section-title" style={{ color: 'var(--green)', margin: 0 }}>💡 Bài mẫu AI</div>
-                      <button onClick={() => setSpkSample('')} style={{ fontSize: 11, color: 'var(--muted)', background: 'none', border: 'none', cursor: 'pointer' }}>✕ Đóng</button>
+                      <div style={{ display: 'flex', gap: 10 }}>
+                        <button 
+                          onClick={(e) => {
+                            const btn = e.currentTarget;
+                            // Extract plain text from Markdown for better copy
+                            const text = spkSample.replace(/(\*\*|##|#|>\s)/g, '');
+                            navigator.clipboard.writeText(text);
+                            const old = btn.innerText;
+                            btn.innerText = '✓ Đã copy';
+                            setTimeout(() => btn.innerText = old, 2000);
+                          }} 
+                          style={{ fontSize: 11, color: 'var(--accent)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700 }}
+                        >
+                          📋 Copy
+                        </button>
+                        <button onClick={() => setSpkSample('')} style={{ fontSize: 11, color: 'var(--muted)', background: 'none', border: 'none', cursor: 'pointer' }}>✕ Đóng</button>
+                      </div>
                     </div>
                     <div style={{ fontSize: 13, lineHeight: 1.7, color: 'var(--text)' }} dangerouslySetInnerHTML={{ __html: parseMarkdown(spkSample) }} />
                   </div>
@@ -989,7 +1005,22 @@ Return JSON ONLY (no markdown code blocks, just raw json):
                   <div className="card" style={{ marginBottom: 12, borderLeft: '4px solid var(--green)', background: 'var(--surface2)' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                       <div className="section-title" style={{ color: 'var(--green)', margin: 0 }}>💡 Bài viết mẫu AI</div>
-                      <button onClick={() => setWriteSample('')} style={{ fontSize: 11, color: 'var(--muted)', background: 'none', border: 'none', cursor: 'pointer' }}>✕ Đóng</button>
+                      <div style={{ display: 'flex', gap: 10 }}>
+                        <button 
+                          onClick={(e) => {
+                            const btn = e.currentTarget;
+                            const text = writeSample.replace(/(\*\*|##|#|>\s)/g, '');
+                            navigator.clipboard.writeText(text);
+                            const old = btn.innerText;
+                            btn.innerText = '✓ Đã copy';
+                            setTimeout(() => btn.innerText = old, 2000);
+                          }} 
+                          style={{ fontSize: 11, color: 'var(--accent)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700 }}
+                        >
+                          📋 Copy bài mẫu
+                        </button>
+                        <button onClick={() => setWriteSample('')} style={{ fontSize: 11, color: 'var(--muted)', background: 'none', border: 'none', cursor: 'pointer' }}>✕ Đóng</button>
+                      </div>
                     </div>
                     <div style={{ fontSize: 13, lineHeight: 1.7, color: 'var(--text)' }} dangerouslySetInnerHTML={{ __html: parseMarkdown(writeSample) }} />
                   </div>
