@@ -701,7 +701,7 @@ Trả lời theo Markdown:
                 <div>
                   <div className="section-title" style={{ marginBottom:4 }}>Chủ đề nói</div>
                   <div style={{ fontSize:16, color:'var(--purple)', fontWeight:700, lineHeight:1.4 }}>
-                    {spkTopic}
+                    {spkLoading && !transcript ? '⏳ AI đang tạo chủ đề mới...' : spkTopic}
                   </div>
                 </div>
                 <button onClick={genSpkTopic} disabled={spkLoading} style={{ padding:'6px 12px', borderRadius:8, border:'none', background:'var(--accent)', color:'#000', fontSize:11, fontWeight:800, cursor:'pointer', flexShrink:0, display:'flex', alignItems:'center', gap:4, boxShadow:'0 2px 8px rgba(0,0,0,0.2)' }}>
@@ -770,7 +770,7 @@ Trả lời theo Markdown:
                 <div>
                   <div className="section-title" style={{ marginBottom:4 }}>Đề tài viết</div>
                   <div style={{ fontSize:15, color:'var(--orange)', fontWeight:700, lineHeight:1.4 }}>
-                    {writePrompt}
+                    {writeLoading && !writeText ? '⏳ AI đang soạn đề tài mới...' : writePrompt}
                   </div>
                 </div>
                 <button onClick={genWriteTopic} disabled={writeLoading} style={{ padding:'6px 12px', borderRadius:8, border:'none', background:'var(--accent)', color:'#000', fontSize:11, fontWeight:800, cursor:'pointer', flexShrink:0, display:'flex', alignItems:'center', gap:4, boxShadow:'0 2px 8px rgba(0,0,0,0.2)' }}>
