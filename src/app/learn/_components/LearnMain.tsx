@@ -103,7 +103,7 @@ export default function LearnMain() {
         for (const m of ms) answers.push(m[1]);
         setQuizAnswers(answers);
         setUserAnswers(answers.map(() => ''));
-        contentRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        contentRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
       } else {
         // Nếu hết bài, chỉ cần update lại bài hiện tại (để hiện nút "Đã hoàn thành")
         setCurrent(updatedLessons.find((l: any) => l.id === lessonId));
@@ -491,7 +491,7 @@ ${codeInput}` }] }),
                         setCodeExample(session.output);
                       }
                       window.scrollTo({ top: 0, behavior: 'smooth' });
-                      contentRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                      contentRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
                     }} style={{ flex:1, minWidth:0, cursor:'pointer', display:'flex', alignItems:'center', gap:6 }}>
                       <div style={{ width:28, height:28, borderRadius:6, display:'flex', alignItems:'center', justifyContent:'center', fontWeight:700, fontSize:12,
                         background: 'var(--surface2)',
@@ -645,7 +645,7 @@ ${codeInput}` }] }),
                         setQuizAnswers(answers);
                         setUserAnswers(answers.map(() => ''));
                         window.scrollTo({ top: 0, behavior: 'smooth' });
-                        contentRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                        contentRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
                       }} style={{ display:'flex', alignItems:'center', gap:8, padding:'10px 8px', borderBottom:'1px solid var(--surface2)', cursor:'pointer', borderRadius:8, transition:'background 0.15s' }}
                         onMouseEnter={e=>(e.currentTarget.style.background='var(--surface2)')}
                         onMouseLeave={e=>(e.currentTarget.style.background='transparent')}>
