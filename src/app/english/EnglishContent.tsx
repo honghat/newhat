@@ -314,61 +314,47 @@ export default function EnglishContent() {
   // SPEAK
   async function genSpkTopic() {
     setSpkTopicLoading(true); setSpkTopicError('');
-    const p = `You are an English teacher. Suggest ONE short speaking discussion question for a learner interested in: ${modeDesc}. Current topic: "${spkTopic}". Provide a DIFFERENT topic relevant to ${modeDesc}. Output: ONE English question only.`;
+    const p = `Give ONE short English speaking question for: ${modeDesc}. Different from: "${spkTopic}". Reply with the question ONLY, no explanation.`;
     const t = await askAI(p);
     if (t) {
-      setSpkTopic(t);
+      const clean = cleanTopic(t);
+      setSpkTopic(clean);
       setTranscript(''); setSpkFeedback(''); setSpkSample('');
-      const res = await fetch('/api/english', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type: 'speak', content: '', metadata: { topic: t, mode } }),
-      });
-      const data = await res.json();
-      setSpkRecordId(data.id);
+      setSpkRecordId(null);
     }
-    setSpkTopicLoading(false); loadHistory();
+    setSpkTopicLoading(false);
   }
 
   async function genSpkSample() {
     setSpkSampleLoading(true);
-    const raw = await askAI(`You are a fluent English speaker. Give a natural 30-45 second spoken response to this question: "${spkTopic}".
-Respond in Markdown format:
-# Gợi ý trả lời mẫu
-## English
-(3-5 sentences, conversational tone, use linking words: first, also, however, finally)
-## Giải thích (tiếng Việt)
-(Bản dịch tiếng Việt để học viên hiểu)
-## Từ vựng quan trọng
-- word1: nghĩa
-- word2: nghĩa`);
+    const raw = await askAI(`Answer this English question in 3-4 natural sentences: "${spkTopic}"
+
+**English:** (3-4 sentences)
+**Tiếng Việt:** (bản dịch ngắn)
+**Từ hay:** word1 – nghĩa, word2 – nghĩa`);
     setSpkSample(raw || '');
     if (spkRecordId) {
-      await fetch('/api/english', {
+      fetch('/api/english', {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id: spkRecordId, metadata: { topic: spkTopic, sample: raw || '', mode } }),
-      });
+      }).catch(()=>{});
     }
     setSpkSampleLoading(false);
   }
 
   async function genWriteSample() {
     setWriteSampleLoading(true);
-    const raw = await askAI(`You are a professional English writer. Write a sample response (~150-200 words) for: "${writePrompt}".
-Format in Markdown:
-# Bài mẫu
-## Sample Essay (English)
-(A well-structured paragraph with clear intro, body, conclusion. Use formal vocabulary)
-## Dịch tiếng Việt
-(Bản dịch để học viên tham khảo)
-## Cấu trúc & Từ vựng tốt
-- **Từ hay:** ...
-- **Cấu trúc:** ...`);
+    const raw = await askAI(`Write a concise sample response (80-120 words) for: "${writePrompt}"
+
+**English:** (1-2 clear paragraphs)
+**Tiếng Việt:** (bản dịch ngắn)
+**Từ hay:** word1 – nghĩa, word2 – nghĩa`);
     setWriteSample(raw || '');
     if (writeRecordId) {
-      await fetch('/api/english', {
+      fetch('/api/english', {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id: writeRecordId, metadata: { prompt: writePrompt, sample: raw || '', mode } }),
-      });
+      }).catch(()=>{});
     }
     setWriteSampleLoading(false);
   }
@@ -444,53 +430,26 @@ Hãy trình bày theo định dạng Markdown sau:
   // WRITE
   async function genWriteTopic() {
     setWriteTopicLoading(true); setWriteTopicError('');
-    const p = `You are an English teacher. Suggest ONE writing prompt for a learner interested in: ${modeDesc}. Current prompt: "${writePrompt}". Provide a DIFFERENT prompt relevant to ${modeDesc}. Output: ONE English prompt only.`;
+    const p = `Give ONE English writing prompt for: ${modeDesc}. Different from: "${writePrompt}". Reply with the prompt ONLY.`;
     const t = await askAI(p);
     if (t) {
-      setWritePrompt(t);
+      const clean = cleanTopic(t);
+      setWritePrompt(clean);
       setWriteText(''); setWriteFeedback(''); setWriteSample('');
-      const res = await fetch('/api/english', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type: 'writing', content: '', metadata: { prompt: t, mode } }),
-      });
-      const data = await res.json();
-      setWriteRecordId(data.id);
+      setWriteRecordId(null);
     }
-    setWriteTopicLoading(false); loadHistory();
+    setWriteTopicLoading(false);
   }
 
   async function checkWriting() {
     if (!writeText.trim()) return;
     setWriteLoading(true);
-    const p = `Bạn là giáo viên tiếng Anh chuyên nghiệp. Chữa bài viết cho học viên.
-Chủ đề: "${writePrompt}"
-Bài viết gốc: "${writeText}"
+    const p = `Check this English writing. Topic: "${writePrompt}". Text: "${writeText}"
 
-Hãy trình bày theo định dạng Markdown sau:
-# Chữa bài và Gợi ý viết lại
-
-## Phân tích lỗi trong bài gốc
-
-### 1. Ngữ pháp:
-(Liệt kê lỗi ngữ pháp, dấu câu)
-
-### 2. Từ vựng:
-(Nhận xét về từ vựng, tính chuyên nghiệp/kỹ thuật)
-
-### 3. Cấu trúc câu:
-(Nhận xét về logic, cách triển khai ý)
-
----
-
-## Gợi ý viết lại (English)
-
-**"Sử dụng tiếng Anh chuyên nghiệp, tự nhiên, đúng ngữ pháp"**
-
----
-
-## Dịch sang tiếng Việt
-
-> Bản dịch của phần gợi ý viết lại phía trên.`;
+Reply in Markdown (concise):
+**Lỗi chính:** (tối đa 4 bullets về grammar/vocab)
+**Viết lại đẹp hơn (English):** (1-2 câu tự nhiên hơn)
+**Dịch:** (bản dịch tiếng Việt của phần viết lại)`;
     const fb = await askAI(p);
     if (fb) {
       setWriteFeedback(fb);
