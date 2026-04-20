@@ -250,11 +250,64 @@ export default function EnglishContent() {
 
   const loadHistory = useCallback(async () => {
     setHistoryLoading(true);
-    const res = await fetch('/api/english');
-    const data = await res.json();
-    setHistory(data);
+    try {
+      const res = await fetch('/api/english');
+      const data = await res.json();
+      setHistory(data);
+      // Resume tasks
+      data.forEach((h: any) => {
+        if (h.type.endsWith('_pending')) {
+          const baseType = h.type.replace('_pending', '');
+          const taskId = h.content;
+          resumeTask(baseType, taskId);
+        }
+      });
+    } catch {}
     setHistoryLoading(false);
   }, []);
+
+  async function resumeTask(type: string, taskId: string) {
+    if (type === 'listen') { setListenLoading(true); pollAndSet(type, taskId, setListenText, setListenLoading); }
+    if (type === 'speak') { setSpkTopicLoading(true); pollAndSet(type, taskId, setSpkTopic, setSpkTopicLoading); }
+    if (type === 'speak_feedback') { setSpkLoading(true); pollAndSet(type, taskId, setSpkFeedback, setSpkLoading); }
+    if (type === 'writing') { setWriteTopicLoading(true); pollAndSet(type, taskId, setWritePrompt, setWriteTopicLoading); }
+    if (type === 'writing_check') { setWriteLoading(true); pollAndSet(type, taskId, setWriteFeedback, setWriteLoading); }
+    if (type === 'vocab') { setVocabLoading(true); pollAndSet(type, taskId, (raw)=> {
+       const m = raw.match(/\[[\s\S]*\]/);
+       if (m) setCards(JSON.parse(m[0]));
+    }, setVocabLoading); }
+    if (type === 'reading') { setReadLoading(true); pollAndSet(type, taskId, (raw)=> {
+       const m = raw.match(/\{[\s\S]*\}/);
+       if (m) {
+         const p = JSON.parse(m[0]);
+         setReadArticle({ title: p.title, body: p.body, wordCount: p.body.split(/\s+/).length });
+         setReadQuestions(p.questions || []);
+         setReadAnswers((p.questions||[]).map(()=>-1));
+       }
+    }, setReadLoading); }
+    if (type === 'dict') { setDictLoading(true); pollAndSet(type, taskId, setDictResult, setDictLoading); }
+    if (type === 'speak_sample') { setSpkSampleLoading(true); pollAndSet(type, taskId, setSpkSample, setSpkSampleLoading); }
+    if (type === 'writing_sample') { setWriteSampleLoading(true); pollAndSet(type, taskId, setWriteSample, setWriteSampleLoading); }
+  }
+
+  async function pollAndSet(type: string, taskId: string, setter: (val: string)=>void, loader: (b: boolean)=>void) {
+    const start = Date.now();
+    setGenElapsed(0);
+    const intv = setInterval(() => setGenElapsed(e => e + 1), 1000);
+    try {
+      while (Date.now() - start < 120000) {
+        const res = await fetch(`/api/ai/task?taskId=${taskId}&type=${encodeURIComponent(type)}`);
+        const data = await res.json();
+        if (data.status === 'done') {
+          setter(data.content); break;
+        }
+        if (data.status === 'error') break;
+        await new Promise(r => setTimeout(r, 2000));
+      }
+    } finally {
+      clearInterval(intv); loader(false); loadHistory();
+    }
+  }
 
   const getGenMessage = useCallback((elapsed: number, action = 'tạo') => {
     if (elapsed < 3) return `🤖 AI đang tiếp nhận yêu cầu ${action}...`;
