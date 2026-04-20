@@ -7,7 +7,7 @@ let _actx: AudioContext | null = null;
 function getAudioContext(): AudioContext | null {
   try {
     if (!_actx || _actx.state === 'closed') {
-      const AC = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      const AC = window.AudioContext || (window as any).webkitAudioContext;
       _actx = new AC();
     }
     return _actx;
@@ -36,6 +36,11 @@ async function beep(type: 'work' | 'break') {
   } catch { /**/ }
 }
 
+function getUserId(): string | null {
+  if (typeof document === 'undefined') return null;
+  return (document.cookie.match(/userId=([^;]+)/)?.[1] ?? localStorage.getItem('userId') ?? null);
+}
+
 interface TimerCtx {
   isWork: boolean; secs: number; running: boolean; session: number;
   todaySessions: number; toggle: ()=>void; reset: ()=>void; switchMode: (w:boolean)=>void;
@@ -50,10 +55,11 @@ export function TimerProvider({ children }: { children: ReactNode }) {
   const [running, setRunning] = useState(false);
   const [session, setSession] = useState(0);
   const [todaySessions, setTodaySessions] = useState(0);
-  const ref = useRef<NodeJS.Timeout|null>(null);
-  const syncRef = useRef<NodeJS.Timeout|null>(null);
 
-  const getToday = () => new Date().toLocaleDateString('en-CA'); // 'YYYY-MM-DD'
+  const timerRef = useRef<NodeJS.Timeout|null>(null);
+  const isSyncing = useRef(false);
+
+  const getToday = () => new Date().toLocaleDateString('en-CA');
 
   const fetchLatest = useCallback(async () => {
     try {
@@ -67,117 +73,115 @@ export function TimerProvider({ children }: { children: ReactNode }) {
     return null;
   }, []);
 
-  // Load from DB on mount and start polling
-  useEffect(() => {
-    const sync = async () => {
+  const sync = useCallback(async () => {
+    if (isSyncing.current) return;
+    isSyncing.current = true;
+
+    try {
       const data = await fetchLatest();
-      // If a remote timer is running and our local timer is NOT running or far off
-      if (data && data.currentEndTime && data.currentEndTime > Date.now()) {
-        const rem = Math.max(0, Math.floor((data.currentEndTime - Date.now()) / 1000));
-        if (rem > 0) {
-          // If we are not running, OR the mode is different, OR the time is off by more than 5s
-          if (!running || isWork !== (data.currentMode === 'work') || Math.abs(secs - rem) > 5) {
-            setIsWork(data.currentMode === 'work');
-            setSecs(rem);
-            setRunning(true);
-          }
-        }
-      } else if (data && (!data.currentEndTime || data.currentEndTime <= Date.now())) {
-        // If remote says STOPPED but we are running, stop local (unless we just started it)
-        // Only stop if the time has passed or explicitly marked 0
-        if (running && data.currentEndTime === 0) {
-          setRunning(false);
-          setSecs(isWork ? WORK_MIN * 60 : BREAK_MIN * 60);
+      if (!data) return;
+
+      const now = Date.now();
+      const serverEndTime = Number(data.currentEndTime || 0);
+      const serverMode = data.currentMode === 'work';
+
+      // 1. Nếu server đang chạy và thời gian kết thúc ở tương lai
+      if (serverEndTime > now) {
+        const rem = Math.round((serverEndTime - now) / 1000);
+
+        // Chỉ cập nhật nếu: Local đang tắt, hoặc khác mode, hoặc thời gian lệch > 10s
+        const needsUpdate = !running || (isWork !== serverMode) || Math.abs(secs - rem) > 10;
+
+        if (needsUpdate) {
+          setIsWork(serverMode);
+          setSecs(rem);
+          setRunning(true);
         }
       }
-    };
+      // 2. Nếu server báo dừng (endTime = 0 hoặc đã qua) nhưng local vẫn chạy
+      else if (running && (serverEndTime === 0 || serverEndTime <= now)) {
+        // Chỉ dừng nếu thời gian trên server thực sự đã hết
+        setRunning(false);
+        setSecs(isWork ? WORK_MIN * 60 : BREAK_MIN * 60);
+      }
+    } finally {
+      isSyncing.current = false;
+    }
+  }, [fetchLatest, running, isWork, secs]);
 
+  // Sync định kỳ và khi tab active
+  useEffect(() => {
     sync();
-    const id = setInterval(sync, 10000); // 10s sync
-    
-    // Immediate sync when tab becomes visible (essential for mobile)
+    const id = setInterval(sync, 5000); // Tăng tốc lên 5s một lần
     const handleVisible = () => { if (document.visibilityState === 'visible') sync(); };
     window.addEventListener('visibilitychange', handleVisible);
+    return () => {
+      clearInterval(id);
+      window.removeEventListener('visibilitychange', handleVisible);
+    };
+  }, [sync]);
 
-    return () => clearInterval(syncInterval);
-  }, [fetchLatest]);
-
-  // Save state to DB
   const saveState = useCallback(async (w: boolean, r: boolean, sCount?: number) => {
-    const date = getToday();
-    const userId = getUserId();
     const endTime = r ? Date.now() + (w ? WORK_MIN : BREAK_MIN) * 60 * 1000 : 0;
     try {
+      await fetch('/api/auth'); // Dummy call to keep session alive if needed
       await fetch('/api/pomodoro', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          date,
-          sessions: sCount !== undefined ? sCount : undefined,
+          date: getToday(),
+          sessions: sCount,
           currentEndTime: endTime,
           currentMode: w ? 'work' : 'break',
-          userId,
+          userId: getUserId(),
         }),
       });
     } catch { /**/ }
   }, []);
 
-  // Save when running
+  // Countdown logic ổn định hơn
   useEffect(() => {
-    if (!running) return;
-    const id = setInterval(() => {
-      saveState(isWork, running);
-    }, 2000);
-    return () => clearInterval(id);
-  }, [running, isWork, saveState]);
+    if (!running) {
+      if (timerRef.current) clearInterval(timerRef.current);
+      return;
+    }
 
-  // Save on mode change
-  useEffect(() => {
-    saveState(isWork, running);
-  }, [isWork]);
-
-  // Switch mode handler
-  const switchMode = useCallback((toWork: boolean) => {
-    setIsWork(toWork); setSecs(toWork ? WORK_MIN * 60 : BREAK_MIN * 60); setRunning(false);
-    saveState(toWork, false);
-  }, [saveState]);
-
-  // Save when running state changes
-  useEffect(() => {
-    saveState(isWork, running);
-  }, [running, isWork, saveState]);
-
-  useEffect(() => {
-    if (!running) return;
-    ref.current = setInterval(()=>{
-      setSecs(s=>{
-        if (s<=1) {
+    timerRef.current = setInterval(() => {
+      setSecs(s => {
+        if (s <= 1) {
+          // Xử lý khi hết giờ
           if (isWork) {
             beep('work');
-            // Fetch latest from DB to ensure no overwrite
             fetchLatest().then(data => {
               const nextCount = (data?.sessions || todaySessions) + 1;
               setTodaySessions(nextCount);
-              saveState(false, false, nextCount); // Switch to break (false), stop timer (false), and SAVE NEW COUNT
-
-              const d = getToday();
-              fetch('/api/logs', { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ date: d, addHours: WORK_MIN/60, addTopic: 'Pomodoro' }) });
+              saveState(false, false, nextCount);
+              fetch('/api/logs', {
+                method:'PATCH',
+                headers:{'Content-Type':'application/json'},
+                body: JSON.stringify({ date: getToday(), addHours: WORK_MIN/60, addTopic: 'Pomodoro' })
+              });
             });
-            setIsWork(false); setSecs(BREAK_MIN*60); setRunning(false);
-            setSession(p=>p+1);
-          } else { 
-            beep('break'); 
-            setIsWork(true); setSecs(WORK_MIN*60); setRunning(false);
+            setIsWork(false);
+            setRunning(false);
+            setSession(p => p + 1);
+            return BREAK_MIN * 60;
+          } else {
+            beep('break');
+            setIsWork(true);
+            setRunning(false);
             saveState(true, false);
+            return WORK_MIN * 60;
           }
-          return 0;
         }
-        return s-1;
+        return s - 1;
       });
-    },1000);
-    return ()=>{ if(ref.current) clearInterval(ref.current); };
-  },[running,isWork,saveState,fetchLatest,todaySessions]);
+    }, 1000);
 
+    return () => { if (timerRef.current) clearInterval(timerRef.current); };
+  }, [running, isWork, todaySessions, fetchLatest, saveState]);
+
+  // Cập nhật tiêu đề trang
   useEffect(() => {
     if (running) {
       const mm = String(Math.floor(secs/60)).padStart(2,'0');
@@ -186,13 +190,30 @@ export function TimerProvider({ children }: { children: ReactNode }) {
     } else {
       document.title = 'NewHat — 60 Ngày Thay Đổi';
     }
-  },[secs, running, isWork]);
+  }, [secs, running, isWork]);
 
   return (
-    <Ctx.Provider value={{ isWork, secs, running, session, todaySessions,
-      toggle: ()=>{ unlockAudio(); setRunning(r=>!r); },
-      reset: ()=>{ setRunning(false); setSecs(isWork?WORK_MIN*60:BREAK_MIN*60); },
-      switchMode,
+    <Ctx.Provider value={{
+      isWork, secs, running, session, todaySessions,
+      toggle: () => {
+        unlockAudio();
+        setRunning(r => {
+          const nextR = !r;
+          saveState(isWork, nextR);
+          return nextR;
+        });
+      },
+      reset: () => {
+        setRunning(false);
+        setSecs(isWork ? WORK_MIN * 60 : BREAK_MIN * 60);
+        saveState(isWork, false);
+      },
+      switchMode: (toWork) => {
+        setIsWork(toWork);
+        setSecs(toWork ? WORK_MIN * 60 : BREAK_MIN * 60);
+        setRunning(false);
+        saveState(toWork, false);
+      },
     }}>
       {children}
     </Ctx.Provider>
