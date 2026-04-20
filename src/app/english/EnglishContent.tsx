@@ -202,6 +202,7 @@ export default function EnglishContent() {
   const [writeTopicLoading, setWriteTopicLoading] = useState(false);
   const [writeSample, setWriteSample] = useState('');
   const [writeSampleLoading, setWriteSampleLoading] = useState(false);
+  const [genElapsed, setGenElapsed] = useState(0);
   const [writeRecordId, setWriteRecordId] = useState<number|null>(null);
 
   // Vocab
@@ -259,15 +260,19 @@ export default function EnglishContent() {
 
   // LISTEN
   async function genListenText() {
-    setListenLoading(true);
-    const t = await askAI(`Generate a short English listening exercise (4-6 sentences) for a B1 learner. Context: ${modeDesc}. Return ONLY the English text, no explanation, no label.`);
-    if (!t || t === AI_OFFLINE || t.startsWith('Error') || t.startsWith('Timeout')) {
-      alert(`⚠️ Lỗi AI: ${t}`);
-      setListenLoading(false); return;
+    setListenLoading(true); setGenElapsed(0);
+    try {
+      const p = `Generate a short English listening exercise (4-6 sentences) for a B1 learner. Context: ${modeDesc}. Return ONLY the English text, no explanation, no label.`;
+      const t = await genTopicTask('listen', p, setGenElapsed);
+      if (t) {
+        setListenText(t);
+        await saveToDb('listen', t, { topic: 'dev life' }, mode);
+      }
+    } catch (e) {
+      alert(`⚠️ Lỗi AI: ${e}`);
+    } finally {
+      setListenLoading(false); loadHistory();
     }
-    setListenText(t);
-    await saveToDb('listen', t, { topic: 'dev life' }, mode);
-    setListenLoading(false); loadHistory();
   }
   async function playText(text = listenText) {
     if (!text || playing) return;
@@ -278,28 +283,21 @@ export default function EnglishContent() {
 
   // SPEAK
   async function genSpkTopic() {
-    setSpkTopicLoading(true); setSpkTopicError('');
+    setSpkTopicLoading(true); setSpkTopicError(''); setGenElapsed(0);
     try {
-      const raw = await askAI(`You are an English teacher. Suggest ONE short speaking discussion question for a learner interested in: ${modeDesc}.
-Current topic: "${spkTopic}".
-Provide a DIFFERENT topic relevant to ${modeDesc}.
-Output: ONE English question only, no quotes, no prefix, no explanation.`);
-      if (!raw || raw === AI_OFFLINE || raw.startsWith('Error') || raw.startsWith('Timeout')) {
-        setSpkTopicError(`⚠️ Lỗi AI: ${raw}`);
+      const p = `You are an English teacher. Suggest ONE short speaking discussion question for a learner interested in: ${modeDesc}. Current topic: "${spkTopic}". Provide a DIFFERENT topic relevant to ${modeDesc}. Output: ONE English question only.`;
+      const t = await genTopicTask('speak', p, setGenElapsed);
+      if (t) {
+        setSpkTopic(t);
+        setTranscript(''); setSpkFeedback(''); setSpkSample('');
+        const res = await fetch('/api/english', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ type: 'speak', content: '', metadata: { topic: t } }),
+        });
+        const data = await res.json();
+        setSpkRecordId(data.id);
       } else {
-        const t = cleanTopic(raw);
-        if (t && t.length > 10) {
-          setSpkTopic(t);
-          setTranscript(''); setSpkFeedback(''); setSpkSample('');
-          const res = await fetch('/api/english', {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ type: 'speak', content: '', metadata: { topic: t } }),
-          });
-          const data = await res.json();
-          setSpkRecordId(data.id);
-        } else {
-          setSpkTopicError('⚠️ AI trả lời không hợp lệ, thử lại');
-        }
+        setSpkTopicError('⚠️ AI trả lời không hợp lệ, thử lại');
       }
     } catch (e) {
       setSpkTopicError('⚠️ Lỗi: ' + String(e));
@@ -419,16 +417,11 @@ Hãy trình bày theo định dạng Markdown sau:
 
   // WRITE
   async function genWriteTopic() {
-    setWriteTopicLoading(true); setWriteTopicError('');
-    const raw = await askAI(`You are an English teacher. Suggest ONE writing prompt for a learner interested in: ${modeDesc}.
-Current prompt: "${writePrompt}".
-Provide a DIFFERENT prompt relevant to ${modeDesc}.
-Output: ONE English prompt only, no quotes, no prefix, no explanation.`);
-    if (!raw || raw === AI_OFFLINE || raw.startsWith('Error') || raw.startsWith('Timeout')) {
-      setWriteTopicError(`⚠️ Lỗi AI: ${raw}`);
-    } else {
-      const t = cleanTopic(raw);
-      if (t && t.length > 10 && t !== writePrompt) {
+    setWriteTopicLoading(true); setWriteTopicError(''); setGenElapsed(0);
+    try {
+      const p = `You are an English teacher. Suggest ONE writing prompt for a learner interested in: ${modeDesc}. Current prompt: "${writePrompt}". Provide a DIFFERENT prompt relevant to ${modeDesc}. Output: ONE English prompt only.`;
+      const t = await genTopicTask('writing', p, setGenElapsed);
+      if (t) {
         setWritePrompt(t);
         setWriteText(''); setWriteFeedback(''); setWriteSample('');
         const res = await fetch('/api/english', {
@@ -440,8 +433,11 @@ Output: ONE English prompt only, no quotes, no prefix, no explanation.`);
       } else {
         setWriteTopicError('⚠️ AI trả lời không hợp lệ, thử lại');
       }
+    } catch (e) {
+      setWriteTopicError('⚠️ Lỗi: ' + String(e));
+    } finally {
+      setWriteTopicLoading(false); loadHistory();
     }
-    setWriteLoading(false); loadHistory();
   }
 
   async function checkWriting() {
@@ -702,8 +698,8 @@ Trả lời theo Markdown:
               <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:12 }}>
                 <div>
                   <div className="section-title" style={{ marginBottom:4 }}>Chủ đề nói</div>
-                  <div style={{ fontSize:16, color:'var(--purple)', fontWeight:700, lineHeight:1.4 }}>
-                    {spkTopicLoading ? '⏳ AI đang tạo chủ đề mới...' : spkTopic}
+                  <div style={{ fontSize:15, color:'var(--purple)', fontWeight:700, lineHeight:1.4 }}>
+                    {spkTopicLoading ? `⏳ AI đang tạo chủ đề mới (${genElapsed}s)...` : spkTopic}
                   </div>
                 </div>
                 <button onClick={genSpkTopic} disabled={spkTopicLoading || spkLoading} style={{ padding:'6px 12px', borderRadius:8, border:'none', background:'var(--accent)', color:'#000', fontSize:11, fontWeight:800, cursor:'pointer', flexShrink:0, display:'flex', alignItems:'center', gap:4, boxShadow:'0 2px 8px rgba(0,0,0,0.2)' }}>
@@ -771,8 +767,8 @@ Trả lời theo Markdown:
               <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:12 }}>
                 <div>
                   <div className="section-title" style={{ marginBottom:4 }}>Đề tài viết</div>
-                  <div style={{ fontSize:15, color:'var(--orange)', fontWeight:700, lineHeight:1.4 }}>
-                    {writeTopicLoading ? '⏳ AI đang soạn đề tài mới...' : writePrompt}
+                  <div style={{ fontSize:14, color:'var(--orange)', fontWeight:700, lineHeight:1.4 }}>
+                    {writeTopicLoading ? `⏳ AI đang soạn đề tài mới (${genElapsed}s)...` : writePrompt}
                   </div>
                 </div>
                 <button onClick={genWriteTopic} disabled={writeTopicLoading || writeLoading} style={{ padding:'6px 12px', borderRadius:8, border:'none', background:'var(--accent)', color:'#000', fontSize:11, fontWeight:800, cursor:'pointer', flexShrink:0, display:'flex', alignItems:'center', gap:4, boxShadow:'0 2px 8px rgba(0,0,0,0.2)' }}>
