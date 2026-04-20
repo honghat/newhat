@@ -57,22 +57,18 @@ export async function POST(req: Request) {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       const rawContent = data.choices?.[0]?.message?.content || '';
-      
-      // Chỉ clean nếu là tạo topic/prompt mới. Nếu là chấm bài/feedback thì để nguyên.
-      const isCheckOrFeedback = type.includes('check') || type.includes('feedback');
-      const finalContent = isCheckOrFeedback ? rawContent : cleanTopic(rawContent);
-
+      const cleaned = cleanTopic(rawContent);
       // Xoá marker pending, lưu kết quả thật
       await prisma.englishLesson.deleteMany({
         where: { userId: user.id, type: `${type}_pending`, content: taskId },
       });
-      if (finalContent && finalContent.length > 5) {
+      if (cleaned && cleaned.length > 10) {
         await prisma.englishLesson.create({
           data: {
             userId: user.id,
             type,
-            content: finalContent,
-            metadata: JSON.stringify({ taskId, generated: true, mode: type }),
+            content: cleaned,
+            metadata: JSON.stringify({ taskId, generated: true }),
           },
         });
       }
