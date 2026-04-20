@@ -320,7 +320,11 @@ export default function EnglishContent() {
       const clean = cleanTopic(t);
       setSpkTopic(clean);
       setTranscript(''); setSpkFeedback(''); setSpkSample('');
-      setSpkRecordId(null);
+      // Background save — không block UI
+      fetch('/api/english', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'speak', content: '', metadata: { topic: clean, mode } }),
+      }).then(r => r.json()).then(d => setSpkRecordId(d.id)).catch(() => setSpkRecordId(null));
     }
     setSpkTopicLoading(false);
   }
@@ -436,7 +440,11 @@ Hãy trình bày theo định dạng Markdown sau:
       const clean = cleanTopic(t);
       setWritePrompt(clean);
       setWriteText(''); setWriteFeedback(''); setWriteSample('');
-      setWriteRecordId(null);
+      // Background save — không block UI
+      fetch('/api/english', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'writing', content: '', metadata: { prompt: clean, mode } }),
+      }).then(r => r.json()).then(d => setWriteRecordId(d.id)).catch(() => setWriteRecordId(null));
     }
     setWriteTopicLoading(false);
   }
