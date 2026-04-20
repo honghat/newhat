@@ -116,3 +116,20 @@ export async function GET(req: Request) {
   }
   return Response.json({ status: 'unknown' });
 }
+
+export async function DELETE(req: Request) {
+  const user = await getSession();
+  if (!user) return Response.json({ status: 'unauthorized' }, { status: 401 });
+  
+  // Xóa các task pending cũ hơn 5 phút
+  const fiveMinsAgo = new Date(Date.now() - 300000);
+  await prisma.englishLesson.deleteMany({
+    where: {
+      userId: user.id,
+      type: { endsWith: '_pending' },
+      createdAt: { lt: fiveMinsAgo }
+    }
+  });
+  
+  return Response.json({ ok: true });
+}

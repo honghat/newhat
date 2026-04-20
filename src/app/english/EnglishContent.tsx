@@ -246,6 +246,8 @@ export default function EnglishContent() {
       .then(r => r.json()).then(d => setTtsOnline(!!d.available)).catch(() => setTtsOnline(false));
     // Check Whisper
     fetch('/api/stt').then(r => r.json()).catch(() => {});
+    // Clear stale tasks (older than 5 mins) on mount
+    fetch('/api/ai/task', { method: 'DELETE' }).catch(() => {});
   }, []);
 
   const activeTaskIds = useRef<Set<string>>(new Set());
@@ -1137,7 +1139,12 @@ Return JSON ONLY (no markdown code blocks, just raw json):
         <div style={{ display: tab==='dict' ? 'none' : undefined }}>
           <div className="card">
             <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:14 }}>
-              <div className="section-title" style={{ margin:0 }}>📚 Lịch sử ({history.filter(h => h.type === (tab==='write'?'writing':tab==='read'?'reading':tab)).length})</div>
+              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:12 }}>
+                <div className="section-title" style={{ margin:0 }}>📚 Lịch sử ({history.filter(h => h.type === (tab==='write'?'writing':tab==='read'?'reading':tab)).length})</div>
+                <button onClick={async ()=>{ await fetch('/api/ai/task',{method:'DELETE'}); loadHistory(); }} style={{ fontSize:10, color:'var(--muted)', background:'none', border:'1px solid var(--border)', borderRadius:4, padding:'2px 6px', cursor:'pointer' }}>
+                  🧹 Dọn dẹp task treo
+                </button>
+              </div>
               <button className="btn btn-ghost" style={{ fontSize:12, padding:'4px 10px' }} onClick={loadHistory}>↻ Tải lại</button>
             </div>
             {historyLoading && <div style={{ color:'var(--muted)', padding:20 }}>Đang tải dữ liệu...</div>}
