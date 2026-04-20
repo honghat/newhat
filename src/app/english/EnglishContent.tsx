@@ -185,6 +185,7 @@ export default function EnglishContent() {
   const [transcript, setTranscript] = useState('');
   const [spkFeedback, setSpkFeedback] = useState('');
   const [spkLoading, setSpkLoading] = useState(false);
+  const [spkTopicLoading, setSpkTopicLoading] = useState(false);
   const [sttStatus, setSttStatus] = useState('');
   const [spkSample, setSpkSample] = useState('');
   const [spkSampleLoading, setSpkSampleLoading] = useState(false);
@@ -198,6 +199,7 @@ export default function EnglishContent() {
   const [writeTopicError, setWriteTopicError] = useState('');
   const [writeFeedback, setWriteFeedback] = useState('');
   const [writeLoading, setWriteLoading] = useState(false);
+  const [writeTopicLoading, setWriteTopicLoading] = useState(false);
   const [writeSample, setWriteSample] = useState('');
   const [writeSampleLoading, setWriteSampleLoading] = useState(false);
   const [writeRecordId, setWriteRecordId] = useState<number|null>(null);
@@ -276,7 +278,7 @@ export default function EnglishContent() {
 
   // SPEAK
   async function genSpkTopic() {
-    setSpkLoading(true); setSpkTopicError('');
+    setSpkTopicLoading(true); setSpkTopicError('');
     try {
       const raw = await askAI(`You are an English teacher. Suggest ONE short speaking discussion question for a learner interested in: ${modeDesc}.
 Current topic: "${spkTopic}".
@@ -302,7 +304,7 @@ Output: ONE English question only, no quotes, no prefix, no explanation.`);
     } catch (e) {
       setSpkTopicError('⚠️ Lỗi: ' + String(e));
     } finally {
-      setSpkLoading(false); loadHistory();
+      setSpkTopicLoading(false); loadHistory();
     }
   }
 
@@ -417,7 +419,7 @@ Hãy trình bày theo định dạng Markdown sau:
 
   // WRITE
   async function genWriteTopic() {
-    setWriteLoading(true); setWriteTopicError('');
+    setWriteTopicLoading(true); setWriteTopicError('');
     const raw = await askAI(`You are an English teacher. Suggest ONE writing prompt for a learner interested in: ${modeDesc}.
 Current prompt: "${writePrompt}".
 Provide a DIFFERENT prompt relevant to ${modeDesc}.
@@ -701,11 +703,11 @@ Trả lời theo Markdown:
                 <div>
                   <div className="section-title" style={{ marginBottom:4 }}>Chủ đề nói</div>
                   <div style={{ fontSize:16, color:'var(--purple)', fontWeight:700, lineHeight:1.4 }}>
-                    {spkLoading && !transcript ? '⏳ AI đang tạo chủ đề mới...' : spkTopic}
+                    {spkTopicLoading ? '⏳ AI đang tạo chủ đề mới...' : spkTopic}
                   </div>
                 </div>
-                <button onClick={genSpkTopic} disabled={spkLoading} style={{ padding:'6px 12px', borderRadius:8, border:'none', background:'var(--accent)', color:'#000', fontSize:11, fontWeight:800, cursor:'pointer', flexShrink:0, display:'flex', alignItems:'center', gap:4, boxShadow:'0 2px 8px rgba(0,0,0,0.2)' }}>
-                  {spkLoading ? '...' : '🤖 Tạo đoạn nói mới'}
+                <button onClick={genSpkTopic} disabled={spkTopicLoading || spkLoading} style={{ padding:'6px 12px', borderRadius:8, border:'none', background:'var(--accent)', color:'#000', fontSize:11, fontWeight:800, cursor:'pointer', flexShrink:0, display:'flex', alignItems:'center', gap:4, boxShadow:'0 2px 8px rgba(0,0,0,0.2)' }}>
+                  {spkTopicLoading ? '⏳...' : '🤖 Tạo đoạn nói mới'}
                 </button>
               </div>
               <div style={{ display:'flex', gap:12, flexWrap:'wrap' }}>
@@ -770,11 +772,11 @@ Trả lời theo Markdown:
                 <div>
                   <div className="section-title" style={{ marginBottom:4 }}>Đề tài viết</div>
                   <div style={{ fontSize:15, color:'var(--orange)', fontWeight:700, lineHeight:1.4 }}>
-                    {writeLoading && !writeText ? '⏳ AI đang soạn đề tài mới...' : writePrompt}
+                    {writeTopicLoading ? '⏳ AI đang soạn đề tài mới...' : writePrompt}
                   </div>
                 </div>
-                <button onClick={genWriteTopic} disabled={writeLoading} style={{ padding:'6px 12px', borderRadius:8, border:'none', background:'var(--accent)', color:'#000', fontSize:11, fontWeight:800, cursor:'pointer', flexShrink:0, display:'flex', alignItems:'center', gap:4, boxShadow:'0 2px 8px rgba(0,0,0,0.2)' }}>
-                  {writeLoading ? '...' : '🤖 Tạo đoạn viết mới'}
+                <button onClick={genWriteTopic} disabled={writeTopicLoading || writeLoading} style={{ padding:'6px 12px', borderRadius:8, border:'none', background:'var(--accent)', color:'#000', fontSize:11, fontWeight:800, cursor:'pointer', flexShrink:0, display:'flex', alignItems:'center', gap:4, boxShadow:'0 2px 8px rgba(0,0,0,0.2)' }}>
+                  {writeTopicLoading ? '⏳...' : '🤖 Tạo đoạn viết mới'}
                 </button>
               </div>
               <div style={{ display:'flex', gap:10, flexWrap:'wrap', alignItems:'center' }}>
