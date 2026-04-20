@@ -527,7 +527,15 @@ Reply in Markdown (concise):
       if (m) {
         const parsed = JSON.parse(m[0]);
         setCards(parsed);
-        await saveToDb('vocab', JSON.stringify(parsed), { topic: vocabTopic, count: parsed.length }, mode);
+        // Lưu từng từ riêng biệt thay vì lưu cả nhóm
+        for (const item of parsed) {
+          await saveToDb('vocab', item.word, { 
+            def: item.def, 
+            ex: item.ex, 
+            vi: item.vi, 
+            topic: vocabTopic 
+          }, mode);
+        }
       }
     }
     setVocabLoading(false); loadHistory();
