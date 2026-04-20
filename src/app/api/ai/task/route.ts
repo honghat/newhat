@@ -71,11 +71,25 @@ export async function POST(req: Request) {
         headers['Authorization'] = `Bearer ${settings.aiKey}`;
       }
 
+      // AUTO-PATCH MODEL NAMES FOR OPENROUTER
+      let finalModel = model || settings.aiModel || 'default';
+      if (settings.aiServer.includes('openrouter.ai')) {
+        if (finalModel === 'deepseek-chat' || finalModel === 'deepseek-reasoner') {
+          finalModel = `deepseek/${finalModel}`;
+        } else if (finalModel.startsWith('gpt-')) {
+          finalModel = `openai/${finalModel}`;
+        } else if (finalModel.startsWith('claude-')) {
+          finalModel = `anthropic/${finalModel}`;
+        } else if (finalModel.startsWith('gemini-')) {
+          finalModel = `google/${finalModel}`;
+        }
+      }
+
       const res = await fetch(url, {
         method: 'POST',
         headers,
         body: JSON.stringify({
-          model: model || settings.aiModel || 'default', 
+          model: finalModel, 
           temperature: 0.7,
           messages: [{ role: 'user', content: prompt }],
         }),
