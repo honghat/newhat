@@ -251,6 +251,30 @@ export default function EnglishContent() {
   }, []);
 
   const activeTaskIds = useRef<Set<string>>(new Set());
+  const abortTasks = useRef<Record<string, () => void>>({});
+
+  const stopTask = useCallback(async (type: string, taskId?: string) => {
+    // Clear interval/loop if exists
+    if (abortTasks.current[type]) {
+      abortTasks.current[type]();
+      delete abortTasks.current[type];
+    }
+    // Delete from DB if taskId provided
+    if (taskId) {
+      await fetch(`/api/ai/task?taskId=${taskId}&type=${encodeURIComponent(type)}`, { method: 'DELETE' }).catch(() => {});
+    }
+    // Reset specific loading state
+    if (type === 'listen') setListenLoading(false);
+    if (type === 'speak') setSpkTopicLoading(false);
+    if (type === 'speak_feedback') setSpkLoading(false);
+    if (type === 'writing') setWriteTopicLoading(false);
+    if (type === 'writing_check') setWriteLoading(false);
+    if (type === 'vocab') setVocabLoading(false);
+    if (type === 'reading') setReadLoading(false);
+    if (type === 'dict') setDictLoading(false);
+    if (type === 'speak_sample') setSpkSampleLoading(false);
+    if (type === 'writing_sample') setWriteSampleLoading(false);
+  }, []);
 
   const loadHistory = useCallback(async () => {
     setHistoryLoading(true);
@@ -303,11 +327,14 @@ export default function EnglishContent() {
   async function pollAndSet(type: string, taskId: string, setter: (val: string)=>void, loader: (b: boolean)=>void) {
     if (activeTaskIds.current.has(taskId)) return;
     activeTaskIds.current.add(taskId);
+    let aborted = false;
+    abortTasks.current[type] = () => { aborted = true; activeTaskIds.current.delete(taskId); };
+    
     const start = Date.now();
     setGenElapsed(0);
     const intv = setInterval(() => setGenElapsed(e => e + 1), 1000);
     try {
-      while (Date.now() - start < 120000) {
+      while (Date.now() - start < 120000 && !aborted) {
         const res = await fetch(`/api/ai/task?taskId=${taskId}&type=${encodeURIComponent(type)}`);
         const data = await res.json();
         if (data.status === 'done') {
@@ -319,8 +346,8 @@ export default function EnglishContent() {
     } finally {
       clearInterval(intv); 
       activeTaskIds.current.delete(taskId);
+      delete abortTasks.current[type];
       loader(false); 
-      // Only refresh history if it was successful or we know it's done
       fetch('/api/english').then(r => r.json()).then(d => setHistory(d.filter((h: any) => !h.type.endsWith('_pending'))));
     }
   }
@@ -777,8 +804,9 @@ Return JSON ONLY (no markdown code blocks, just raw json):
               <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:12 }}>
                 <div>
                   <div className="section-title" style={{ marginBottom:4 }}>Chủ đề nói</div>
-                  <div style={{ fontSize:15, color:'var(--purple)', fontWeight:700, lineHeight:1.4 }}>
-                    {spkTopicLoading ? getGenMessage(genElapsed) : spkTopic}
+                  <div style={{ fontSize:15, color:'var(--purple)', fontWeight:700, lineHeight:1.4, display:'flex', alignItems:'center', gap:8 }}>
+                    <span>{spkTopicLoading ? getGenMessage(genElapsed) : spkTopic}</span>
+                    {spkTopicLoading && <button onClick={()=>stopTask('speak')} style={{ color:'var(--orange)', background:'none', border:'none', fontSize:10, cursor:'pointer', fontWeight:800 }}>[Dừng]</button>}
                   </div>
                 </div>
                 <button onClick={genSpkTopic} disabled={spkTopicLoading || spkLoading} style={{ padding:'6px 12px', borderRadius:8, border:'none', background:'var(--accent)', color:'#000', fontSize:11, fontWeight:800, cursor:'pointer', flexShrink:0, display:'flex', alignItems:'center', gap:4, boxShadow:'0 2px 8px rgba(0,0,0,0.2)' }}>
@@ -820,8 +848,13 @@ Return JSON ONLY (no markdown code blocks, just raw json):
               <div className="card">
                 <div className="section-title">Bạn vừa nói</div>
                 <div style={{ fontSize:14, fontStyle:'italic', lineHeight:1.7, color:'var(--text)', marginBottom:12 }}>"{transcript}"</div>
-                <button className="btn btn-ghost" style={{ width:'100%' }} onClick={getFeedback} disabled={spkLoading || recognizing}>
-                  {spkLoading ? getGenMessage(genElapsed, 'nhận xét') : '🤖 AI nhận xét ngữ pháp & phát âm'}
+                <button className="btn btn-ghost" style={{ width:'100%', position:'relative' }} onClick={getFeedback} disabled={spkLoading || recognizing}>
+                  {spkLoading ? (
+                    <div style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:10 }}>
+                      {getGenMessage(genElapsed, 'nhận xét')}
+                      <span onClick={(e)=>{e.stopPropagation(); stopTask('speak_feedback');}} style={{ color:'var(--orange)', textDecoration:'underline', cursor:'pointer' }}>Dừng</span>
+                    </div>
+                  ) : '🤖 AI nhận xét ngữ pháp & phát âm'}
                 </button>
               </div>
             )}
@@ -846,8 +879,9 @@ Return JSON ONLY (no markdown code blocks, just raw json):
               <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:12 }}>
                 <div>
                   <div className="section-title" style={{ marginBottom:4 }}>Đề tài viết</div>
-                  <div style={{ fontSize:14, color:'var(--orange)', fontWeight:700, lineHeight:1.4 }}>
-                    {writeTopicLoading ? getGenMessage(genElapsed, 'soạn bài') : writePrompt}
+                  <div style={{ fontSize:14, color:'var(--orange)', fontWeight:700, lineHeight:1.4, display:'flex', alignItems:'center', gap:8 }}>
+                    <span>{writeTopicLoading ? getGenMessage(genElapsed, 'soạn bài') : writePrompt}</span>
+                    {writeTopicLoading && <button onClick={()=>stopTask('writing')} style={{ color:'var(--red)', background:'none', border:'none', fontSize:10, cursor:'pointer', fontWeight:800 }}>[Dừng]</button>}
                   </div>
                 </div>
                 <button onClick={genWriteTopic} disabled={writeTopicLoading || writeLoading} style={{ padding:'6px 12px', borderRadius:8, border:'none', background:'var(--accent)', color:'#000', fontSize:11, fontWeight:800, cursor:'pointer', flexShrink:0, display:'flex', alignItems:'center', gap:4, boxShadow:'0 2px 8px rgba(0,0,0,0.2)' }}>
@@ -882,7 +916,12 @@ Return JSON ONLY (no markdown code blocks, just raw json):
                 <button onClick={()=>{setWriteText('');setWriteFeedback('');}} style={{ fontSize:12, color:'var(--muted)', background:'none', border:'none', cursor:'pointer' }}>Xóa</button>
               </div>
               <button className="btn btn-primary" style={{ width:'100%' }} onClick={checkWriting} disabled={writeLoading||!writeText.trim()}>
-                {writeLoading ? getGenMessage(genElapsed, 'chấm bài') : '🤖 AI chấm bài viết'}
+                {writeLoading ? (
+                  <div style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:10 }}>
+                    {getGenMessage(genElapsed, 'chấm bài')}
+                    <span onClick={(e)=>{e.stopPropagation(); stopTask('writing_check');}} style={{ color:'var(--red)', textDecoration:'underline', cursor:'pointer' }}>Dừng</span>
+                  </div>
+                ) : '🤖 AI chấm bài viết'}
               </button>
             </div>
           </div>
