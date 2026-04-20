@@ -44,8 +44,13 @@ export async function POST(req: Request) {
     }
 
     // AUTO-PATCH MODEL NAMES FOR OPENROUTER
-    let finalModel = model || settings.aiModel || 'default';
+    // If client sends 'default', use the one from DB settings
+    let finalModel = (model && model !== 'default') ? model : (settings.aiModel || 'deepseek/deepseek-chat');
+    
     if (settings.aiServer.includes('openrouter.ai')) {
+      // If it's still 'default' or something invalid for OpenRouter, force a safe one
+      if (finalModel === 'default') finalModel = 'deepseek/deepseek-chat';
+      
       if (finalModel === 'deepseek-chat' || finalModel === 'deepseek-reasoner') {
         finalModel = `deepseek/${finalModel}`;
       } else if (finalModel.startsWith('gpt-')) {
