@@ -340,14 +340,23 @@ export default function EnglishContent() {
         if (data.status === 'done') {
           setter(data.content); break;
         }
-        if (data.status === 'error' || data.status === 'unknown') break;
+        if (data.status === 'error' || data.status === 'unknown') {
+          // If unknown/error, delete immediately to stop loop
+          await fetch(`/api/ai/task?taskId=${taskId}&type=${encodeURIComponent(type)}`, { method: 'DELETE' }).catch(() => {});
+          break;
+        }
         await new Promise(r => setTimeout(r, 2000));
+      }
+      // If loop finished due to timeout (120s), also delete it
+      if (Date.now() - start >= 120000) {
+        await fetch(`/api/ai/task?taskId=${taskId}&type=${encodeURIComponent(type)}`, { method: 'DELETE' }).catch(() => {});
       }
     } finally {
       clearInterval(intv); 
       activeTaskIds.current.delete(taskId);
       delete abortTasks.current[type];
       loader(false); 
+      // Refresh history ONLY to reconcile
       fetch('/api/english').then(r => r.json()).then(d => setHistory(d.filter((h: any) => !h.type.endsWith('_pending'))));
     }
   }
