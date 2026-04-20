@@ -204,6 +204,53 @@ export default function EnglishContent() {
   const [writeSampleLoading, setWriteSampleLoading] = useState(false);
   const [writeRecordId, setWriteRecordId] = useState<number|null>(null);
 
+  // --- Task Persistence Logic ---
+  const [activeTasks, setActiveTasks] = useState<Record<string, { taskId: string; elapsed: number }>>(() => {
+    if (typeof window === 'undefined') return {};
+    try { return JSON.parse(localStorage.getItem('eng_tasks') || '{}'); } catch { return {}; }
+  });
+  useEffect(() => {
+    localStorage.setItem('eng_tasks', JSON.stringify(activeTasks));
+  }, [activeTasks]);
+
+  const runBgTask = async (type: string, prompt: string, onDone: (content: string) => void, onError: (err: string) => void) => {
+    try {
+      const startRes = await fetch('/api/ai/task', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type, prompt }),
+      });
+      if (!startRes.ok) throw new Error('Không khởi động được task');
+      const { taskId } = await startRes.json();
+      
+      const key = `${type}_${taskId}`;
+      setActiveTasks(prev => ({ ...prev, [key]: { taskId, elapsed: 0 } }));
+
+      // Bắt đầu poll
+      let done = false;
+      let count = 0;
+      while (!done && count < 60) {
+        await new Promise(r => setTimeout(r, 2000));
+        count++;
+        setActiveTasks(prev => prev[key] ? { ...prev, [key]: { ...prev[key], elapsed: count * 2 } } : prev);
+        
+        const res = await fetch(`/api/ai/task?taskId=${taskId}&type=${encodeURIComponent(type)}`);
+        if (!res.ok) continue;
+        const data = await res.json();
+        if (data.status === 'done') {
+          onDone(data.content);
+          done = true;
+        } else if (data.status === 'error') {
+          throw new Error(data.error || 'AI lỗi');
+        }
+      }
+      if (!done) throw new Error('Yêu cầu đang xử lý lâu hơn dự kiến, hãy quay lại sau ít phút.');
+      setActiveTasks(prev => { const n = { ...prev }; delete n[key]; return n; });
+    } catch (e) {
+      onError(String(e));
+      setActiveTasks(prev => { const n = { ...prev }; delete n[key]; return n; });
+    }
+  };
+
   // Vocab
   const [vocabTopic, setVocabTopic] = useState('programming');
   const [cards, setCards] = useState<{word:string;def:string;ex:string;vi:string}[]>([]);
@@ -257,17 +304,13 @@ export default function EnglishContent() {
 
   useEffect(() => { loadHistory(); }, [loadHistory]);
 
-  // LISTEN
+  // LISTEN - optimized with task
   async function genListenText() {
     setListenLoading(true);
-    const t = await askAI(`Generate a short English listening exercise (4-6 sentences) for a B1 learner. Context: ${modeDesc}. Return ONLY the English text, no explanation, no label.`);
-    if (!t || t === AI_OFFLINE || t.startsWith('Error') || t.startsWith('Timeout')) {
-      alert(`⚠️ Lỗi AI: ${t}`);
-      setListenLoading(false); return;
-    }
-    setListenText(t);
-    await saveToDb('listen', t, { topic: 'dev life' }, mode);
-    setListenLoading(false); loadHistory();
+    const p = `Generate a short English listening exercise (4-6 sentences) for a B1 learner. Context: ${modeDesc}. Return ONLY the English text, no explanation, no label.`;
+    await runBgTask('listen', p, (c) => {
+      setListenText(c); setListenLoading(false); loadHistory();
+    }, (err) => { alert(err); setListenLoading(false); });
   }
   async function playText(text = listenText) {
     if (!text || playing) return;
@@ -276,36 +319,14 @@ export default function EnglishContent() {
     setPlaying(false);
   }
 
-  // SPEAK
+  // SPEAK - optimized with task
   async function genSpkTopic() {
     setSpkTopicLoading(true); setSpkTopicError('');
-    try {
-      const raw = await askAI(`You are an English teacher. Suggest ONE short speaking discussion question for a learner interested in: ${modeDesc}.
-Current topic: "${spkTopic}".
-Provide a DIFFERENT topic relevant to ${modeDesc}.
-Output: ONE English question only, no quotes, no prefix, no explanation.`);
-      if (!raw || raw === AI_OFFLINE || raw.startsWith('Error') || raw.startsWith('Timeout')) {
-        setSpkTopicError(`⚠️ Lỗi AI: ${raw}`);
-      } else {
-        const t = cleanTopic(raw);
-        if (t && t.length > 10) {
-          setSpkTopic(t);
-          setTranscript(''); setSpkFeedback(''); setSpkSample('');
-          const res = await fetch('/api/english', {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ type: 'speak', content: '', metadata: { topic: t } }),
-          });
-          const data = await res.json();
-          setSpkRecordId(data.id);
-        } else {
-          setSpkTopicError('⚠️ AI trả lời không hợp lệ, thử lại');
-        }
-      }
-    } catch (e) {
-      setSpkTopicError('⚠️ Lỗi: ' + String(e));
-    } finally {
+    const p = `You are an English teacher. Suggest ONE short speaking discussion question for a learner interested in: ${modeDesc}. Current topic: "${spkTopic}". Provide a DIFFERENT topic relevant to ${modeDesc}. Output: ONE English question only.`;
+    await runBgTask('speak', p, (c) => {
+      setSpkTopic(c); setTranscript(''); setSpkFeedback(''); setSpkSample('');
       setSpkTopicLoading(false); loadHistory();
-    }
+    }, (err) => { setSpkTopicError(err); setSpkTopicLoading(false); });
   }
 
   async function genSpkSample() {
@@ -389,103 +410,29 @@ Format in Markdown:
   async function getFeedback() {
     if (!transcript) return;
     setSpkLoading(true);
-    const fb = await askAI(`Bạn là giáo viên tiếng Anh chuyên nghiệp. Phân tích bài nói của học viên: "${transcript}".
-Hãy trình bày theo định dạng Markdown sau:
-# Nhận xét bài nói và Gợi ý
-## Phân tích lỗi
-### 1. Ngữ pháp & Phát âm:
-(Nhận xét lỗi cụ thể)
-### 2. Từ vựng:
-(Nhận xét về lựa chọn từ ngữ)
-### 3. Cấu trúc:
-(Nhận xét về sự trôi chảy/cấu trúc)
----
-## Gợi ý nói lại (English)
-**"Câu tiếng Anh hoàn chỉnh và tự nhiên hơn"**
----
-## Dịch sang tiếng Việt
-> Bản dịch của câu gợi ý.`);
-    setSpkFeedback(fb);
-    if (spkRecordId) {
-      await fetch('/api/english', {
-        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: spkRecordId, content: transcript, metadata: { topic: spkTopic, feedback: fb, sample: spkSample } }),
-      });
-    } else {
-      await saveToDb('speak', transcript, { topic: spkTopic, feedback: fb, sample: spkSample }, mode);
-    }
-    setSpkLoading(false); loadHistory();
+    const p = `Bạn là giáo viên tiếng Anh chuyên nghiệp. Phân tích bài nói của học viên: "${transcript}". Dùng định dạng Markdown # Nhận xét bài nói...`;
+    await runBgTask('speak_feedback', p, (c) => {
+      setSpkFeedback(c); setSpkLoading(false); loadHistory();
+    }, (err) => { alert(err); setSpkLoading(false); });
   }
 
-  // WRITE
+  // WRITE - optimized with task
   async function genWriteTopic() {
     setWriteTopicLoading(true); setWriteTopicError('');
-    const raw = await askAI(`You are an English teacher. Suggest ONE writing prompt for a learner interested in: ${modeDesc}.
-Current prompt: "${writePrompt}".
-Provide a DIFFERENT prompt relevant to ${modeDesc}.
-Output: ONE English prompt only, no quotes, no prefix, no explanation.`);
-    if (!raw || raw === AI_OFFLINE || raw.startsWith('Error') || raw.startsWith('Timeout')) {
-      setWriteTopicError(`⚠️ Lỗi AI: ${raw}`);
-    } else {
-      const t = cleanTopic(raw);
-      if (t && t.length > 10 && t !== writePrompt) {
-        setWritePrompt(t);
-        setWriteText(''); setWriteFeedback(''); setWriteSample('');
-        const res = await fetch('/api/english', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ type: 'writing', content: '', metadata: { prompt: t } }),
-        });
-        const data = await res.json();
-        setWriteRecordId(data.id);
-      } else {
-        setWriteTopicError('⚠️ AI trả lời không hợp lệ, thử lại');
-      }
-    }
-    setWriteLoading(false); loadHistory();
+    const p = `You are an English teacher. Suggest ONE writing prompt for a learner interested in: ${modeDesc}. Current prompt: "${writePrompt}". Provide a DIFFERENT prompt relevant to ${modeDesc}. Output: ONE English prompt only.`;
+    await runBgTask('writing', p, (c) => {
+      setWritePrompt(c); setWriteText(''); setWriteFeedback(''); setWriteSample('');
+      setWriteTopicLoading(false); loadHistory();
+    }, (err) => { setWriteTopicError(err); setWriteTopicLoading(false); });
   }
 
   async function checkWriting() {
     if (!writeText.trim()) return;
     setWriteLoading(true);
-    const fb = await askAI(`Bạn là giáo viên tiếng Anh chuyên nghiệp. Chữa bài viết cho học viên.
-Chủ đề: "${writePrompt}"
-Bài viết gốc: "${writeText}"
-
-Hãy trình bày theo định dạng Markdown sau:
-# Chữa bài và Gợi ý viết lại
-
-## Phân tích lỗi trong bài gốc
-
-### 1. Ngữ pháp:
-(Liệt kê lỗi ngữ pháp, dấu câu)
-
-### 2. Từ vựng:
-(Nhận xét về từ vựng, tính chuyên nghiệp/kỹ thuật)
-
-### 3. Cấu trúc câu:
-(Nhận xét về logic, cách triển khai ý)
-
----
-
-## Gợi ý viết lại (English)
-
-**"Sử dụng tiếng Anh chuyên nghiệp, tự nhiên, đúng ngữ pháp"**
-
----
-
-## Dịch sang tiếng Việt
-
-> Bản dịch của phần gợi ý viết lại phía trên.`);
-    setWriteFeedback(fb);
-    if (writeRecordId) {
-      await fetch('/api/english', {
-        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: writeRecordId, content: writeText, metadata: { prompt: writePrompt, feedback: fb, sample: writeSample, words: writeText.split(/\s+/).filter(Boolean).length } }),
-      });
-    } else {
-      await saveToDb('writing', writeText, { prompt: writePrompt, feedback: fb, sample: writeSample, words: writeText.split(/\s+/).filter(Boolean).length }, mode);
-    }
-    setWriteLoading(false); loadHistory();
+    const p = `Bạn là giáo viên tiếng Anh chuyên nghiệp. Chữa bài viết cho học viên.\nChủ đề: "${writePrompt}"\nBài viết gốc: "${writeText}"\n\nSử dụng Markdown # Chữa bài...`;
+    await runBgTask('writing_check', p, (c) => {
+      setWriteFeedback(c); setWriteLoading(false); loadHistory();
+    }, (err) => { alert(err); setWriteLoading(false); });
   }
 
   // VOCAB
