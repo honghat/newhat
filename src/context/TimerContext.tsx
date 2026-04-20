@@ -99,15 +99,13 @@ export function TimerProvider({ children }: { children: ReactNode }) {
     const handleVisible = () => { if (document.visibilityState === 'visible') sync(); };
     window.addEventListener('visibilitychange', handleVisible);
 
-    return () => {
-      clearInterval(id);
-      window.removeEventListener('visibilitychange', handleVisible);
-    };
-  }, [fetchLatest, running, isWork, secs]);
+    return () => clearInterval(syncInterval);
+  }, [fetchLatest]);
 
   // Save state to DB
   const saveState = useCallback(async (w: boolean, r: boolean, sCount?: number) => {
     const date = getToday();
+    const userId = getUserId();
     const endTime = r ? Date.now() + (w ? WORK_MIN : BREAK_MIN) * 60 * 1000 : 0;
     try {
       await fetch('/api/pomodoro', {
@@ -115,17 +113,32 @@ export function TimerProvider({ children }: { children: ReactNode }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           date,
-          sessions: sCount !== undefined ? sCount : undefined, // Only send if explicitly changed
+          sessions: sCount !== undefined ? sCount : undefined,
           currentEndTime: endTime,
           currentMode: w ? 'work' : 'break',
+          userId,
         }),
       });
     } catch { /**/ }
   }, []);
 
-  const switchMode = useCallback((toWork:boolean) => {
-    setIsWork(toWork); setSecs(toWork?WORK_MIN*60:BREAK_MIN*60); setRunning(false);
-    if (ref.current) clearInterval(ref.current);
+  // Save when running
+  useEffect(() => {
+    if (!running) return;
+    const id = setInterval(() => {
+      saveState(isWork, running);
+    }, 2000);
+    return () => clearInterval(id);
+  }, [running, isWork, saveState]);
+
+  // Save on mode change
+  useEffect(() => {
+    saveState(isWork, running);
+  }, [isWork]);
+
+  // Switch mode handler
+  const switchMode = useCallback((toWork: boolean) => {
+    setIsWork(toWork); setSecs(toWork ? WORK_MIN * 60 : BREAK_MIN * 60); setRunning(false);
     saveState(toWork, false);
   }, [saveState]);
 
