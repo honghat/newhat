@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+
+  <!-- Tên định danh duy nhất -->
+  <key>Label</key>
+  <string>io.vn.hatai.newhat</string>
+
+  <!-- Script khởi động -->
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>/usr/local/bin/newhat_daemon.sh</string>
+  </array>
+
+  <!-- Chạy với user nguyenhat (không phải root) -->
+  <key>UserName</key>
+  <string>nguyenhat</string>
+
+  <!-- Thư mục làm việc -->
+  <key>WorkingDirectory</key>
+  <string>/Users/nguyenhat/Documents/NewHat</string>
+
+  <!-- Các biến môi trường bổ sung -->
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>HOME</key>
+    <string>/Users/nguyenhat</string>
+    <key>USER</key>
+    <string>nguyenhat</string>
+    <key>PATH</key>
+    <string>/usr/local/bin:/Users/nguyenhat/miniconda3/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    <key>LANG</key>
+    <string>en_US.UTF-8</string>
+    <key>NODE_ENV</key>
+    <string>development</string>
+  </dict>
+
+  <!-- Tự động chạy khi load (lúc boot) -->
+  <key>RunAtLoad</key>
+  <true/>
+
+  <!-- Tự restart nếu crash -->
+  <key>KeepAlive</key>
+  <true/>
+
+  <!-- Giới hạn restart quá nhanh (tránh crash loop) -->
+  <key>ThrottleInterval</key>
+  <integer>30</integer>
+
+  <!-- Log output -->
+  <key>StandardOutPath</key>
+  <string>/tmp/newhat_daemon.log</string>
+  <key>StandardErrorPath</key>
+  <string>/tmp/newhat_daemon_err.log</string>
+
+</dict>
+</plist>

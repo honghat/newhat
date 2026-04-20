@@ -90,15 +90,54 @@ async function speak(text: string, speed = 1.0, voice = 'en_female') {
 // Simple Markdown Parser to handle # and *
 function parseMarkdown(text: string) {
   if (!text) return '';
-  let html = text
-    .replace(/^# (.*$)/gim, '<h1 style="font-size:18px; margin:14px 0 8px; font-weight:900; color:var(--text-main)">$1</h1>')
-    .replace(/^## (.*$)/gim, '<h2 style="font-size:16px; margin:12px 0 6px; font-weight:800; color:var(--text-main)">$1</h2>')
-    .replace(/^### (.*$)/gim, '<h3 style="font-size:14px; margin:10px 0 4px; font-weight:700; color:var(--text-main)">$1</h3>')
-    .replace(/\*\*(.*?)\*\*/gim, '<strong style="color:var(--accent)">$1</strong>')
-    .replace(/^> (.*$)/gim, '<blockquote style="border-left:3px solid var(--muted); padding-left:12px; margin:10px 0; font-style:italic; color:var(--muted)">$1</blockquote>')
-    .replace(/^---$/gim, '<hr style="border:none; border-top:1px solid var(--surface); margin:16px 0" />')
-    .replace(/\n/gim, '<div style="height:4px"></div>'); // Spacing for new lines
-  return html;
+  const lines = text.split('\n');
+  const htmlLines: string[] = [];
+  let inTable = false;
+
+  for (let line of lines) {
+    if (/^[ \t]*\|.*\|[ \t]*$/.test(line)) {
+      if (/^[ \t]*\|[\-\|\s:]+\|[ \t]*$/.test(line)) continue;
+      if (!inTable) {
+        inTable = true;
+        htmlLines.push('<div style="overflow-x:auto; margin:12px 0; border-radius:8px; border:1px solid var(--border);"><table style="width:100%; border-collapse:collapse; background:rgba(0,0,0,0.1);"><tbody>');
+      }
+      
+      const content = line.replace(/^[ \t]*\|/, '').replace(/\|[ \t]*$/, '');
+      const cells = content.split('|').map(c => c.trim());
+      const isHeader = htmlLines[htmlLines.length - 1].endsWith('<tbody>');
+      
+      const rowHtml = '<tr>' + cells.map(c => {
+        const cellText = c.replace(/\*\*(.*?)\*\*/g, '<strong style="color:var(--accent)">$1</strong>');
+        if (isHeader) {
+          return `<th style="padding: 10px 12px; border-bottom: 1px solid var(--border); font-size: 13px; font-weight: 800; color: var(--text-main); text-align: left; background: rgba(0,0,0,0.25)">${cellText}</th>`;
+        }
+        return `<td style="padding: 8px 12px; border-bottom: 1px solid var(--border); font-size: 13px; color: var(--text);">${cellText}</td>`;
+      }).join('') + '</tr>';
+      
+      htmlLines.push(rowHtml);
+      continue;
+    } else if (inTable) {
+      inTable = false;
+      htmlLines.push('</tbody></table></div>');
+    }
+
+    let parsed = line
+      .replace(/^# (.*$)/g, '<h1 style="font-size:18px; margin:14px 0 8px; font-weight:900; color:var(--text-main)">$1</h1>')
+      .replace(/^## (.*$)/g, '<h2 style="font-size:16px; margin:12px 0 6px; font-weight:800; color:var(--text-main)">$1</h2>')
+      .replace(/^### (.*$)/g, '<h3 style="font-size:14px; margin:10px 0 4px; font-weight:700; color:var(--text-main)">$1</h3>')
+      .replace(/\*\*(.*?)\*\*/g, '<strong style="color:var(--accent)">$1</strong>')
+      .replace(/^> (.*$)/g, '<blockquote style="border-left:3px solid var(--muted); padding-left:12px; margin:10px 0; font-style:italic; color:var(--muted)">$1</blockquote>')
+      .replace(/^---$/g, '<hr style="border:none; border-top:1px solid var(--surface); margin:16px 0" />');
+
+    htmlLines.push(parsed);
+  }
+
+  if (inTable) htmlLines.push('</tbody></table></div>');
+
+  return htmlLines.map(l => {
+    if (l.startsWith('<div style="overflow-x') || l.startsWith('</tbody>') || l.startsWith('<tr>')) return l;
+    return l + '<div style="height:4px"></div>';
+  }).join('');
 }
 
 const WRITING_PROMPTS = [
@@ -163,12 +202,17 @@ type LearnMode = typeof MODES[number]['id'];
 
 export default function EnglishContent() {
   const [tab, setTab] = useState<'listen'|'speak'|'write'|'vocab'|'read'|'dict'>('listen');
-  const [mode, setMode] = useState<LearnMode>(() => {
-    if (typeof window === 'undefined') return 'coder';
-    return (localStorage.getItem('eng_mode') as LearnMode) || 'coder';
-  });
+  const [mode, setMode] = useState<LearnMode>('coder');
+  const [isMounted, setIsMounted] = useState(false);
+
+  useEffect(() => {
+    setIsMounted(true);
+    const savedMode = localStorage.getItem('eng_mode') as LearnMode;
+    if (savedMode) setMode(savedMode);
+  }, []);
+
   const [ttsOnline, setTtsOnline] = useState(false);
-  useEffect(() => { if (typeof window !== 'undefined') localStorage.setItem('eng_mode', mode); }, [mode]);
+  useEffect(() => { if (isMounted) localStorage.setItem('eng_mode', mode); }, [mode, isMounted]);
   const modeDesc = MODES.find(m => m.id === mode)?.desc || 'developer';
 
   // Listening
