@@ -52,6 +52,19 @@ export default function LearnMain() {
   const [activeCodeMode, setActiveCodeMode] = useState<'explain'|'generate'>('explain');
   const [codeSessions, setCodeSessions] = useState<any[]>([]);
   const contentRef = useRef<HTMLDivElement>(null);
+  const [aiModel, setAiModel] = useState('default');
+  const [isMounted, setIsMounted] = useState(false);
+
+  useEffect(() => {
+    setIsMounted(true);
+    const savedModel = localStorage.getItem('eng_model');
+    if (savedModel) setAiModel(savedModel);
+  }, []);
+
+  useEffect(() => {
+    if (isMounted) localStorage.setItem('eng_model', aiModel);
+  }, [aiModel, isMounted]);
+
   useEffect(() => setMounted(true), []);
 
   const load = useCallback(async () => {
@@ -168,7 +181,7 @@ A) [nội dung đáp án A] B) [nội dung đáp án B] C) [nội dung đáp án
     try {
       const res = await fetch('/api/ai', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: [{ role: 'user', content: prompt }] }),
+        body: JSON.stringify({ model: aiModel, messages: [{ role: 'user', content: prompt }] }),
       });
       if (!res.ok) { setError('AI không phản hồi'); setLoading(false); return; }
       const data = await res.json();
@@ -226,7 +239,7 @@ A) [nội dung đáp án A] B) [nội dung đáp án B] C) [nội dung đáp án
       const res = await fetch('/api/ai', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: [{ role: 'user', content: `Giải thích chi tiết code ${trackLabel} này (bằng tiếng Việt). Format:
+        body: JSON.stringify({ model: aiModel, messages: [{ role: 'user', content: `Giải thích chi tiết code ${trackLabel} này (bằng tiếng Việt). Format:
 
 ## 📖 Giải thích
 [Giải thích dễ hiểu từng dòng code, khái niệm chính]
@@ -274,7 +287,7 @@ ${codeInput}
       const res = await fetch('/api/ai', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: [{ role: 'user', content: `Viết code ${trackLabel} theo yêu cầu sau (bằng tiếng Việt). Format:
+        body: JSON.stringify({ model: aiModel, messages: [{ role: 'user', content: `Viết code ${trackLabel} theo yêu cầu sau (bằng tiếng Việt). Format:
 
 ## 📝 Yêu cầu
 [Tóm tắt yêu cầu]

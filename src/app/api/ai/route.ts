@@ -1,30 +1,79 @@
 import { prisma } from '@/lib/prisma';
-import { execSync } from 'child_process';
 
-async function getAIBase(): Promise<string> {
+async function getAISettings() {
   try {
-    const s = await prisma.settings.findUnique({ where: { id: 1 } });
-    if (s?.aiServer) return s.aiServer;
-  } catch {}
-  return process.env.AI_SERVER || 'http://100.69.50.64:8080';
+    const results: any = await prisma.$queryRawUnsafe('SELECT * FROM "Settings" WHERE id = 1 LIMIT 1');
+    const s = results[0];
+    if (s) return {
+      aiServer: s.aiServer || 'http://100.69.50.64:8080',
+      aiProvider: s.aiProvider || 'local',
+      aiKey: s.aiKey || '',
+      aiHost: s.aiHost || '100.69.50.64',
+      aiModel: s.aiModel || 'default'
+    };
+  } catch (e) {
+    console.error('[getAISettings Raw SQL error]', e);
+  }
+  return { 
+    aiServer: process.env.AI_SERVER || 'http://100.69.50.64:8080', 
+    aiProvider: 'local', 
+    aiKey: '',
+    aiModel: 'default'
+  };
 }
 
 export async function POST(req: Request) {
-  const AI_BASE = await getAIBase();
+  const settings = await getAISettings();
   try {
     const body = await req.json();
-    const payload = JSON.stringify({ model: 'default', temperature: 0.7, ...body });
-    const raw = execSync(
-      `curl -s -X POST "${AI_BASE}/v1/chat/completions" -H "Content-Type: application/json" -d '${payload.replace(/'/g, "'\\''")}'`,
-      { timeout: 300000, encoding: 'utf8' }
-    );
-    const data = JSON.parse(raw);
+    const { model, ...rest } = body;
+
+    // Use settings.aiServer as the authoritative base URL. 
+    // We expect it to be something like https://api.openai.com/v1
+    let baseUrl = settings.aiServer.replace(/\/+$/, '');
+    let url = `${baseUrl}/chat/completions`;
+
+    const headers: Record<string, string> = { 
+      'Content-Type': 'application/json',
+      'HTTP-Referer': 'https://hatai.io.vn',
+      'X-OpenRouter-Title': 'HatAI'
+    };
+
+    if (settings.aiKey) {
+      headers['Authorization'] = `Bearer ${settings.aiKey}`;
+    }
+
+    const payload = {
+      model: model || settings.aiModel || 'default',
+      temperature: 0.7,
+      ...rest
+    };
+
+    console.log(`[AI Request] URL: ${url} | Model: ${payload.model} | Provider: ${settings.aiProvider}`);
+    
+    const res = await fetch(url, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(300000),
+    });
+
+    if (!res.ok) {
+      const errText = await res.text();
+      console.error(`[AI Provider Error] Status: ${res.status}`, errText);
+      throw new Error(`OpenRouter Error (${res.status}): ${errText}`);
+    }
+
+    const data = await res.json();
     return Response.json(data);
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e);
-    console.error('[AI route error]', msg.slice(0, 200));
+    console.error('[AI Final Error]', msg);
     return Response.json(
-      { error: `AI offline: ${msg.slice(0, 100)}`, choices: [{ message: { content: `⚠️ AI server không phản hồi (${AI_BASE}). Kiểm tra server đang chạy chưa.` } }] },
+      { 
+        error: `AI Error: ${msg}`, 
+        choices: [{ message: { content: `⚠️ AI LỖI: ${msg}` } }] 
+      },
       { status: 503 }
     );
   }

@@ -1,5 +1,6 @@
 'use client';
 import { useState, useEffect, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 
 const QUOTES = [
   "960 giờ. Không có thời gian để lướt mạng xã hội.",
@@ -105,6 +106,7 @@ function parseMarkdown(text: string) {
 }
 
 export default function HomePage() {
+  const router = useRouter();
   const [cd, setCd] = useState({ days: 60, hours: 0, mins: 0 });
   const [missionStart, setMissionStart] = useState(0);
   const [totalH, setTotalH] = useState(0);
@@ -117,14 +119,22 @@ export default function HomePage() {
   const [loading, setLoading] = useState(true);
   const today = new Date().toISOString().slice(0, 10);
 
-  const [wolStatus, setWolStatus] = useState('');
-  const [aiHost, setAiHost] = useState('100.69.50.64');
-  const [aiServer, setAiServer] = useState('http://100.69.50.64:8080');
-  const [settingsSaved, setSettingsSaved] = useState(false);
   const [aiReport, setAiReport] = useState('');
   const [reportLoading, setReportLoading] = useState(false);
   const [savedReports, setSavedReports] = useState<AIReport[]>([]);
   const [selectedReportId, setSelectedReportId] = useState<number | null>(null);
+  const [aiModel, setAiModel] = useState('default');
+  const [isMounted, setIsMounted] = useState(false);
+
+  useEffect(() => {
+    setIsMounted(true);
+    const savedModel = localStorage.getItem('eng_model');
+    if (savedModel) setAiModel(savedModel);
+  }, []);
+
+  useEffect(() => {
+    if (isMounted) localStorage.setItem('eng_model', aiModel);
+  }, [aiModel, isMounted]);
 
   const loadReports = useCallback(async () => {
     try {
@@ -146,53 +156,27 @@ export default function HomePage() {
     setSelectedReportId(r.id);
   }
 
-  async function saveAISettings() {
-    try {
-      const res = await fetch('/api/settings', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ aiHost, aiServer }),
-      });
-      if (res.ok) {
-        setSettingsSaved(true);
-        setTimeout(() => setSettingsSaved(false), 2000);
-      }
-    } catch {}
-  }
+  const [aiInfo, setAiInfo] = useState<{server:string, provider:string}>({server:'', provider:''});
 
   useEffect(() => {
+    // Immediate local sync
+    const cachedProv = localStorage.getItem('eng_provider');
+    const cachedServer = localStorage.getItem('eng_server');
+    if (cachedProv && cachedServer) {
+      setAiInfo({ server: cachedServer, provider: cachedProv });
+    }
+
     fetch('/api/settings').then(r => r.json()).then(d => {
-      if (d.aiHost) setAiHost(d.aiHost);
-      if (d.aiServer) setAiServer(d.aiServer);
+      setAiInfo({ server: d.aiServer, provider: d.aiProvider });
+      if (d.aiModel) {
+        setAiModel(d.aiModel);
+        localStorage.setItem('eng_model', d.aiModel);
+      }
+      // Keep local store in sync with database truth
+      localStorage.setItem('eng_provider', d.aiProvider);
+      localStorage.setItem('eng_server', d.aiServer);
     }).catch(() => {});
   }, []);
-  const [shutdownPwd, setShutdownPwd] = useState('');
-  const [shutdownStatus, setShutdownStatus] = useState('');
-  const [shutdownLoading, setShutdownLoading] = useState(false);
-  const [shutdownConfirm, setShutdownConfirm] = useState(false);
-
-  async function wakeAI() {
-    setWolStatus('⏳ Đang gửi...');
-    try {
-      const res = await fetch('/api/wol', { method: 'POST' });
-      const d = await res.json();
-      setWolStatus(d.ok ? '✅ Đã gửi magic packet!' : '❌ ' + d.error);
-    } catch { setWolStatus('❌ Lỗi kết nối'); }
-    setTimeout(() => setWolStatus(''), 4000);
-  }
-
-  async function shutdownAI() {
-    if (!shutdownPwd) return;
-    setShutdownLoading(true); setShutdownStatus('');
-    try {
-      const res = await fetch('/api/shutdown', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password: shutdownPwd, host: aiHost }) });
-      const d = await res.json();
-      setShutdownStatus(d.ok ? '✅ Đã gửi lệnh tắt máy' : '❌ ' + d.error);
-      if (d.ok) setShutdownPwd('');
-    } catch { setShutdownStatus('❌ Lỗi kết nối'); }
-    setShutdownLoading(false);
-    setTimeout(() => setShutdownStatus(''), 5000);
-  }
 
   const load = useCallback(async () => {
     const [mRes, lRes] = await Promise.all([fetch('/api/mission'), fetch('/api/logs')]);
@@ -251,7 +235,7 @@ Trả lời bằng tiếng Việt, chuyên sâu và cá nhân hóa.`;
 
     const res = await fetch('/api/ai', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ messages: [{ role: 'user', content: prompt }] }),
+      body: JSON.stringify({ model: aiModel, messages: [{ role: 'user', content: prompt }] }),
     });
     const data = await res.json();
     const content = data.choices?.[0]?.message?.content || '⚠️ AI không phản hồi';
@@ -282,7 +266,14 @@ Trả lời bằng tiếng Việt, chuyên sâu và cá nhân hóa.`;
       <div style={{ marginBottom: 14, display:'flex', justifyContent:'space-between', alignItems:'center', gap:8 }}>
         <div style={{ minWidth:0, flex:1 }}>
           <h1 className="page-title" style={{ fontSize:20, fontWeight:900, marginBottom:2, background:'linear-gradient(135deg, #f85149, #ff8c69)', WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent', whiteSpace:'nowrap' }}>Trang Chủ</h1>
-          <div style={{ fontSize:10, color:'var(--muted)', textTransform:'uppercase', letterSpacing:1, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{new Date().toLocaleDateString('vi-VN', { weekday:'long', day:'2-digit', month:'2-digit' })}</div>
+          <div style={{ display:'flex', alignItems:'center', gap:6, flexWrap:'wrap' }}>
+            <div style={{ fontSize:10, color:'var(--muted)', textTransform:'uppercase', letterSpacing:1 }}>{new Date().toLocaleDateString('vi-VN', { weekday:'long', day:'2-digit', month:'2-digit' })}</div>
+            {aiInfo.provider && (
+              <div style={{ fontSize:9, color:'rgba(63,185,80,0.8)', fontWeight:800, background:'rgba(63,185,80,0.05)', padding:'1px 6px', borderRadius:4, border:'1px solid rgba(63,185,80,0.2)' }}>
+                🧠 {aiModel} · 🌐 {aiInfo.provider.toUpperCase()}
+              </div>
+            )}
+          </div>
         </div>
         <div style={{ textAlign:'right', flexShrink:0 }}>
           <div style={{ color:'#f85149', fontWeight:800, fontSize:16, lineHeight:1 }}>{Math.round((elapsed/60)*100)}%</div>
@@ -355,8 +346,6 @@ Trả lời bằng tiếng Việt, chuyên sâu và cá nhân hóa.`;
                 <div className="progress-fill" style={{ width:`${(form.hours/16)*100}%`, background:'var(--green)' }} />
               </div>
             </div>
-            <textarea className="input" placeholder="Học gì hôm nay? (Next.js, SQL, vocab...)" value={form.topic} rows={2}
-              onChange={e=>setForm(f=>({...f,topic:e.target.value}))} style={{ marginBottom:10, fontSize:12 }} />
             <textarea className="input" placeholder="Ghi chú, vướng mắc, điều cần nhớ..." value={form.notes} rows={3}
               onChange={e=>setForm(f=>({...f,notes:e.target.value}))} style={{ marginBottom:12 }} />
             <button className="btn btn-green" style={{ width:'100%' }} onClick={save}>
@@ -455,47 +444,15 @@ Trả lời bằng tiếng Việt, chuyên sâu và cá nhân hóa.`;
               ))}
             </div>
           )}
-          {/* AI Machine Control */}
-          <div className="card" style={{ marginTop: 20 }}>
-            <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 10 }}>🖥️ Máy AI Local</div>
-            <div style={{ display:'grid', gridTemplateColumns:'70px 1fr', gap:6, alignItems:'center', marginBottom: 10, fontSize:11 }}>
-              <label style={{ color:'var(--muted)' }}>Host:</label>
-              <input value={aiHost} onChange={e=>setAiHost(e.target.value)} onBlur={saveAISettings} placeholder="100.69.50.64" style={{ fontSize:11, padding:'5px 8px', borderRadius:6, border:'1px solid var(--border)', background:'var(--surface2)', color:'var(--text)' }} />
-              <label style={{ color:'var(--muted)' }}>AI URL:</label>
-              <input value={aiServer} onChange={e=>setAiServer(e.target.value)} onBlur={saveAISettings} placeholder="http://100.69.50.64:8080" style={{ fontSize:11, padding:'5px 8px', borderRadius:6, border:'1px solid var(--border)', background:'var(--surface2)', color:'var(--text)' }} />
-            </div>
-            {settingsSaved && <div style={{ fontSize:11, color:'#3fb950', marginBottom:8 }}>✅ Đã lưu</div>}
-            <button onClick={wakeAI} className="btn btn-green" style={{ width: '100%', marginBottom: 10, height: 40 }}>
-              ⚡ Bật máy AI (Wake-on-LAN)
-            </button>
-            {wolStatus && <div style={{ fontSize: 12, color: wolStatus.startsWith('✅') ? '#3fb950' : '#f85149', marginBottom: 10 }}>{wolStatus}</div>}
-            <div style={{ display: 'flex', gap: 8 }}>
-              <input className="input" type="password" placeholder="Mật khẩu sudo" value={shutdownPwd}
-                onChange={e => setShutdownPwd(e.target.value)} onKeyDown={e => e.key === 'Enter' && setShutdownConfirm(true)}
-                style={{ flex: 1, marginBottom: 0 }} />
-              <button onClick={() => shutdownPwd && setShutdownConfirm(true)} disabled={shutdownLoading || !shutdownPwd}
-                style={{ flexShrink: 0, padding: '0 14px', borderRadius: 8, border: '1px solid #f85149', background: '#f8514911', color: '#f85149', fontSize: 13, fontWeight: 700, cursor: 'pointer', height: 40 }}>
-                ⏻ Tắt
-              </button>
-            </div>
-            {shutdownStatus && <div style={{ fontSize: 12, marginTop: 8, color: shutdownStatus.startsWith('✅') ? '#3fb950' : '#f85149' }}>{shutdownStatus}</div>}
 
-            {/* Confirm dialog */}
-            {shutdownConfirm && (
-              <div style={{ position: 'fixed', inset: 0, background: '#00000088', zIndex: 999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <div style={{ background: 'var(--surface)', border: '1px solid #f85149', borderRadius: 12, padding: 24, maxWidth: 300, width: '90%' }}>
-                  <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 8 }}>⏻ Tắt máy AI?</div>
-                  <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 20 }}>Máy tại {aiHost} sẽ bị tắt ngay lập tức.</div>
-                  <div style={{ display: 'flex', gap: 10 }}>
-                    <button onClick={() => setShutdownConfirm(false)} style={{ flex: 1, padding: '10px', borderRadius: 8, border: '1px solid var(--border)', background: 'transparent', color: 'var(--muted)', cursor: 'pointer', fontWeight: 600 }}>Huỷ</button>
-                    <button onClick={() => { setShutdownConfirm(false); shutdownAI(); }} disabled={shutdownLoading}
-                      style={{ flex: 1, padding: '10px', borderRadius: 8, border: 'none', background: '#f85149', color: '#fff', cursor: 'pointer', fontWeight: 700 }}>
-                      {shutdownLoading ? '...' : 'Tắt ngay'}
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
+          {/* AI Info & Management link */}
+          <div style={{ textAlign: 'center', marginTop: 24, padding: '16px 0', borderTop: '1px solid var(--border)' }}>
+            <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 12 }}>
+              Đang kết nối: <strong style={{color:'var(--accent)'}}>{aiInfo.server}</strong>
+            </div>
+            <button onClick={() => router.push('/admin')} className="btn btn-ghost" style={{ fontSize: 12, padding: '6px 16px' }}>
+              ⚙️ Quản lý AI & Máy chủ
+            </button>
           </div>
         </div>
       </div>

@@ -117,8 +117,11 @@ model CodeSession {
 }
 
 model Settings {
-  id        Int      @id @default(1)
-  aiServer  String   @default("http://100.69.50.64:8080")
-  aiHost    String   @default("100.69.50.64")
-  updatedAt DateTime @default(now()) @updatedAt
+  id         Int      @id @default(1)
+  aiServer   String   @default("http://100.69.50.64:8080/v1")
+  aiHost     String   @default("100.69.50.64")
+  aiProvider String   @default("local")
+  aiModel    String   @default("default")
+  aiKey      String   @default("")
+  updatedAt  DateTime @default(now()) @updatedAt
 }

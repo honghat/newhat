@@ -3,13 +3,13 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { speakText } from '@/lib/tts';
 
 const AI_OFFLINE = '__AI_OFFLINE__';
-async function askAI(prompt: string, timeoutMs = 300000): Promise<string> {
+async function askAI(prompt: string, model = 'default', timeoutMs = 300000): Promise<string> {
   const ctrl = new AbortController();
   const to = setTimeout(() => ctrl.abort(), timeoutMs);
   try {
     const res = await fetch('/api/ai', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ messages: [{ role: 'user', content: prompt }] }),
+      body: JSON.stringify({ model, messages: [{ role: 'user', content: prompt }] }),
       signal: ctrl.signal,
     });
     clearTimeout(to);
@@ -29,11 +29,12 @@ async function askAI(prompt: string, timeoutMs = 300000): Promise<string> {
 async function genTopicTask(
   type: string,
   prompt: string,
-  onTick: (elapsed: number) => void
+  onTick: (elapsed: number) => void,
+  model = 'default'
 ): Promise<string | null> {
   const startRes = await fetch('/api/ai/task', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ type, prompt }),
+    body: JSON.stringify({ type, prompt, model }),
   });
   if (!startRes.ok) throw new Error('Không khởi động được task');
   const { taskId } = await startRes.json();
@@ -201,16 +202,24 @@ type LearnMode = typeof MODES[number]['id'];
 export default function EnglishContent() {
   const [tab, setTab] = useState<'listen' | 'speak' | 'write' | 'vocab' | 'read' | 'dict'>('listen');
   const [mode, setMode] = useState<LearnMode>('coder');
+  const [aiModel, setAiModel] = useState('default');
   const [isMounted, setIsMounted] = useState(false);
 
   useEffect(() => {
     setIsMounted(true);
     const savedMode = localStorage.getItem('eng_mode') as LearnMode;
     if (savedMode) setMode(savedMode);
+    const savedModel = localStorage.getItem('eng_model');
+    if (savedModel) setAiModel(savedModel);
   }, []);
 
   const [ttsOnline, setTtsOnline] = useState(false);
-  useEffect(() => { if (isMounted) localStorage.setItem('eng_mode', mode); }, [mode, isMounted]);
+  useEffect(() => { 
+    if (isMounted) {
+      localStorage.setItem('eng_mode', mode);
+      localStorage.setItem('eng_model', aiModel);
+    }
+  }, [mode, aiModel, isMounted]);
   const modeDesc = MODES.find(m => m.id === mode)?.desc || 'developer';
 
   // Listening
@@ -393,7 +402,7 @@ Return JSON format ONLY:
   "vi": "Bản dịch tiếng Việt...",
   "vocab": [{"w": "từ/cụm từ", "m": "nghĩa & cách dùng"}]
 }`;
-    const raw = await askAI(p);
+    const raw = await askAI(p, aiModel);
     if (raw) {
       try {
         const m = raw.match(/\{[\s\S]*\}/);
@@ -428,7 +437,7 @@ Return JSON format ONLY:
   async function genSpkTopic() {
     setSpkTopicLoading(true); setSpkTopicError('');
     const p = `Give ONE short English speaking question for: ${modeDesc}. Different from: "${spkTopic}". Reply with the question ONLY, no explanation.`;
-    const t = await askAI(p);
+    const t = await askAI(p, aiModel);
     if (t) {
       const clean = cleanTopic(t);
       setSpkTopic(clean);
@@ -448,7 +457,7 @@ Return JSON format ONLY:
 
 **English:** (3-4 sentences)
 **Tiếng Việt:** (bản dịch ngắn)
-**Từ hay:** word1 – nghĩa, word2 – nghĩa`);
+**Từ hay:** word1 – nghĩa, word2 – nghĩa`, aiModel);
     setSpkSample(raw || '');
     if (spkRecordId) {
       fetch('/api/english', {
@@ -465,7 +474,7 @@ Return JSON format ONLY:
 
 **English:** (1-2 clear paragraphs)
 **Tiếng Việt:** (bản dịch ngắn)
-**Từ hay:** word1 – nghĩa, word2 – nghĩa`);
+**Từ hay:** word1 – nghĩa, word2 – nghĩa`, aiModel);
     setWriteSample(raw || '');
     if (writeRecordId) {
       fetch('/api/english', {
@@ -549,7 +558,7 @@ Hãy trình bày theo định dạng Markdown sau:
   async function genWriteTopic() {
     setWriteTopicLoading(true); setWriteTopicError('');
     const p = `Give ONE English writing prompt for: ${modeDesc}. Different from: "${writePrompt}". Reply with the prompt ONLY.`;
-    const t = await askAI(p);
+    const t = await askAI(p, aiModel);
     if (t) {
       const clean = cleanTopic(t);
       setWritePrompt(clean);
@@ -592,7 +601,7 @@ Reply in Markdown (concise):
   async function loadVocab() {
     setVocabLoading(true); setCards([]); setCardIdx(0); setFlipped(false); setKnown([]);
     const p = `Give 8 unique, varied and useful English vocabulary words for a Vietnamese learner. Context: ${modeDesc}. Topic: ${vocabTopic}. Avoid common words like 'variable' or 'function' unless the topic specifically requires them. Return JSON array ONLY: [{"word":"...","def":"short English definition","ex":"Example sentence","vi":"Vietnamese meaning"}]`;
-    const raw = await askAI(p);
+    const raw = await askAI(p, aiModel);
     if (raw) {
       const m = raw.match(/\[[\s\S]*\]/);
       if (m) {
@@ -625,7 +634,7 @@ Topic: ${readTopic}
 Return JSON ONLY (no markdown code blocks, just raw json):
 {"title":"...","body":"4-6 paragraphs separated by \\n\\n, ${readLevel === 'A2' ? '80-120' : readLevel === 'B1' ? '150-200' : '200-280'} words","questions":[{"q":"...","options":["A","B","C","D"],"answer":0},{"q":"...","options":["A","B","C","D"],"answer":2},{"q":"...","options":["A","B","C","D"],"answer":1},{"q":"...","options":["A","B","C","D"],"answer":3}]}`;
 
-    const raw = await askAI(p);
+    const raw = await askAI(p, aiModel);
     if (raw) {
       const m = raw.match(/\{[\s\S]*\}/);
       if (m) {
@@ -691,6 +700,8 @@ Return JSON ONLY (no markdown code blocks, just raw json):
           {ttsOnline ? '🔊 LuxTTS' : '🔇 Browser TTS'}
         </div>
       </div>
+
+      <div style={{ height: 1 }} />
 
       {/* Tabs */}
       <div style={{ display: 'flex', gap: '6px', marginBottom: '12px', flexWrap: 'wrap' }}>

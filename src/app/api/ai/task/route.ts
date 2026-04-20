@@ -1,12 +1,26 @@
 import { prisma } from '@/lib/prisma';
 import { getSession } from '@/lib/auth';
 
-async function getAIBase(): Promise<string> {
+async function getAISettings() {
   try {
-    const s = await prisma.settings.findUnique({ where: { id: 1 } });
-    if (s?.aiServer) return s.aiServer;
-  } catch {}
-  return process.env.AI_SERVER || 'http://100.69.50.64:8080';
+    const results: any = await prisma.$queryRawUnsafe('SELECT * FROM "Settings" WHERE id = 1 LIMIT 1');
+    const s = results[0];
+    if (s) return {
+      aiServer: s.aiServer || 'http://100.69.50.64:8080',
+      aiProvider: s.aiProvider || 'local',
+      aiKey: s.aiKey || '',
+      aiHost: s.aiHost || '100.69.50.64',
+      aiModel: s.aiModel || 'default'
+    };
+  } catch (e) {
+    console.error('[getAISettings Raw SQL error]', e);
+  }
+  return { 
+    aiServer: process.env.AI_SERVER || 'http://100.69.50.64:8080', 
+    aiProvider: 'local', 
+    aiKey: '',
+    aiModel: 'default'
+  };
 }
 
 function cleanTopic(raw: string): string {
@@ -26,11 +40,11 @@ function cleanTopic(raw: string): string {
 export async function POST(req: Request) {
   const user = await getSession();
   if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
-  const { type, prompt } = await req.json();
+  const { type, prompt, model } = await req.json();
   if (!type || !prompt) return Response.json({ error: 'Missing type or prompt' }, { status: 400 });
 
   const taskId = `task_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-  const AI_BASE = await getAIBase();
+  const settings = await getAISettings();
 
   // Ghi marker "đang chạy" vào DB để client poll được
   await prisma.englishLesson.create({
@@ -38,23 +52,39 @@ export async function POST(req: Request) {
       userId: user.id,
       type: `${type}_pending`,
       content: taskId,
-      metadata: JSON.stringify({ taskId, prompt: prompt.slice(0, 100), status: 'running' }),
+      metadata: JSON.stringify({ taskId, prompt: prompt.slice(0, 100), status: 'running', model }),
     },
   });
 
   // Chạy nền — không await, response trả về ngay
   (async () => {
     try {
-      const res = await fetch(`${AI_BASE}/v1/chat/completions`, {
+      let baseUrl = settings.aiServer.replace(/\/+$/, '');
+      let url = `${baseUrl}/chat/completions`;
+      const headers: Record<string, string> = { 
+        'Content-Type': 'application/json',
+        'HTTP-Referer': 'https://hatai.io.vn',
+        'X-OpenRouter-Title': 'HatAI'
+      };
+
+      if (settings.aiKey) {
+        headers['Authorization'] = `Bearer ${settings.aiKey}`;
+      }
+
+      const res = await fetch(url, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
-          model: 'default', temperature: 0.7,
+          model: model || settings.aiModel || 'default', 
+          temperature: 0.7,
           messages: [{ role: 'user', content: prompt }],
         }),
         signal: AbortSignal.timeout(300000),
       });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      if (!res.ok) {
+        const errText = await res.text();
+        throw new Error(`AI HTTP ${res.status}: ${errText.slice(0, 100)}`);
+      }
       const data = await res.json();
       const rawContent = data.choices?.[0]?.message?.content || '';
       const cleaned = cleanTopic(rawContent);
@@ -67,16 +97,19 @@ export async function POST(req: Request) {
             metadata: JSON.stringify({ taskId, generated: true }),
           },
         });
+      } else {
+        throw new Error("AI returned empty or invalid content");
       }
       // Xoá marker pending SAU KHI đã lưu kết quả thành công
       await prisma.englishLesson.deleteMany({
         where: { userId: user.id, type: `${type}_pending`, content: taskId },
       });
     } catch (e) {
-      // Đánh dấu lỗi trong marker
+      console.error('[AI Task Error]', e);
+      // Đánh dấu lỗi trong marker với chi tiết
       await prisma.englishLesson.updateMany({
         where: { userId: user.id, type: `${type}_pending`, content: taskId },
-        data: { metadata: JSON.stringify({ taskId, status: 'error', error: String(e) }) },
+        data: { metadata: JSON.stringify({ taskId, status: 'error', error: e instanceof Error ? e.message : String(e) }) },
       });
     }
   })();
