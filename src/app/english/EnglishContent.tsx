@@ -253,10 +253,15 @@ export default function EnglishContent() {
     try {
       const res = await fetch('/api/english');
       const data = await res.json();
-      setHistory(data);
+      setHistory(data.filter((h: any) => !h.type.endsWith('_pending')));
       // Resume tasks
       data.forEach((h: any) => {
         if (h.type.endsWith('_pending')) {
+          // Skip if task is older than 5 mins
+          const ageS = (Date.now() - new Promise(()=>{})) / 1000; // placeholder for real date
+          const createdAt = new Date(h.createdAt || Date.now()).getTime();
+          if (Date.now() - createdAt > 300000) return; 
+
           const baseType = h.type.replace('_pending', '');
           const taskId = h.content;
           resumeTask(baseType, taskId);
@@ -267,16 +272,17 @@ export default function EnglishContent() {
   }, []);
 
   async function resumeTask(type: string, taskId: string) {
-    if (type === 'listen') { setListenLoading(true); pollAndSet(type, taskId, setListenText, setListenLoading); }
-    if (type === 'speak') { setSpkTopicLoading(true); pollAndSet(type, taskId, setSpkTopic, setSpkTopicLoading); }
-    if (type === 'speak_feedback') { setSpkLoading(true); pollAndSet(type, taskId, setSpkFeedback, setSpkLoading); }
-    if (type === 'writing') { setWriteTopicLoading(true); pollAndSet(type, taskId, setWritePrompt, setWriteTopicLoading); }
-    if (type === 'writing_check') { setWriteLoading(true); pollAndSet(type, taskId, setWriteFeedback, setWriteLoading); }
-    if (type === 'vocab') { setVocabLoading(true); pollAndSet(type, taskId, (raw)=> {
+    // Prevent double resume
+    if (type === 'listen' && !listenLoading) { setListenLoading(true); pollAndSet(type, taskId, setListenText, setListenLoading); }
+    if (type === 'speak' && !spkTopicLoading) { setSpkTopicLoading(true); pollAndSet(type, taskId, setSpkTopic, setSpkTopicLoading); }
+    if (type === 'speak_feedback' && !spkLoading) { setSpkLoading(true); pollAndSet(type, taskId, setSpkFeedback, setSpkLoading); }
+    if (type === 'writing' && !writeTopicLoading) { setWriteTopicLoading(true); pollAndSet(type, taskId, setWritePrompt, setWriteTopicLoading); }
+    if (type === 'writing_check' && !writeLoading) { setWriteLoading(true); pollAndSet(type, taskId, setWriteFeedback, setWriteLoading); }
+    if (type === 'vocab' && !vocabLoading) { setVocabLoading(true); pollAndSet(type, taskId, (raw)=> {
        const m = raw.match(/\[[\s\S]*\]/);
        if (m) setCards(JSON.parse(m[0]));
     }, setVocabLoading); }
-    if (type === 'reading') { setReadLoading(true); pollAndSet(type, taskId, (raw)=> {
+    if (type === 'reading' && !readLoading) { setReadLoading(true); pollAndSet(type, taskId, (raw)=> {
        const m = raw.match(/\{[\s\S]*\}/);
        if (m) {
          const p = JSON.parse(m[0]);
@@ -285,9 +291,9 @@ export default function EnglishContent() {
          setReadAnswers((p.questions||[]).map(()=>-1));
        }
     }, setReadLoading); }
-    if (type === 'dict') { setDictLoading(true); pollAndSet(type, taskId, setDictResult, setDictLoading); }
-    if (type === 'speak_sample') { setSpkSampleLoading(true); pollAndSet(type, taskId, setSpkSample, setSpkSampleLoading); }
-    if (type === 'writing_sample') { setWriteSampleLoading(true); pollAndSet(type, taskId, setWriteSample, setWriteSampleLoading); }
+    if (type === 'dict' && !dictLoading) { setDictLoading(true); pollAndSet(type, taskId, setDictResult, setDictLoading); }
+    if (type === 'speak_sample' && !spkSampleLoading) { setSpkSampleLoading(true); pollAndSet(type, taskId, setSpkSample, setSpkSampleLoading); }
+    if (type === 'writing_sample' && !writeSampleLoading) { setWriteSampleLoading(true); pollAndSet(type, taskId, setWriteSample, setWriteSampleLoading); }
   }
 
   async function pollAndSet(type: string, taskId: string, setter: (val: string)=>void, loader: (b: boolean)=>void) {
