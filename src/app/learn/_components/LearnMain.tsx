@@ -29,6 +29,8 @@ const TRACKS = [
   { id: 'linux', label: '🐧 Linux/Bash', color: '#ffcc00' },
   { id: 'excel-vba', label: '📊 Excel VBA', color: '#217346' },
   { id: 'powerbi', label: '📈 Power BI', color: '#F2CC0C' },
+  {id: 'ai-ml', label: '🧠 AI/ML', color: '#7f52ff' },
+  {id: 'langchain', label: '🦜 LangChain', color: '#00add8' },
 ];
 
 export default function LearnMain() {
