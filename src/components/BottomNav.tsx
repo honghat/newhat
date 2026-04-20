@@ -137,7 +137,7 @@ export default function BottomNav({ session }: { session: AuthUser | null }) {
             </Link>
           )}
           <div style={{ fontSize:10, color:'var(--muted)', marginTop:10, lineHeight:1.5 }}>
-            AI <span style={{ color: '#3fb950' }}>● 100.69.50.64</span>
+            AI <span style={{ color: '#3fb950' }}>● {mounted ? (secs > 0 && running ? 'Đang tập trung...' : (isWork ? 'Sẵn sàng' : 'Nghỉ ngơi')) : 'Đang kết nối...'}</span>
           </div>
         </div>
       </aside>
