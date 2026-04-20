@@ -121,13 +121,25 @@ export async function DELETE(req: Request) {
   const user = await getSession();
   if (!user) return Response.json({ status: 'unauthorized' }, { status: 401 });
   
-  // Xóa các task pending cũ hơn 5 phút
-  const fiveMinsAgo = new Date(Date.now() - 300000);
+  const { searchParams } = new URL(req.url);
+  const taskId = searchParams.get('taskId');
+  const type = searchParams.get('type');
+
+  if (taskId && type) {
+    // Xóa một task cụ thể
+    await prisma.englishLesson.deleteMany({
+      where: { userId: user.id, type: `${type}_pending`, content: taskId }
+    });
+    return Response.json({ ok: true });
+  }
+  
+  // Xóa các task pending cũ hơn 3 phút (giảm từ 5 xuống 3 cho quyết liệt hơn)
+  const staleTime = new Date(Date.now() - 180000);
   await prisma.englishLesson.deleteMany({
     where: {
       userId: user.id,
       type: { endsWith: '_pending' },
-      createdAt: { lt: fiveMinsAgo }
+      createdAt: { lt: staleTime }
     }
   });
   
