@@ -69,23 +69,41 @@ export function TimerProvider({ children }: { children: ReactNode }) {
 
   // Load from DB on mount and start polling
   useEffect(() => {
-    const init = async () => {
+    const sync = async () => {
       const data = await fetchLatest();
+      // If a remote timer is running and our local timer is NOT running or far off
       if (data && data.currentEndTime && data.currentEndTime > Date.now()) {
         const rem = Math.max(0, Math.floor((data.currentEndTime - Date.now()) / 1000));
         if (rem > 0) {
-          setIsWork(data.currentMode === 'work');
-          setSecs(rem);
-          setRunning(true);
+          // If we are not running, OR the mode is different, OR the time is off by more than 5s
+          if (!running || isWork !== (data.currentMode === 'work') || Math.abs(secs - rem) > 5) {
+            setIsWork(data.currentMode === 'work');
+            setSecs(rem);
+            setRunning(true);
+          }
         }
-      } else {
-        // No active timer
+      } else if (data && (!data.currentEndTime || data.currentEndTime <= Date.now())) {
+        // If remote says STOPPED but we are running, stop local (unless we just started it)
+        // Only stop if the time has passed or explicitly marked 0
+        if (running && data.currentEndTime === 0) {
+          setRunning(false);
+          setSecs(isWork ? WORK_MIN * 60 : BREAK_MIN * 60);
+        }
       }
     };
-    init();
-    const id = setInterval(fetchLatest, 30000);
-    return () => clearInterval(id);
-  }, [fetchLatest]);
+
+    sync();
+    const id = setInterval(sync, 10000); // 10s sync
+    
+    // Immediate sync when tab becomes visible (essential for mobile)
+    const handleVisible = () => { if (document.visibilityState === 'visible') sync(); };
+    window.addEventListener('visibilitychange', handleVisible);
+
+    return () => {
+      clearInterval(id);
+      window.removeEventListener('visibilitychange', handleVisible);
+    };
+  }, [fetchLatest, running, isWork, secs]);
 
   // Save state to DB
   const saveState = useCallback(async (w: boolean, r: boolean, sCount?: number) => {
