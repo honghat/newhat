@@ -125,6 +125,8 @@ export default function HomePage() {
   const [selectedReportId, setSelectedReportId] = useState<number | null>(null);
   const [aiModel, setAiModel] = useState('default');
   const [isMounted, setIsMounted] = useState(false);
+  const [notesExpanded, setNotesExpanded] = useState(false);
+  const [expandedDays, setExpandedDays] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     setIsMounted(true);
@@ -333,24 +335,44 @@ Trả lời bằng tiếng Việt, chuyên sâu và cá nhân hóa.`;
         <div>
           {/* Daily Log Form */}
           <div className="card" style={{ marginBottom:20 }}>
-            <div style={{ fontWeight:700, marginBottom:14, fontSize:15 }}>📝 Nhật Ký Hôm Nay</div>
-            <div style={{ marginBottom:14 }}>
-              <div style={{ display:'flex', justifyContent:'space-between', fontSize:13, marginBottom:8 }}>
-                <span style={{ color:'var(--muted)' }}>Giờ học</span>
-                <span style={{ color:'var(--green)', fontWeight:700, fontSize:16 }}>{form.hours}h <span style={{ color:'var(--muted)', fontWeight:400, fontSize:12 }}>/ 16h</span></span>
-              </div>
-              <input type="range" min={0} max={16} step={0.5} value={form.hours}
-                onChange={e=>setForm(f=>({...f,hours:parseFloat(e.target.value)}))}
-                style={{ width:'100%', accentColor:'var(--green)', cursor:'pointer' }} />
-              <div className="progress-bar" style={{ marginTop:6 }}>
-                <div className="progress-fill" style={{ width:`${(form.hours/16)*100}%`, background:'var(--green)' }} />
-              </div>
-            </div>
-            <textarea className="input" placeholder="Ghi chú, vướng mắc, điều cần nhớ..." value={form.notes} rows={3}
-              onChange={e=>setForm(f=>({...f,notes:e.target.value}))} style={{ marginBottom:12 }} />
-            <button className="btn btn-green" style={{ width:'100%' }} onClick={save}>
-              {saved ? '✅ Đã lưu vào PostgreSQL' : '💾 Lưu nhật ký'}
+            <button
+              onClick={() => setNotesExpanded(!notesExpanded)}
+              style={{ width:'100%', display:'flex', justifyContent:'space-between', alignItems:'center', background:'none', border:'none', cursor:'pointer', padding:0, marginBottom: notesExpanded ? 14 : 0 }}
+            >
+              <div style={{ fontWeight:700, fontSize:15 }}>📝 Nhật Ký Hôm Nay</div>
+              <span style={{ fontSize:18, color:'var(--muted)', transition:'transform 0.2s', transform: notesExpanded ? 'rotate(180deg)' : 'rotate(0)' }}>▼</span>
             </button>
+
+            {notesExpanded && (
+              <>
+                <div style={{ marginBottom:14 }}>
+                  <div style={{ display:'flex', justifyContent:'space-between', fontSize:13, marginBottom:8 }}>
+                    <span style={{ color:'var(--muted)' }}>Giờ học</span>
+                    <span style={{ color:'var(--green)', fontWeight:700, fontSize:16 }}>{form.hours}h <span style={{ color:'var(--muted)', fontWeight:400, fontSize:12 }}>/ 16h</span></span>
+                  </div>
+                  <input type="range" min={0} max={16} step={0.5} value={form.hours}
+                    onChange={e=>setForm(f=>({...f,hours:parseFloat(e.target.value)}))}
+                    style={{ width:'100%', accentColor:'var(--green)', cursor:'pointer', height: 8 }} />
+                  <div className="progress-bar" style={{ marginTop:6 }}>
+                    <div className="progress-fill" style={{ width:`${(form.hours/16)*100}%`, background:'var(--green)' }} />
+                  </div>
+                  {/* Quick time buttons */}
+                  <div style={{ display:'flex', gap:6, marginTop:10, flexWrap:'wrap' }}>
+                    {[0.5, 1, 2, 4, 6, 8].map(h => (
+                      <button key={h} onClick={() => setForm(f => ({...f, hours: h}))}
+                        style={{ flex:1, minWidth:50, padding:'6px 8px', borderRadius:6, border:'1px solid var(--border)', background: form.hours === h ? 'var(--green)22' : 'var(--surface2)', color: form.hours === h ? 'var(--green)' : 'var(--muted)', fontSize:11, fontWeight:600, cursor:'pointer', transition:'all 0.15s' }}>
+                        {h}h
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <textarea className="input" placeholder="Ghi chú, vướng mắc, điều cần nhớ..." value={form.notes} rows={3}
+                  onChange={e=>setForm(f=>({...f,notes:e.target.value}))} style={{ marginBottom:12 }} />
+                <button className="btn btn-green" style={{ width:'100%' }} onClick={save}>
+                  {saved ? '✅ Đã lưu vào PostgreSQL' : '💾 Lưu nhật ký'}
+                </button>
+              </>
+            )}
           </div>
 
           {/* Saved AI Reports */}
@@ -395,53 +417,68 @@ Trả lời bằng tiếng Việt, chuyên sâu và cá nhân hóa.`;
                   {reportLoading ? '⏳ Đang phân tích...' : '🤖 AI đánh giá tiến độ'}
                 </button>
               </div>
-              {logs.slice(0,8).map(l => (
-                <div key={l.id} style={{ display:'flex', alignItems:'center', gap:14, padding:'12px 0', borderBottom:'1px solid var(--border)' }}>
-                  <div style={{ width:48, height:48, borderRadius:12, background: l.hours >= 8 ? 'rgba(63,185,80,0.1)' : 'rgba(125,133,144,0.05)', border: `1px solid ${l.hours >= 8 ? 'var(--green)' : 'var(--border)'}`, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
-                    <div style={{ fontSize:14, fontWeight:900, color: l.hours >= 8 ? 'var(--green)' : 'var(--text)' }}>{parseFloat(l.hours.toFixed(1))}</div>
-                    <div style={{ fontSize:9, color:'var(--muted)', fontWeight:700 }}>GIỜ</div>
-                  </div>
-                  <div style={{ flex:1, minWidth:0 }}>
-                    <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
-                      {l.topic ? l.topic.split(', ').map((t, idx) => {
-                        const isCode = t.includes('💻');
-                        const isListen = t.includes('🎧');
-                        const isRead = t.includes('📖');
-                        const isSpeak = t.includes('🗣️');
-                        const isWrite = t.includes('✍️');
-                        const isVocab = t.includes('🗂️');
-                        
-                        let color = 'var(--accent)';
-                        if (isListen) color = '#58a6ff';
-                        if (isRead) color = '#d2a8ff';
-                        if (isSpeak) color = '#3fb950';
-                        if (isWrite) color = '#ff7b72';
-                        
-                        return (
-                          <div key={idx} style={{ display:'flex', alignItems:'center', gap:8, padding:'4px 10px', borderRadius:8, background:'var(--surface2)', border:'1px solid var(--border)' }}>
-                            <div style={{ fontSize:16 }}>{isCode?'💻':isListen?'🎧':isRead?'📖':isSpeak?'🗣️':isWrite?'✍️':isVocab?'🗂️':'📚'}</div>
-                            <div style={{ fontSize:12, fontWeight:600, color: 'var(--text)', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis', flex:1 }}>
-                              {t.replace(/^[💻🎧📖🗣️✍️🗂️📚]\s*/, '')}
+              {logs.slice(0,8).map(l => {
+                const isExpanded = expandedDays.has(l.date);
+                const toggleDay = () => {
+                  setExpandedDays(prev => {
+                    const next = new Set(prev);
+                    if (next.has(l.date)) next.delete(l.date);
+                    else next.add(l.date);
+                    return next;
+                  });
+                };
+
+                return (
+                  <div key={l.id} style={{ borderBottom:'1px solid var(--border)' }}>
+                    <button
+                      onClick={toggleDay}
+                      style={{ width:'100%', display:'flex', alignItems:'center', gap:14, padding:'12px 0', background:'none', border:'none', cursor:'pointer', textAlign:'left' }}
+                    >
+                      <div style={{ width:48, height:48, borderRadius:12, background: l.hours >= 8 ? 'rgba(63,185,80,0.1)' : 'rgba(125,133,144,0.05)', border: `1px solid ${l.hours >= 8 ? 'var(--green)' : 'var(--border)'}`, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+                        <div style={{ fontSize:14, fontWeight:900, color: l.hours >= 8 ? 'var(--green)' : 'var(--text)' }}>{parseFloat(l.hours.toFixed(1))}</div>
+                        <div style={{ fontSize:9, color:'var(--muted)', fontWeight:700 }}>GIỜ</div>
+                      </div>
+                      <div style={{ flex:1, minWidth:0 }}>
+                        <div style={{ fontSize:13, fontWeight:700, color:'var(--text)', marginBottom:4 }}>
+                          {new Date(l.date).toLocaleDateString('vi-VN', { weekday:'short', day:'2-digit', month:'2-digit' })}
+                        </div>
+                        <div style={{ fontSize:11, color:'var(--muted)' }}>
+                          {l.topic ? l.topic.split(', ').length + ' hoạt động' : 'Không có ghi chú'}
+                        </div>
+                      </div>
+                      <span style={{ fontSize:16, color:'var(--muted)', transition:'transform 0.2s', transform: isExpanded ? 'rotate(180deg)' : 'rotate(0)' }}>▼</span>
+                    </button>
+
+                    {isExpanded && l.topic && (
+                      <div style={{ paddingLeft:62, paddingBottom:12, display:'flex', flexDirection:'column', gap:6 }}>
+                        {l.topic.split(', ').map((t, idx) => {
+                          const isCode = t.includes('💻');
+                          const isListen = t.includes('🎧');
+                          const isRead = t.includes('📖');
+                          const isSpeak = t.includes('🗣️');
+                          const isWrite = t.includes('✍️');
+                          const isVocab = t.includes('🗂️');
+
+                          let color = 'var(--accent)';
+                          if (isListen) color = '#58a6ff';
+                          if (isRead) color = '#d2a8ff';
+                          if (isSpeak) color = '#3fb950';
+                          if (isWrite) color = '#ff7b72';
+                          if (isVocab) color = '#d29922';
+                          if (isCode) color = '#f78166';
+
+                          return (
+                            <div key={idx} style={{ fontSize:12, color, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis', padding:'4px 8px', background:'rgba(125,133,144,0.05)', borderRadius:6, border:`1px solid ${color}22` }}>
+                              {t}
                             </div>
-                            <div style={{ fontSize:9, fontWeight:800, color, textTransform:'uppercase', opacity:0.8 }}>
-                              {isCode?'CODE':isListen?'LISTEN':isRead?'READ':isSpeak?'SPEAK':isWrite?'WRITE':isVocab?'VOCAB':'LEARN'}
-                            </div>
-                          </div>
-                        );
-                      }) : (
-                        <div style={{ fontSize:12, color:'var(--muted)', fontStyle:'italic' }}>Học tập tự do (Chưa có ghi chú chi tiết)</div>
-                      )}
-                    </div>
-                    <div style={{ display:'flex', alignItems:'center', gap:8, marginTop:10 }}>
-                      <div style={{ fontSize:11, color:'var(--muted)', fontWeight:500 }}>{l.date}</div>
-                      {l.hours >= 8 && <span style={{ fontSize:9, color:'var(--green)', background:'rgba(63,185,80,0.1)', padding:'1px 6px', borderRadius:99, border:'1px solid #3fb95044', fontWeight:800 }}>🔥 ĐÃ ĐẠT KPI</span>}
-                    </div>
+                          );
+                        })}
+                        {l.hours >= 8 && <span style={{ fontSize:9, color:'var(--green)', background:'rgba(63,185,80,0.1)', padding:'1px 6px', borderRadius:99, border:'1px solid #3fb95044', fontWeight:800, alignSelf:'flex-start' }}>🔥 ĐÃ ĐẠT KPI</span>}
+                      </div>
+                    )}
                   </div>
-                  {l.notes && (
-                    <div title={l.notes} style={{ color:'var(--muted)', fontSize:14, cursor:'help' }}>📝</div>
-                  )}
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
 

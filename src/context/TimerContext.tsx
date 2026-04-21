@@ -43,7 +43,7 @@ function getUserId(): string | null {
 
 interface TimerCtx {
   isWork: boolean; secs: number; running: boolean; session: number;
-  todaySessions: number; toggle: ()=>void; reset: ()=>void; switchMode: (w:boolean)=>void;
+  todaySessions: number; toggle: ()=>void; reset: ()=>void; switchMode: (w:boolean)=>void; setTime: (s:number)=>void;
 }
 
 const Ctx = createContext<TimerCtx|null>(null);
@@ -59,6 +59,7 @@ export function TimerProvider({ children }: { children: ReactNode }) {
   const timerRef = useRef<NodeJS.Timeout|null>(null);
   const isSyncing = useRef(false);
   const isCompletingWork = useRef(false);
+  const wakeLockRef = useRef<any>(null);
 
   const getToday = () => new Date().toLocaleDateString('en-CA');
 
@@ -72,6 +73,28 @@ export function TimerProvider({ children }: { children: ReactNode }) {
       }
     } catch { /**/ }
     return null;
+  }, []);
+
+  // Wake Lock: Giữ màn hình không tắt khi timer chạy
+  const requestWakeLock = useCallback(async () => {
+    try {
+      if ('wakeLock' in navigator) {
+        wakeLockRef.current = await (navigator as any).wakeLock.request('screen');
+        console.log('🔒 Wake Lock active');
+      }
+    } catch (err) {
+      console.log('Wake Lock not supported or denied');
+    }
+  }, []);
+
+  const releaseWakeLock = useCallback(async () => {
+    if (wakeLockRef.current) {
+      try {
+        await wakeLockRef.current.release();
+        wakeLockRef.current = null;
+        console.log('🔓 Wake Lock released');
+      } catch { /**/ }
+    }
   }, []);
 
   const sync = useCallback(async () => {
@@ -105,10 +128,12 @@ export function TimerProvider({ children }: { children: ReactNode }) {
         }
       }
       // 2. Nếu server báo dừng (endTime = 0 hoặc đã qua) nhưng local vẫn chạy
-      else if (running && (serverEndTime === 0 || serverEndTime <= now)) {
-        // Chỉ dừng nếu thời gian trên server thực sự đã hết
-        setRunning(false);
-        setSecs(isWork ? WORK_MIN * 60 : BREAK_MIN * 60);
+      else if (serverEndTime === 0 || serverEndTime <= now) {
+        // Chỉ dừng nếu local đang chạy
+        if (running) {
+          setRunning(false);
+          // GIỮ NGUYÊN thời gian hiện tại, KHÔNG reset
+        }
       }
     } finally {
       isSyncing.current = false;
@@ -127,8 +152,10 @@ export function TimerProvider({ children }: { children: ReactNode }) {
     };
   }, [sync]);
 
-  const saveState = useCallback(async (w: boolean, r: boolean, sCount?: number) => {
-    const endTime = r ? Date.now() + (w ? WORK_MIN : BREAK_MIN) * 60 * 1000 : 0;
+  const saveState = useCallback(async (w: boolean, r: boolean, sCount?: number, remainingSecs?: number) => {
+    // Nếu đang chạy (r=true), dùng remainingSecs nếu có, không thì dùng full time
+    const timeToUse = remainingSecs !== undefined ? remainingSecs : (w ? WORK_MIN * 60 : BREAK_MIN * 60);
+    const endTime = r ? Date.now() + timeToUse * 1000 : 0;
     try {
       await fetch('/api/auth'); // Dummy call to keep session alive if needed
       await fetch('/api/pomodoro', {
@@ -193,16 +220,18 @@ export function TimerProvider({ children }: { children: ReactNode }) {
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
   }, [running, isWork, todaySessions, fetchLatest, saveState]);
 
-  // Cập nhật tiêu đề trang
+  // Cập nhật tiêu đề trang và Wake Lock
   useEffect(() => {
     if (running) {
       const mm = String(Math.floor(secs/60)).padStart(2,'0');
       const ss = String(secs%60).padStart(2,'0');
       document.title = `${isWork?'🔴':'🟢'} ${mm}:${ss} — NewHat`;
+      requestWakeLock(); // Giữ màn hình không tắt
     } else {
       document.title = 'NewHat — 60 Ngày Thay Đổi';
+      releaseWakeLock(); // Cho phép màn hình tắt
     }
-  }, [secs, running, isWork]);
+  }, [secs, running, isWork, requestWakeLock, releaseWakeLock]);
 
   return (
     <Ctx.Provider value={{
@@ -211,7 +240,8 @@ export function TimerProvider({ children }: { children: ReactNode }) {
         unlockAudio();
         setRunning(r => {
           const nextR = !r;
-          saveState(isWork, nextR);
+          // Truyền secs hiện tại khi resume
+          saveState(isWork, nextR, undefined, secs);
           return nextR;
         });
       },
@@ -225,6 +255,11 @@ export function TimerProvider({ children }: { children: ReactNode }) {
         setSecs(toWork ? WORK_MIN * 60 : BREAK_MIN * 60);
         setRunning(false);
         saveState(toWork, false);
+      },
+      setTime: (newSecs) => {
+        if (!running) {
+          setSecs(newSecs);
+        }
       },
     }}>
       {children}

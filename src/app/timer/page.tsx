@@ -7,10 +7,11 @@ const WORK_MIN = 50, BREAK_MIN = 10;
 const QUOTES = ["Tắt điện thoại. Code là ưu tiên.","50 phút focus = 1 kỹ năng tiến bộ.","Mỗi Pomodoro = 1 bước đến việc làm.","Nghỉ 10 phút, không phải 10 tiếng.","Bạn không cần mood. Bạn cần timer.","Senior dev cũng bắt đầu từ Pomodoro đầu tiên."];
 
 export default function TimerPage() {
-  const { isWork, secs, running, session, todaySessions, toggle, reset, switchMode } = useTimer();
+  const { isWork, secs, running, session, todaySessions, toggle, reset, switchMode, setTime } = useTimer();
   const [qi, setQi] = useState(0);
   const [focus, setFocus] = useState(false);
   const [mounted, setMounted] = useState(false);
+
   useEffect(() => {
     setMounted(true);
   }, []);
@@ -49,7 +50,7 @@ export default function TimerPage() {
 
   const Controls = () => (
     <div style={{ display:'flex', gap:12, alignItems:'center', justifyContent:'center' }}>
-      <button onClick={reset} style={{ width:52, height:52, borderRadius:99, background:'var(--surface2)', border:'1px solid var(--border)', color:'var(--muted)', fontSize:20, cursor:'pointer', transition:'all 0.15s' }}>↺</button>
+      <button onClick={reset} disabled={!running && secs === (isWork ? WORK_MIN*60 : BREAK_MIN*60)} style={{ width:52, height:52, borderRadius:99, background:'var(--surface2)', border:'1px solid var(--border)', color:'var(--muted)', fontSize:20, cursor:'pointer', transition:'all 0.15s', opacity: (!running && secs === (isWork ? WORK_MIN*60 : BREAK_MIN*60)) ? 0.3 : 1 }}>↺</button>
       <button onClick={handleToggle} style={{ width:72, height:72, borderRadius:99, background:color, border:'none', color:'#000', fontSize:26, fontWeight:900, cursor:'pointer', boxShadow:`0 0 20px ${color}44`, transition:'all 0.15s' }}>
         {running ? '⏸' : '▶'}
       </button>
@@ -94,6 +95,31 @@ export default function TimerPage() {
           </div>
           <TimerRing size={280}/>
           <Controls/>
+          {/* Time slider - luôn hiển thị, disable khi đang chạy */}
+          <div style={{ width: '100%', maxWidth: 280, opacity: running ? 0.5 : 1, pointerEvents: running ? 'none' : 'auto' }}>
+            <div style={{ display:'flex', justifyContent:'space-between', fontSize:11, color:'var(--muted)', marginBottom:6 }}>
+              <span>Kéo để điều chỉnh</span>
+              <span>{Math.floor(secs/60)} phút</span>
+            </div>
+            <input
+              type="range"
+              min={1}
+              max={isWork ? WORK_MIN*60 : BREAK_MIN*60}
+              step={60}
+              value={secs}
+              onChange={e => setTime(parseInt(e.target.value))}
+              disabled={running}
+              style={{ width:'100%', accentColor:color, cursor: running ? 'not-allowed' : 'pointer', height:6 }}
+            />
+            <div style={{ display:'flex', gap:4, marginTop:8, flexWrap:'wrap', justifyContent:'center' }}>
+              {(isWork ? [10, 25, 35, 50] : [5, 10]).map(min => (
+                <button key={min} onClick={() => setTime(min * 60)} disabled={running}
+                  style={{ padding:'4px 10px', borderRadius:6, border:'1px solid var(--border)', background: Math.floor(secs/60) === min ? color+'22' : 'var(--surface2)', color: Math.floor(secs/60) === min ? color : 'var(--muted)', fontSize:11, fontWeight:600, cursor: running ? 'not-allowed' : 'pointer', opacity: running ? 0.5 : 1 }}>
+                  {min}m
+                </button>
+              ))}
+            </div>
+          </div>
           <div style={{ textAlign:'center', fontSize:12, color:'var(--muted)' }}>
             {todaySessions} / {DAILY_GOAL} phiên hôm nay ({todayH}h)
           </div>

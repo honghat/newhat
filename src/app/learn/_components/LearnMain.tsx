@@ -98,30 +98,38 @@ export default function LearnMain() {
   useEffect(() => { if (mode === 'code') { loadCodeSessions(); } }, [mode]);
 
   async function markComplete(lessonId: number) {
-    await fetch('/api/lessons', { 
-      method: 'PATCH', 
-      headers: { 'Content-Type': 'application/json' }, 
-      body: JSON.stringify({ id: lessonId, completed: true, incrementLearnCount: true }) 
+    await fetch('/api/lessons', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: lessonId, completed: true, incrementLearnCount: true })
     });
     const updatedLessons = await fetch('/api/lessons').then(res => res.json());
     setLessons(updatedLessons);
 
     const currentLesson = lessons.find(l => l.id === lessonId);
     if (currentLesson) {
+      // Auto-sync roadmap
+      try {
+        const { syncRoadmap } = await import('@/lib/roadmap-sync');
+        await syncRoadmap(currentLesson.track, currentLesson.topic);
+      } catch {
+        // Silent fail
+      }
+
       const next = updatedLessons
         .filter((l: any) => l.track === currentLesson.track && !l.completed)
         .sort((a: any, b: any) => a.order - b.order)[0];
-      
+
       const newCurrent = updatedLessons.find((l: any) => l.id === lessonId);
       setCurrent(newCurrent);
 
       // Nhật ký trang chủ
       if (newCurrent) {
         const today = new Date().toLocaleDateString('en-CA'); // yyyy-mm-dd
-        fetch('/api/logs', { 
-          method: 'PATCH', 
-          headers: { 'Content-Type': 'application/json' }, 
-          body: JSON.stringify({ date: today, addTopic: '💻 ' + newCurrent.topic }) 
+        fetch('/api/logs', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ date: today, addTopic: '💻 ' + newCurrent.topic })
         });
       }
 

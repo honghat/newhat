@@ -86,6 +86,18 @@ async function speak(text: string, speed = 1.0, voice = 'en_female') {
   await speakText(text, speed, voice);
 }
 
+// Browser TTS for vocabulary (simple, fast)
+function speakBrowser(text: string) {
+  if ('speechSynthesis' in window) {
+    window.speechSynthesis.cancel(); // Stop any ongoing speech
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = 'en-US';
+    utterance.rate = 0.9;
+    utterance.pitch = 1.0;
+    window.speechSynthesis.speak(utterance);
+  }
+}
+
 // Simple Markdown Parser to handle # and *
 function parseMarkdown(text: string) {
   if (!text) return '';
@@ -242,6 +254,7 @@ const TABS = [
 ] as const;
 
 const MODES = [
+  { id: 'all', label: '🌐 All', desc: 'all topics' },
   { id: 'coder', label: '💻 Coder', desc: 'developer, tech, programming' },
   { id: 'communication', label: '💬 Giao tiếp', desc: 'daily life, travel, work, relationships' },
   { id: 'business', label: '💼 Công việc', desc: 'business meetings, emails, interviews' },
@@ -444,6 +457,10 @@ export default function EnglishContent() {
 
   // LISTEN
   async function genListenText() {
+    if (mode === 'all') {
+      alert('Vui lòng chọn mode cụ thể (Coder, Giao tiếp, Công việc, IELTS) để tạo bài mới');
+      return;
+    }
     setListenLoading(true); setListenVi(''); setListenVocab([]); setShowListenVi(false);
 
     // Lấy TẤT CẢ bài cùng mode để tránh trùng
@@ -524,6 +541,10 @@ Return JSON format ONLY:
 
   // SPEAK
   async function genSpkTopic() {
+    if (mode === 'all') {
+      alert('Vui lòng chọn mode cụ thể (Coder, Giao tiếp, Công việc, IELTS) để tạo bài mới');
+      return;
+    }
     setSpkTopicLoading(true); setSpkTopicError('');
 
     // Lấy TẤT CẢ chủ đề speaking cùng mode
@@ -673,6 +694,10 @@ Reply with the question ONLY, no explanation.`;
 
   // WRITE
   async function genWriteTopic() {
+    if (mode === 'all') {
+      alert('Vui lòng chọn mode cụ thể (Coder, Giao tiếp, Công việc, IELTS) để tạo bài mới');
+      return;
+    }
     setWriteTopicLoading(true); setWriteTopicError('');
 
     // Lấy TẤT CẢ đề viết cùng mode
@@ -742,6 +767,10 @@ Reply in Markdown (concise):
 
   // VOCAB
   async function loadVocab() {
+    if (mode === 'all') {
+      alert('Vui lòng chọn mode cụ thể (Coder, Giao tiếp, Công việc, IELTS) để tạo bài mới');
+      return;
+    }
     setVocabLoading(true); setCards([]); setCardIdx(0); setFlipped(false); setKnown([]);
 
     // Lấy TẤT CẢ từ vựng cùng mode và topic
@@ -763,9 +792,9 @@ Reply in Markdown (concise):
       ? `\n\nAvoid these existing words:\n${existingWords.join(', ')}`
       : '';
 
-    const p = `Give 8 unique, varied and useful English vocabulary words for a Vietnamese learner. Context: ${modeDesc}. Topic: ${vocabTopic}. Avoid common words like 'variable' or 'function' unless the topic specifically requires them.${avoidList}
+    const p = `Give 10 unique, varied and useful English vocabulary words for a Vietnamese learner. Context: ${modeDesc}. Topic: ${vocabTopic}. Avoid common words like 'variable' or 'function' unless the topic specifically requires them.${avoidList}
 
-Return JSON array ONLY: [{"word":"...","def":"short English definition","ex":"Example sentence","vi":"Vietnamese meaning"}]`;
+Return JSON array ONLY: [{"word":"...","ipa":"IPA pronunciation","def":"short English definition","ex":"Example sentence","vi":"Vietnamese meaning"}]`;
     const raw = await askAI(p, aiModel);
     if (raw) {
       const m = raw.match(/\[[\s\S]*\]/);
@@ -775,6 +804,7 @@ Return JSON array ONLY: [{"word":"...","def":"short English definition","ex":"Ex
         // Lưu từng từ riêng biệt thay vì lưu cả nhóm
         for (const item of parsed) {
           await saveToDb('vocab', item.word, {
+            ipa: item.ipa || '',
             def: item.def,
             ex: item.ex,
             vi: item.vi,
@@ -789,6 +819,10 @@ Return JSON array ONLY: [{"word":"...","def":"short English definition","ex":"Ex
   const card = cards[cardIdx];
   const wordCount = writeText.split(/\s+/).filter(Boolean).length;
   async function generateReading() {
+    if (mode === 'all') {
+      alert('Vui lòng chọn mode cụ thể (Coder, Giao tiếp, Công việc, IELTS) để tạo bài mới');
+      return;
+    }
     setReadLoading(true); setReadError('');
     setReadArticle(null); setReadQuestions([]); setReadAnswers([]); setReadSubmitted(false);
     setReadSelected(''); setReadLookup(''); setReadChat([]);
@@ -846,11 +880,17 @@ Return JSON ONLY (no markdown code blocks, just raw json):
   async function readLookupFn() {
     if (!readSelected.trim() || readLookupLoading) return;
     setReadLookupLoading(true); setReadLookup('');
-    const isShort = readSelected.trim().split(/\s+/).length <= 3;
-    const res = await askAI(isShort
-      ? `Giải thích từ/cụm "${readSelected}" trong ngữ cảnh bài đọc về "${readTopic}". Tiếng Việt: nghĩa, phiên âm, ví dụ. Dưới 60 từ.`
-      : `Dịch và giải thích câu này sang tiếng Việt: "${readSelected}". Ngắn gọn.`);
-    setReadLookup(res); setReadLookupLoading(false);
+    try {
+      const isShort = readSelected.trim().split(/\s+/).length <= 3;
+      const res = await askAI(isShort
+        ? `Giải thích từ/cụm "${readSelected}" trong ngữ cảnh bài đọc về "${readTopic}". Tiếng Việt: nghĩa, phiên âm, ví dụ. Dưới 60 từ.`
+        : `Dịch và giải thích câu này sang tiếng Việt: "${readSelected}". Ngắn gọn.`, aiModel);
+      setReadLookup(res || 'Lỗi: AI không phản hồi');
+    } catch (e) {
+      setReadLookup('Lỗi: ' + (e instanceof Error ? e.message : String(e)));
+    } finally {
+      setReadLookupLoading(false);
+    }
   }
 
   async function sendReadChat() {
@@ -907,11 +947,27 @@ Return JSON ONLY (no markdown code blocks, just raw json):
       {/* Mode selector */}
       <div style={{ display: 'flex', gap: 6, marginBottom: 20, flexWrap: 'wrap', alignItems: 'center' }}>
         <span style={{ fontSize: 11, color: 'var(--muted)', whiteSpace: 'nowrap', marginRight: 4 }}>Chế độ:</span>
-        {MODES.map(m => (
-          <button key={m.id} onClick={() => setMode(m.id)} style={{ padding: '5px 12px', borderRadius: 6, border: '1px solid', whiteSpace: 'nowrap', fontSize: 12, fontWeight: 600, cursor: 'pointer', borderColor: mode === m.id ? 'var(--green)' : 'var(--border)', background: mode === m.id ? 'var(--green)22' : 'transparent', color: mode === m.id ? 'var(--green)' : 'var(--muted)' }}>
-            {m.label}
-          </button>
-        ))}
+        {MODES.map(m => {
+          const mapType = tab === 'write' ? 'writing' : tab === 'read' ? 'reading' : tab;
+          const count = m.id === 'all'
+            ? history.filter(h => h.type === mapType).length
+            : history.filter(h => {
+                if (h.type !== mapType) return false;
+                try {
+                  const itemMode = JSON.parse(h.metadata || '{}').mode || 'coder';
+                  return itemMode === m.id;
+                } catch {
+                  return false;
+                }
+              }).length;
+
+          return (
+            <button key={m.id} onClick={() => setMode(m.id)} style={{ padding: '5px 12px', borderRadius: 6, border: '1px solid', whiteSpace: 'nowrap', fontSize: 12, fontWeight: 600, cursor: 'pointer', borderColor: mode === m.id ? 'var(--green)' : 'var(--border)', background: mode === m.id ? 'var(--green)22' : 'transparent', color: mode === m.id ? 'var(--green)' : 'var(--muted)', display: 'flex', alignItems: 'center', gap: 4 }}>
+              {m.label}
+              {count > 0 && <span style={{ fontSize: 10, background: mode === m.id ? 'var(--green)' : 'var(--surface2)', color: mode === m.id ? '#000' : 'var(--muted)', padding: '1px 5px', borderRadius: 99, fontWeight: 800 }}>{count}</span>}
+            </button>
+          );
+        })}
       </div>
 
       <div className="desktop-main-side">
@@ -1322,13 +1378,8 @@ Return JSON ONLY (no markdown code blocks, just raw json):
           {tab === 'vocab' && (
             <div className="desktop-2col">
               <div>
-                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12 }}>
-                  {VOCAB_TOPICS.map(t => (
-                    <button key={t} onClick={() => setVocabTopic(t)} style={{ padding: '7px 14px', borderRadius: 8, border: '1px solid', fontSize: 12, cursor: 'pointer', borderColor: vocabTopic === t ? 'var(--green)' : 'var(--border)', background: vocabTopic === t ? '#3fb95022' : 'var(--surface)', color: vocabTopic === t ? 'var(--green)' : 'var(--muted)', fontWeight: vocabTopic === t ? 700 : 400 }}>{t}</button>
-                  ))}
-                </div>
                 <button className="btn btn-green" style={{ width: '100%', marginBottom: 16, height: 46 }} onClick={loadVocab} disabled={vocabLoading}>
-                  {vocabLoading ? '⏳ AI đang tạo từ...' : '🤖 AI tạo 8 từ mới — lưu vào DB'}
+                  {vocabLoading ? '⏳ AI đang tạo từ...' : '🤖 AI tạo 10 từ mới — lưu vào DB'}
                 </button>
 
                 {cards.length > 0 && card && (
@@ -1340,7 +1391,7 @@ Return JSON ONLY (no markdown code blocks, just raw json):
                       <div className={`flashcard${flipped ? ' flipped' : ''}`} onClick={() => setFlipped(f => !f)}>
                         <div className="flashcard-front">
                           <div style={{ fontSize: 32, fontWeight: 900, color: 'var(--accent)', marginBottom: 10 }}>{card.word}</div>
-                          <button onClick={e => { e.stopPropagation(); speak(card.word, 1.0); }} style={{ fontSize: 12, color: 'var(--muted)', background: 'none', border: 'none', cursor: 'pointer' }}>🔊 Phát âm</button>
+                          <button onClick={e => { e.stopPropagation(); speakBrowser(card.word); }} style={{ fontSize: 12, color: 'var(--muted)', background: 'none', border: 'none', cursor: 'pointer' }}>🔊 Phát âm</button>
                           <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 8 }}>Bấm để xem nghĩa</div>
                         </div>
                         <div className="flashcard-back">
@@ -1351,7 +1402,33 @@ Return JSON ONLY (no markdown code blocks, just raw json):
                       </div>
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'center', gap: 10, flexWrap: 'wrap', marginTop: 16 }}>
-                      <button className="btn btn-ghost" style={{ flex: 1 }} onClick={() => { setFlipped(false); setCardIdx(i => Math.max(0, i - 1)); }}>← Trước</button>
+                      <button className="btn btn-ghost" style={{ flex: 1 }} onClick={() => {
+                        setFlipped(false);
+                        // Tìm từ trước đó trong lịch sử
+                        const vocabHistory = history.filter(h => h.type === 'vocab' && (() => {
+                          try {
+                            const itemMode = JSON.parse(h.metadata || '{}').mode || 'coder';
+                            return itemMode === mode;
+                          } catch {
+                            return false;
+                          }
+                        })());
+                        const currentIdx = vocabHistory.findIndex(h => h.content === card.word);
+                        if (currentIdx > 0) {
+                          const prevItem = vocabHistory[currentIdx - 1];
+                          try {
+                            const m = JSON.parse(prevItem.metadata || '{}');
+                            setCards([{
+                              word: prevItem.content,
+                              def: m.def,
+                              ex: m.ex,
+                              vi: m.vi
+                            }]);
+                            setCardIdx(0);
+                            setFlipped(false);
+                          } catch { /**/ }
+                        }
+                      }}>← Trước</button>
 
                       {cardIdx === cards.length - 1 && (
                         <button onClick={() => {
@@ -1361,11 +1438,37 @@ Return JSON ONLY (no markdown code blocks, just raw json):
                              if (item) markLessonLearned(item.id);
                           });
                         }} style={{ flex: 2, borderRadius: 8, background: '#3fb950', color: '#000', border: 'none', fontWeight: 700, fontSize: 13, cursor: 'pointer', boxShadow: '0 2px 8px rgba(63,185,80,0.3)' }}>
-                          ✓ Đã học xong bộ này
+                          ✓ Đã học xong!
                         </button>
                       )}
 
-                      <button className="btn btn-ghost" style={{ flex: 1 }} onClick={() => { setFlipped(false); setCardIdx(i => Math.min(cards.length - 1, i + 1)); }}>Tiếp →</button>
+                      <button className="btn btn-ghost" style={{ flex: 1 }} onClick={() => {
+                        setFlipped(false);
+                        // Tìm từ tiếp theo trong lịch sử
+                        const vocabHistory = history.filter(h => h.type === 'vocab' && (() => {
+                          try {
+                            const itemMode = JSON.parse(h.metadata || '{}').mode || 'coder';
+                            return itemMode === mode;
+                          } catch {
+                            return false;
+                          }
+                        })());
+                        const currentIdx = vocabHistory.findIndex(h => h.content === card.word);
+                        if (currentIdx < vocabHistory.length - 1) {
+                          const nextItem = vocabHistory[currentIdx + 1];
+                          try {
+                            const m = JSON.parse(nextItem.metadata || '{}');
+                            setCards([{
+                              word: nextItem.content,
+                              def: m.def,
+                              ex: m.ex,
+                              vi: m.vi
+                            }]);
+                            setCardIdx(0);
+                            setFlipped(false);
+                          } catch { /**/ }
+                        }
+                      }}>Tiếp →</button>
                     </div>
                   </>
                 )}
@@ -1382,11 +1485,6 @@ Return JSON ONLY (no markdown code blocks, just raw json):
                   <div style={{ display: 'flex', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
                     {READ_LEVELS.map(l => (
                       <button key={l.id} onClick={() => setReadLevel(l.id)} style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid', fontSize: 12, fontWeight: 600, cursor: 'pointer', borderColor: readLevel === l.id ? 'var(--accent)' : 'var(--border)', background: readLevel === l.id ? '#58a6ff22' : 'transparent', color: readLevel === l.id ? 'var(--accent)' : 'var(--muted)' }}>{l.label}</button>
-                    ))}
-                  </div>
-                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12 }}>
-                    {READ_TOPICS.map(t => (
-                      <button key={t} onClick={() => setReadTopic(t)} style={{ padding: '5px 10px', borderRadius: 6, border: '1px solid', fontSize: 11, cursor: 'pointer', borderColor: readTopic === t ? 'var(--purple)' : 'var(--border)', background: readTopic === t ? '#d2a8ff22' : 'transparent', color: readTopic === t ? 'var(--purple)' : 'var(--muted)' }}>{t}</button>
                     ))}
                   </div>
                   <button className="btn btn-primary" style={{ width: '100%', height: 44 }} onClick={generateReading} disabled={readLoading}>
@@ -1444,7 +1542,17 @@ Return JSON ONLY (no markdown code blocks, just raw json):
                     </div>
 
                     <div style={{ fontSize: 15, lineHeight: 1.9, color: 'var(--text-main)', userSelect: 'text', letterSpacing: '0.01em' }}
-                      onMouseUp={() => { const s = window.getSelection()?.toString().trim(); if (s && s.length > 0 && s.length < 300) setReadSelected(s); }}>
+                      onMouseUp={() => {
+                        try {
+                          const s = window.getSelection()?.toString().trim();
+                          if (s && s.length > 0 && s.length < 300) {
+                            setReadSelected(s);
+                            console.log('Selected text:', s);
+                          }
+                        } catch (e) {
+                          console.error('Selection error:', e);
+                        }
+                      }}>
                       {readArticle.body.split('\n\n').map((p, i) => <p key={i} style={{ marginBottom: 16, marginTop: 0 }}>{p}</p>)}
                     </div>
                     <div style={{ fontSize: 11, color: 'var(--muted)', fontStyle: 'italic' }}>💡 Bôi đen từ hoặc câu để tra nghĩa</div>
@@ -1456,7 +1564,7 @@ Return JSON ONLY (no markdown code blocks, just raw json):
                 {readArticle && (
                   <div className="card" style={{ borderLeft: '3px solid var(--purple)' }}>
                     <div className="section-title" style={{ color: 'var(--purple)' }}>🔍 Tra từ / câu</div>
-                    <textarea className="input" rows={2} value={readSelected} onChange={e => setReadSelected(e.target.value)} placeholder="Bôi đen trong bài hoặc gõ từ cần tra..." style={{ marginBottom: 8 }} />
+                    <textarea className="input" rows={4} value={readSelected} onChange={e => setReadSelected(e.target.value)} placeholder="Bôi đen trong bài hoặc gõ từ cần tra..." style={{ marginBottom: 8, fontSize: 14, lineHeight: 1.6 }} />
                     <button className="btn btn-ghost" style={{ width: '100%' }} onClick={readLookupFn} disabled={readLookupLoading || !readSelected.trim()}>
                       {readLookupLoading ? '⏳ Đang tra...' : '🤖 AI giải thích'}
                     </button>
@@ -1554,7 +1662,16 @@ Return JSON ONLY (no markdown code blocks, just raw json):
 
               <div>
                 {(() => {
-                  const dictItems = history.filter(h => h.type === 'dict');
+                  const dictItems = history.filter(h => {
+                    if (h.type !== 'dict') return false;
+                    if (mode === 'all') return true;
+                    try {
+                      const itemMode = JSON.parse(h.metadata || '{}').mode || 'coder';
+                      return itemMode === mode;
+                    } catch {
+                      return false;
+                    }
+                  });
                   if (!dictItems.length) return null;
                   return (
                     <div className="card">
@@ -1604,8 +1721,10 @@ Return JSON ONLY (no markdown code blocks, just raw json):
               {(() => {
                 const mapType = tab === 'write' ? 'writing' : tab === 'read' ? 'reading' : tab;
                 const items = history.filter(h => {
+                  if (h.type !== mapType) return false;
+                  if (mode === 'all') return true; // Show all when "All" is selected
                   const itemMode = (() => { try { return JSON.parse(h.metadata || '{}').mode || 'coder'; } catch { return 'coder'; } })();
-                  return h.type === mapType && itemMode === mode;
+                  return itemMode === mode;
                 });
                 if (!items.length && !historyLoading) return <div style={{ color: 'var(--muted)', fontSize: 13, padding: 10 }}>Chưa có bài lưu cho phần này.</div>;
 
@@ -1671,13 +1790,33 @@ Return JSON ONLY (no markdown code blocks, just raw json):
 
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontSize: 13, color: 'var(--text)', lineHeight: 1.5, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontWeight: 600 }}>
-                        {mapType === 'vocab' ? (() => { try { const words = JSON.parse(item.content); const m = JSON.parse(item.metadata || '{}'); const wordList = words.map((w: { word: string }) => w.word).join(', '); return `[${m.topic || 'Từ vựng'}] ${wordList}`; } catch { return item.content.slice(0, 60); } })()
+                        {mapType === 'vocab' ? (() => {
+                          try {
+                            const m = JSON.parse(item.metadata || '{}');
+                            return item.content; // Hiển thị từ
+                          } catch {
+                            return item.content.slice(0, 60);
+                          }
+                        })()
                           : (mapType === 'speak' || mapType === 'writing') ? (() => { try { const m = JSON.parse(item.metadata || '{}'); return m.topic || m.prompt || item.content.slice(0, 50) || 'Dự án mới'; } catch { return item.content.slice(0, 50) || 'Dự án mới'; } })()
                             : (mapType === 'reading') ? (() => { try { return JSON.parse(item.metadata || '{}').title; } catch { return item.content.slice(0, 50); } })()
                               : item.content.slice(0, 60)}
                       </div>
-                      <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 4, display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 4, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                         <span>{new Date(item.createdAt).toLocaleString('vi')}</span>
+                        {mapType === 'vocab' && (() => {
+                          try {
+                            const m = JSON.parse(item.metadata || '{}');
+                            return (
+                              <>
+                                {m.ipa && <span style={{ fontSize: 10, color: 'var(--accent)', fontFamily: 'monospace' }}>/{m.ipa}/</span>}
+                                {m.vi && <span style={{ fontSize: 10, color: 'var(--green)', fontStyle: 'italic' }}>• {m.vi}</span>}
+                              </>
+                            );
+                          } catch {
+                            return null;
+                          }
+                        })()}
                         <span style={{
                           padding: '1px 6px',
                           borderRadius: 4,
@@ -1698,7 +1837,7 @@ Return JSON ONLY (no markdown code blocks, just raw json):
                         </button>
                       )}
                       {mapType === 'vocab' && (
-                        <button onClick={(e) => { e.stopPropagation(); speak(item.content, 1.0); }} style={{ fontSize: 14, background: 'var(--accent)15', border: 'none', cursor: 'pointer', padding: '4px 8px', borderRadius: 6, color: 'var(--accent)' }}>
+                        <button onClick={(e) => { e.stopPropagation(); speakBrowser(item.content); }} style={{ fontSize: 14, background: 'var(--accent)15', border: 'none', cursor: 'pointer', padding: '4px 8px', borderRadius: 6, color: 'var(--accent)' }}>
                           🔊
                         </button>
                       )}
