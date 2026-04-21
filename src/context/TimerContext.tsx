@@ -164,7 +164,7 @@ export function TimerProvider({ children }: { children: ReactNode }) {
               fetch('/api/logs', {
                 method:'PATCH',
                 headers:{'Content-Type':'application/json'},
-                body: JSON.stringify({ date: getToday(), addHours: WORK_MIN/60, addTopic: 'Pomodoro' })
+                body: JSON.stringify({ date: getToday(), addHours: 0.5, addTopic: 'Pomodoro' })
               });
             });
             setIsWork(false);

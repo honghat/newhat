@@ -183,6 +183,50 @@ const SPEAKING_TOPICS = [
   "Why did you decide to become a programmer?"
 ];
 
+// Listening scenarios by mode
+const LISTEN_SCENARIOS = {
+  coder: [
+    'a developer explaining a bug fix to their team',
+    'a tech lead discussing code review feedback',
+    'a programmer describing their debugging process',
+    'a developer talking about their favorite programming language',
+    'a team discussing API design decisions',
+    'a developer explaining how they optimized performance',
+    'a programmer sharing their experience with a new framework',
+    'a tech interview conversation about problem-solving'
+  ],
+  communication: [
+    'a conversation at a coffee shop',
+    'someone describing their weekend plans',
+    'a phone call arranging to meet a friend',
+    'a discussion about hobbies and interests',
+    'someone giving directions to a tourist',
+    'a conversation about favorite movies or books',
+    'friends planning a trip together',
+    'someone describing their daily routine'
+  ],
+  business: [
+    'a manager giving feedback in a performance review',
+    'a team discussing project deadlines',
+    'a client meeting about requirements',
+    'a presentation about quarterly results',
+    'a negotiation about contract terms',
+    'a job interview conversation',
+    'colleagues discussing a business proposal',
+    'a meeting about budget allocation'
+  ],
+  ielts: [
+    'a student describing their hometown',
+    'someone discussing environmental issues',
+    'a conversation about education systems',
+    'someone explaining the benefits of technology',
+    'a discussion about work-life balance',
+    'someone describing a memorable event',
+    'a conversation about cultural differences',
+    'someone discussing health and fitness'
+  ]
+};
+
 interface EngLesson { id: number; type: string; content: string; metadata: string; completed: boolean; learnCount: number; createdAt: string; }
 
 const READ_LEVELS = [{ id: 'A2', label: 'A2' }, { id: 'B1', label: 'B1' }, { id: 'B2', label: 'B2' }];
@@ -401,10 +445,48 @@ export default function EnglishContent() {
   // LISTEN
   async function genListenText() {
     setListenLoading(true); setListenVi(''); setListenVocab([]); setShowListenVi(false);
-    const p = `Generate a short English listening exercise (4-6 sentences) for a B1 learner. Context: ${modeDesc}.
+
+    // Lấy TẤT CẢ bài cùng mode để tránh trùng
+    const existingListens = history
+      .filter(h => {
+        if (h.type !== 'listen') return false;
+        try {
+          const itemMode = JSON.parse(h.metadata || '{}').mode || 'coder';
+          return itemMode === mode;
+        } catch {
+          return false;
+        }
+      })
+      .map(h => {
+        try {
+          return JSON.parse(h.metadata || '{}').title || h.content.slice(0, 40);
+        } catch {
+          return h.content.slice(0, 40);
+        }
+      });
+
+    // Chọn scenario ngẫu nhiên theo mode
+    const scenarios = LISTEN_SCENARIOS[mode as keyof typeof LISTEN_SCENARIOS] || LISTEN_SCENARIOS.coder;
+    const scenario = scenarios[Math.floor(Math.random() * scenarios.length)];
+
+    const avoidList = existingListens.length > 0
+      ? `\nAvoid these existing topics: ${existingListens.join('; ')}`
+      : '';
+
+    const p = `Generate a unique English listening exercise (4-6 sentences) for a B1 learner.
+
+Scenario: ${scenario}
+Context: ${modeDesc}${avoidList}
+
+Requirements:
+- Natural conversational English
+- Include 3-4 useful vocabulary words
+- Different situation from existing exercises
+- Realistic dialogue or monologue
+
 Return JSON format ONLY:
 {
-  "title": "A short descriptive title",
+  "title": "A short descriptive title (different from existing ones)",
   "en": "English text...",
   "vi": "Bản dịch tiếng Việt...",
   "vocab": [{"w": "từ/cụm từ", "m": "nghĩa & cách dùng"}]
@@ -418,7 +500,7 @@ Return JSON format ONLY:
           setListenText(d.en || '');
           setListenVi(d.vi || '');
           setListenVocab(d.vocab || []);
-          const d2 = await saveToDb('listen', d.en, { title: d.title, vi: d.vi, vocab: d.vocab, topic: 'listening' }, mode);
+          const d2 = await saveToDb('listen', d.en, { title: d.title, vi: d.vi, vocab: d.vocab, topic: scenario }, mode);
           if (d2?.id) {
             setListenRecordId(d2.id);
             loadHistory();
@@ -443,7 +525,33 @@ Return JSON format ONLY:
   // SPEAK
   async function genSpkTopic() {
     setSpkTopicLoading(true); setSpkTopicError('');
-    const p = `Give ONE short English speaking question for: ${modeDesc}. Different from: "${spkTopic}". Reply with the question ONLY, no explanation.`;
+
+    // Lấy TẤT CẢ chủ đề speaking cùng mode
+    const existingTopics = history
+      .filter(h => {
+        if (h.type !== 'speak') return false;
+        try {
+          const itemMode = JSON.parse(h.metadata || '{}').mode || 'coder';
+          return itemMode === mode;
+        } catch {
+          return false;
+        }
+      })
+      .map(h => {
+        try {
+          return JSON.parse(h.metadata || '{}').topic || h.content.slice(0, 50);
+        } catch {
+          return h.content.slice(0, 50);
+        }
+      });
+
+    const avoidList = existingTopics.length > 0
+      ? `\n\nAvoid these existing topics:\n${existingTopics.join('\n')}`
+      : '';
+
+    const p = `Give ONE short English speaking question for: ${modeDesc}.${avoidList}
+
+Reply with the question ONLY, no explanation.`;
     const t = await askAI(p, aiModel);
     if (t) {
       const clean = cleanTopic(t);
@@ -566,7 +674,33 @@ Return JSON format ONLY:
   // WRITE
   async function genWriteTopic() {
     setWriteTopicLoading(true); setWriteTopicError('');
-    const p = `Give ONE English writing prompt for: ${modeDesc}. Different from: "${writePrompt}". Reply with the prompt ONLY.`;
+
+    // Lấy TẤT CẢ đề viết cùng mode
+    const existingPrompts = history
+      .filter(h => {
+        if (h.type !== 'writing') return false;
+        try {
+          const itemMode = JSON.parse(h.metadata || '{}').mode || 'coder';
+          return itemMode === mode;
+        } catch {
+          return false;
+        }
+      })
+      .map(h => {
+        try {
+          return JSON.parse(h.metadata || '{}').prompt || h.content.slice(0, 50);
+        } catch {
+          return h.content.slice(0, 50);
+        }
+      });
+
+    const avoidList = existingPrompts.length > 0
+      ? `\n\nAvoid these existing prompts:\n${existingPrompts.join('\n')}`
+      : '';
+
+    const p = `Give ONE English writing prompt for: ${modeDesc}.${avoidList}
+
+Reply with the prompt ONLY.`;
     const t = await askAI(p, aiModel);
     if (t) {
       const clean = cleanTopic(t);
@@ -609,7 +743,29 @@ Reply in Markdown (concise):
   // VOCAB
   async function loadVocab() {
     setVocabLoading(true); setCards([]); setCardIdx(0); setFlipped(false); setKnown([]);
-    const p = `Give 8 unique, varied and useful English vocabulary words for a Vietnamese learner. Context: ${modeDesc}. Topic: ${vocabTopic}. Avoid common words like 'variable' or 'function' unless the topic specifically requires them. Return JSON array ONLY: [{"word":"...","def":"short English definition","ex":"Example sentence","vi":"Vietnamese meaning"}]`;
+
+    // Lấy TẤT CẢ từ vựng cùng mode và topic
+    const existingWords = history
+      .filter(h => {
+        if (h.type !== 'vocab') return false;
+        try {
+          const meta = JSON.parse(h.metadata || '{}');
+          const itemMode = meta.mode || 'coder';
+          const itemTopic = meta.topic || '';
+          return itemMode === mode && itemTopic === vocabTopic;
+        } catch {
+          return false;
+        }
+      })
+      .map(h => h.content);
+
+    const avoidList = existingWords.length > 0
+      ? `\n\nAvoid these existing words:\n${existingWords.join(', ')}`
+      : '';
+
+    const p = `Give 8 unique, varied and useful English vocabulary words for a Vietnamese learner. Context: ${modeDesc}. Topic: ${vocabTopic}. Avoid common words like 'variable' or 'function' unless the topic specifically requires them.${avoidList}
+
+Return JSON array ONLY: [{"word":"...","def":"short English definition","ex":"Example sentence","vi":"Vietnamese meaning"}]`;
     const raw = await askAI(p, aiModel);
     if (raw) {
       const m = raw.match(/\[[\s\S]*\]/);
@@ -637,9 +793,36 @@ Reply in Markdown (concise):
     setReadArticle(null); setReadQuestions([]); setReadAnswers([]); setReadSubmitted(false);
     setReadSelected(''); setReadLookup(''); setReadChat([]);
 
+    // Lấy TẤT CẢ bài đọc cùng mode, level, topic
+    const existingArticles = history
+      .filter(h => {
+        if (h.type !== 'reading') return false;
+        try {
+          const meta = JSON.parse(h.metadata || '{}');
+          const itemMode = meta.mode || 'coder';
+          const itemLevel = meta.level || 'B1';
+          const itemTopic = meta.topic || '';
+          return itemMode === mode && itemLevel === readLevel && itemTopic === readTopic;
+        } catch {
+          return false;
+        }
+      })
+      .map(h => {
+        try {
+          return JSON.parse(h.metadata || '{}').title || h.content.slice(0, 50);
+        } catch {
+          return h.content.slice(0, 50);
+        }
+      });
+
+    const avoidList = existingArticles.length > 0
+      ? `\n\nAvoid these existing articles:\n${existingArticles.join('\n')}`
+      : '';
+
     const p = `You are an English reading teacher. Create a reading passage for a Vietnamese learner. Context: ${modeDesc}.
 Level: ${readLevel}
-Topic: ${readTopic}
+Topic: ${readTopic}${avoidList}
+
 Return JSON ONLY (no markdown code blocks, just raw json):
 {"title":"...","body":"4-6 paragraphs separated by \\n\\n, ${readLevel === 'A2' ? '80-120' : readLevel === 'B1' ? '150-200' : '200-280'} words","questions":[{"q":"...","options":["A","B","C","D"],"answer":0},{"q":"...","options":["A","B","C","D"],"answer":2},{"q":"...","options":["A","B","C","D"],"answer":1},{"q":"...","options":["A","B","C","D"],"answer":3}]}`;
 

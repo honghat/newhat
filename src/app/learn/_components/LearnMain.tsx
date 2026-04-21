@@ -140,13 +140,17 @@ export default function LearnMain() {
   async function genLesson() {
     setLoading(true); setCurrent(null); setQuizMode(false); setQuizAnswers([]); setUserAnswers([]); setQuizSubmitted(false);
 
-    // Lấy danh sách bài đã học để AI không lặp lại (lọc theo track thật)
-    const done = lessons.filter(l => l.track === track).map(l => l.topic);
-    const avoidStr = done.length > 0 ? `TUYỆT ĐỐI KHÔNG được dạy lại các chủ đề sau (tìm chủ đề mới khác hoàn toàn): ${done.join(' | ')}.` : '';
+    // Lấy TẤT CẢ bài trong track này để AI không lặp lại
+    const existingTopics = lessons
+      .filter(l => l.track === track)
+      .map(l => l.topic);
+
+    const avoidStr = existingTopics.length > 0
+      ? `\n\nTUYỆT ĐỐI KHÔNG được dạy lại các chủ đề sau (tìm chủ đề mới khác hoàn toàn):\n${existingTopics.join('\n')}`
+      : '';
 
     const prompt = `Bạn là một giáo viên lập trình tận tâm, có khả năng biến những khái niệm phức tạp thành đơn giản.
-    Hãy tạo một bài học về ${TRACKS.find(t=>t.id===track)?.label || track} dành cho người mới bắt đầu.
-    ${avoidStr}
+    Hãy tạo một bài học về ${TRACKS.find(t=>t.id===track)?.label || track} dành cho người mới bắt đầu.${avoidStr}
     Hãy dẫn dắt người học bằng cách bổ sung các khái niệm căn bản trước khi vào ví dụ code.
 
     Format bài học như sau:
