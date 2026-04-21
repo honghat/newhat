@@ -144,39 +144,45 @@ export default function LearnMain() {
     const done = lessons.filter(l => l.track === track).map(l => l.topic);
     const avoidStr = done.length > 0 ? `TUYỆT ĐỐI KHÔNG được dạy lại các chủ đề sau (tìm chủ đề mới khác hoàn toàn): ${done.join(' | ')}.` : '';
 
-    const prompt = `Bạn là giáo viên lập trình. Hãy tạo một bài học ngắn về ${TRACKS.find(t=>t.id===track)?.label || track} cho người mới học.
-${avoidStr}
-Chọn một khái niệm CỤ THỂ chưa dạy. Format bài học như sau:
+    const prompt = `Bạn là một giáo viên lập trình tận tâm, có khả năng biến những khái niệm phức tạp thành đơn giản.
+    Hãy tạo một bài học về ${TRACKS.find(t=>t.id===track)?.label || track} dành cho người mới bắt đầu.
+    ${avoidStr}
+    Hãy dẫn dắt người học bằng cách bổ sung các khái niệm căn bản trước khi vào ví dụ code.
 
-# [Tên khái niệm]
+    Format bài học như sau:
 
-## 🎯 Mục tiêu
-[1-2 câu mô tả học xong sẽ biết gì]
+    # [Tên chủ đề/khái niệm]
 
-## 📖 Giải thích
-[Giải thích bằng tiếng Việt, ngắn gọn, dễ hiểu. 3-5 câu]
+    ## 🎯 Mục tiêu
+    [Mô tả ngắn gọn giá trị của bài học này đối với người học]
 
-## 💻 Ví dụ code
-\`\`\`
-[code ví dụ rõ ràng, có comment tiếng Việt]
-\`\`\`
+    ## 💡 Khái niệm cốt lõi
+    [Giải thích các thuật ngữ/nguyên lý căn bản liên quan bằng ngôn ngữ dễ hiểu, dùng ví dụ thực tế nếu có thể. Khoảng 4-6 câu]
 
-## 🧠 Quiz (3 câu)
-QUAN TRỌNG: Mỗi câu PHẢI có đúng 3 lựa chọn A, B, C đầy đủ nội dung, không được để trống. Với câu hỏi Có/Không phải thêm lựa chọn thứ 3 như "Tùy trường hợp" hoặc "Không phải lúc nào cũng vậy".
-1. [câu hỏi 1]?
-A) [nội dung đáp án A] B) [nội dung đáp án B] C) [nội dung đáp án C]
-ĐÁPÁN:B
+    ## 📖 Giải thích chi tiết
+    [Giải thích cách vận hành và các quy tắc cần nhớ. Ngắn gọn, súc tích]
 
-2. [câu hỏi 2]?
-A) [nội dung đáp án A] B) [nội dung đáp án B] C) [nội dung đáp án C]
-ĐÁPÁN:A
+    ## 💻 Ví dụ code minh họa
+    \`\`\`
+    [Code ví dụ rõ ràng, sạch sẽ, có comment tiếng Việt giải thích từng bước quan trọng]
+    \`\`\`
 
-3. [câu hỏi 3]?
-A) [nội dung đáp án A] B) [nội dung đáp án B] C) [nội dung đáp án C]
-ĐÁPÁN:C
+    ## 🧠 Quiz (3 câu)
+    QUAN TRỌNG: Mỗi câu PHẢI có đúng 3 lựa chọn A, B, C đầy đủ nội dung.
+    1. [câu hỏi 1]?
+    A) [đáp án A] B) [đáp án B] C) [đáp án C]
+    ĐÁPÁN:B
 
-## 💡 Thực hành
-[1 bài tập nhỏ để làm ngay]`;
+    2. [câu hỏi 2]?
+    A) [đáp án A] B) [đáp án B] C) [đáp án C]
+    ĐÁPÁN:A
+
+    3. [câu hỏi 3]?
+    A) [đáp án A] B) [đáp án B] C) [đáp án C]
+    ĐÁPÁN:C
+
+    ## 🚀 Thực hành
+    [1 bài tập nhỏ để người học tự tay gõ code và kiểm tra kiến thức]`;
 
     try {
       const res = await fetch('/api/ai', {
