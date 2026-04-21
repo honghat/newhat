@@ -222,7 +222,7 @@ export default function EnglishContent() {
   }, []);
 
   const [ttsOnline, setTtsOnline] = useState(false);
-  useEffect(() => { 
+  useEffect(() => {
     if (isMounted) {
       localStorage.setItem('eng_mode', mode);
       localStorage.setItem('eng_model', aiModel);
@@ -340,7 +340,7 @@ export default function EnglishContent() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id: lessonId, completed: true, incrementLearnCount: true })
     });
-    
+
     // Nhật ký trang chủ
     const item = history.find(h => h.id === lessonId);
     if (item) {
@@ -348,12 +348,12 @@ export default function EnglishContent() {
       if (item.type === 'reading') {
         try { topic = '📖 Đọc: ' + (JSON.parse(item.metadata || '{}').title || 'Bài đọc'); } catch { topic = '📖 Bài đọc'; }
       } else if (item.type === 'listen') {
-        try { 
+        try {
           const m = JSON.parse(item.metadata || '{}');
           topic = '🎧 Nghe: ' + (m.title || item.content.slice(0, 30) + '...');
         } catch { topic = '🎧 Nghe: ' + item.content.slice(0, 30) + '...'; }
       } else if (item.type === 'speak') {
-        try { 
+        try {
           const m = JSON.parse(item.metadata || '{}');
           topic = '🗣️ Nói: ' + (m.topic || item.content.slice(0, 30) + '...');
         } catch { topic = '🗣️ Nói: ' + item.content.slice(0, 30) + '...'; }
@@ -365,10 +365,10 @@ export default function EnglishContent() {
         topic = '📚 Học ' + item.type;
       }
       const today = new Date().toLocaleDateString('en-CA');
-      fetch('/api/logs', { 
-        method: 'PATCH', 
-        headers: { 'Content-Type': 'application/json' }, 
-        body: JSON.stringify({ date: today, addTopic: topic }) 
+      fetch('/api/logs', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ date: today, addTopic: topic })
       });
     }
 
@@ -402,7 +402,7 @@ export default function EnglishContent() {
   // LISTEN
   async function genListenText() {
     setListenLoading(true); setListenVi(''); setListenVocab([]); setShowListenVi(false);
-    const p = `Generate a short English listening exercise (4-6 sentences) for a B1 learner. Context: ${modeDesc}. 
+    const p = `Generate a short English listening exercise (4-6 sentences) for a B1 learner. Context: ${modeDesc}.
 Return JSON format ONLY:
 {
   "title": "A short descriptive title",
@@ -530,22 +530,24 @@ Return JSON format ONLY:
   async function getFeedback() {
     if (!transcript) return;
     setSpkLoading(true);
-    const p = `Bạn là giáo viên tiếng Anh chuyên nghiệp. Phân tích bài nói của học viên: "${transcript}".
-Hãy trình bày theo định dạng Markdown sau:
-# Nhận xét bài nói và Gợi ý
-## Phân tích lỗi
-### 1. Ngữ pháp & Phát âm:
-(Nhận xét lỗi cụ thể)
-### 2. Từ vựng:
-(Nhận xét về lựa chọn từ ngữ)
-### 3. Cấu trúc:
-(Nhận xét về sự trôi chảy/cấu trúc)
----
-## Gợi ý nói lại (English)
-**"Câu tiếng Anh hoàn chỉnh và tự nhiên hơn"**
----
-## Dịch sang tiếng Việt
-> Bản dịch của câu gợi ý.`;
+    const p = `Bạn là giáo viên tiếng Anh chuyên nghiệp. Hãy chấm điểm bài nói sau trên thang điểm 100 và nhận xét chi tiết.
+    Chủ đề: "${spkTopic}"
+    Bài nói của học viên: "${transcript}"
+
+    Hãy trình bày theo định dạng Markdown sau:
+    # Điểm số: [Số điểm]/100
+    ---
+    ## Nhận xét chi tiết
+    ### 1. Ngữ pháp & Phát âm:
+    (Nhận xét lỗi cụ thể)
+    ### 2. Từ vựng & Độ tự nhiên:
+    (Nhận xét về từ ngữ)
+    ---
+    ## Gợi ý nói lại (English)
+    **"Câu tiếng Anh hoàn chỉnh và tự nhiên hơn"**
+    ---
+    ## Dịch sang tiếng Việt
+    > Bản dịch của câu gợi ý.`;
     const fb = await askAI(p);
     if (fb) {
       setSpkFeedback(fb);
@@ -753,11 +755,11 @@ Return JSON ONLY (no markdown code blocks, just raw json):
                       })()}
                     </div>
                     {history.find(h => h.type === 'listen' && h.content === listenText) && (
-                      <button 
+                      <button
                         onClick={() => {
                           const item = history.find(h => h.type === 'listen' && h.content === listenText);
                           if (item) markLessonLearned(item.id);
-                        }} 
+                        }}
                         style={{ padding: '6px 12px', borderRadius: 8, background: '#3fb950', color: '#000', border: 'none', fontSize: 11, fontWeight: 700, cursor: 'pointer', boxShadow: '0 2px 8px rgba(63,185,80,0.2)' }}
                       >
                         ✓ Đánh dấu đã học
@@ -869,7 +871,7 @@ Return JSON ONLY (no markdown code blocks, just raw json):
                         const activeId = spkRecordId || history.find(h => h.type === 'speak' && h.content === transcript)?.id;
                         if (activeId) {
                           return (
-                            <button 
+                            <button
                               onClick={() => markLessonLearned(activeId)}
                               style={{ marginTop: 10, padding: '6px 14px', borderRadius: 8, background: '#3fb950', color: '#000', border: 'none', fontSize: 11, fontWeight: 700, cursor: 'pointer', boxShadow: '0 2px 8px rgba(63,185,80,0.2)' }}
                             >
@@ -899,32 +901,42 @@ Return JSON ONLY (no markdown code blocks, just raw json):
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                       <div className="section-title" style={{ color: 'var(--green)', margin: 0 }}>💡 Bài mẫu AI</div>
                       <div style={{ display: 'flex', gap: 10 }}>
-                        <button 
+                        <button
+                          onClick={() => {
+                            let text = spkSample;
+                            const enStartMatch = text.match(/English:?\s*/i);
+                            const enStartIdx = enStartMatch ? enStartMatch.index! + enStartMatch[0].length : 0;
+                            const viMarkers = [/Tiếng Việt/i, /Bản dịch/i, /Dịch/i, /Từ hay/i];
+                            let firstViIdx = text.length;
+                            viMarkers.forEach(regex => {
+                              const m = text.match(regex);
+                              if (m && m.index! > enStartIdx && m.index! < firstViIdx) firstViIdx = m.index!;
+                            });
+                            text = text.slice(enStartIdx, firstViIdx).replace(/(\*\*|##|#|>\s|[:])/g, '').trim();
+                            speak(text, 1.0);
+                          }}
+                          style={{ fontSize: 11, color: 'var(--accent)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700 }}
+                        >
+                          🔊 Nghe mẫu
+                        </button>
+                        <button
                           onClick={(e) => {
                             const btn = e.currentTarget;
                             let text = spkSample;
-                            
-                            // 1. Try to slice between English and Vietnamese/Vocab markers
                             const enStartMatch = text.match(/English:?\s*/i);
                             const enStartIdx = enStartMatch ? enStartMatch.index! + enStartMatch[0].length : 0;
-                            
                             const viMarkers = [/Tiếng Việt/i, /Bản dịch/i, /Dịch/i, /Từ hay/i, /Từ vựng/i];
                             let firstViIdx = text.length;
                             viMarkers.forEach(regex => {
                               const m = text.match(regex);
                               if (m && m.index! > enStartIdx && m.index! < firstViIdx) firstViIdx = m.index!;
                             });
-                            
-                            text = text.slice(enStartIdx, firstViIdx);
-                            
-                            // 2. Final cleanup of markdown and stray stars
-                            text = text.replace(/(\*\*|##|#|>\s|[:])/g, '').trim();
+                            text = text.slice(enStartIdx, firstViIdx).replace(/(\*\*|##|#|>\s|[:])/g, '').trim();
                             navigator.clipboard.writeText(text);
-                            
                             const old = btn.innerText;
                             btn.innerText = '✓ Đã copy';
                             setTimeout(() => btn.innerText = old, 2000);
-                          }} 
+                          }}
                           style={{ fontSize: 11, color: 'var(--accent)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700 }}
                         >
                           📋 Copy
@@ -952,7 +964,7 @@ Return JSON ONLY (no markdown code blocks, just raw json):
                     <div className="section-title">Bạn vừa nói</div>
                     <div style={{ fontSize: 14, fontStyle: 'italic', lineHeight: 1.7, color: 'var(--text)', marginBottom: 12 }}>"{transcript}"</div>
                     <button className="btn btn-ghost" style={{ width: '100%', position: 'relative' }} onClick={getFeedback} disabled={spkLoading || recognizing}>
-                      {spkLoading ? '⏳ AI đang nhận xét...' : '🤖 AI nhận xét ngữ pháp & phát âm'}
+                      {spkLoading ? '⏳ AI đang chấm điểm...' : '🤖 AI chấm điểm & nhận xét'}
                     </button>
                   </div>
                 )}
@@ -961,7 +973,7 @@ Return JSON ONLY (no markdown code blocks, just raw json):
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, marginBottom: 16 }}>
                       <div style={{ flex: 1 }}>
                         <div className="section-title" style={{ color: 'var(--green)', display: 'flex', alignItems: 'center', gap: 8, margin: 0, fontSize: 16, fontWeight: 800 }}>
-                          <span>📋</span> Nhận xét bài nói
+                          <span>📋</span> Kết quả chấm điểm
                         </div>
                         {spkRecordId && history.find(h => h.id === spkRecordId)?.learnCount && history.find(h => h.id === spkRecordId)!.learnCount > 0 && (
                           <div style={{ marginTop: 6, display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 8px', borderRadius: 8, background: '#3fb95022', color: '#3fb950', fontSize: 10, fontWeight: 700, border: '1px solid #3fb95044' }}>
@@ -1012,7 +1024,7 @@ Return JSON ONLY (no markdown code blocks, just raw json):
                         const activeId = writeRecordId || history.find(h => h.type === 'writing' && h.content === writeText)?.id;
                         if (activeId) {
                           return (
-                            <button 
+                            <button
                               onClick={() => markLessonLearned(activeId)}
                               style={{ marginTop: 10, padding: '8px 16px', borderRadius: 8, background: '#3fb950', color: '#000', border: 'none', fontSize: 11, fontWeight: 700, cursor: 'pointer', boxShadow: '0 2px 8px rgba(63,185,80,0.3)' }}
                             >
@@ -1043,30 +1055,30 @@ Return JSON ONLY (no markdown code blocks, just raw json):
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                       <div className="section-title" style={{ color: 'var(--green)', margin: 0 }}>💡 Bài viết mẫu AI</div>
                       <div style={{ display: 'flex', gap: 10 }}>
-                        <button 
+                        <button
                           onClick={(e) => {
                             const btn = e.currentTarget;
                             let text = writeSample;
-                            
+
                             const enStartMatch = text.match(/English:?\s*/i);
                             const enStartIdx = enStartMatch ? enStartMatch.index! + enStartMatch[0].length : 0;
-                            
+
                             const viMarkers = [/Tiếng Việt/i, /Bản dịch/i, /Dịch/i, /Từ hay/i, /Từ vựng/i];
                             let firstViIdx = text.length;
                             viMarkers.forEach(regex => {
                               const m = text.match(regex);
                               if (m && m.index! > enStartIdx && m.index! < firstViIdx) firstViIdx = m.index!;
                             });
-                            
+
                             text = text.slice(enStartIdx, firstViIdx);
 
                             text = text.replace(/(\*\*|##|#|>\s|[:])/g, '').trim();
                             navigator.clipboard.writeText(text);
-                            
+
                             const old = btn.innerText;
                             btn.innerText = '✓ Đã copy';
                             setTimeout(() => btn.innerText = old, 2000);
-                          }} 
+                          }}
                           style={{ fontSize: 11, color: 'var(--accent)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700 }}
                         >
                           📋 Copy tiếng Anh
@@ -1158,7 +1170,7 @@ Return JSON ONLY (no markdown code blocks, just raw json):
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'center', gap: 10, flexWrap: 'wrap', marginTop: 16 }}>
                       <button className="btn btn-ghost" style={{ flex: 1 }} onClick={() => { setFlipped(false); setCardIdx(i => Math.max(0, i - 1)); }}>← Trước</button>
-                      
+
                       {cardIdx === cards.length - 1 && (
                         <button onClick={() => {
                           // Đánh dấu đã học cho tất cả các từ trong bộ này
@@ -1205,7 +1217,7 @@ Return JSON ONLY (no markdown code blocks, just raw json):
                   <div className="card">
                     <div style={{ marginBottom: 16 }}>
                       <div style={{ fontSize: 22, fontWeight: 900, lineHeight: 1.3, color: 'var(--accent)', marginBottom: 12 }}>{readArticle.title}</div>
-                      
+
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10, padding: '10px 0', borderTop: '1px solid var(--border)', borderBottom: '1px solid var(--border)' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                           <span style={{ fontSize: 11, background: 'var(--surface2)', padding: '3px 8px', borderRadius: 4, color: 'var(--muted)', fontWeight: 600 }}>{readArticle.wordCount} words</span>
@@ -1223,9 +1235,9 @@ Return JSON ONLY (no markdown code blocks, just raw json):
                             return null;
                           })()}
                         </div>
-                        
+
                         <div style={{ display: 'flex', gap: 6 }}>
-                          <button 
+                          <button
                             onClick={() => speak(`${readArticle.title}. ${readArticle.body}`, 1.0)}
                             style={{ padding: '6px 12px', borderRadius: 8, background: 'var(--surface2)', border: '1px solid var(--border)', color: 'var(--accent)', cursor: 'pointer', fontSize: 12, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 4 }}
                           >
@@ -1235,8 +1247,8 @@ Return JSON ONLY (no markdown code blocks, just raw json):
                             const itemId = readRecordId || history.find(h => h.type === 'reading' && h.content === readArticle.body)?.id;
                             if (itemId) {
                               return (
-                                <button 
-                                  onClick={() => markLessonLearned(itemId)} 
+                                <button
+                                  onClick={() => markLessonLearned(itemId)}
                                   style={{ padding: '6px 12px', borderRadius: 8, background: '#3fb950', color: '#000', border: 'none', fontSize: 12, fontWeight: 700, cursor: 'pointer', boxShadow: '0 2px 8px rgba(63,185,80,0.3)', display: 'flex', alignItems: 'center', gap: 4 }}
                                 >
                                   📚 Đã học xong
@@ -1424,7 +1436,7 @@ Return JSON ONLY (no markdown code blocks, just raw json):
                           const m = JSON.parse(item.metadata || '{}');
                           setListenVi(m.vi || '');
                           setListenVocab(m.vocab || []);
-                        } catch { 
+                        } catch {
                           setListenVi(''); setListenVocab([]);
                         }
                         setShowListenVi(false);
@@ -1484,11 +1496,11 @@ Return JSON ONLY (no markdown code blocks, just raw json):
                       </div>
                       <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 4, display: 'flex', alignItems: 'center', gap: 6 }}>
                         <span>{new Date(item.createdAt).toLocaleString('vi')}</span>
-                        <span style={{ 
-                          padding: '1px 6px', 
-                          borderRadius: 4, 
-                          background: item.learnCount > 0 ? '#3fb95022' : 'var(--surface2)', 
-                          color: item.learnCount > 0 ? '#3fb950' : 'var(--muted)', 
+                        <span style={{
+                          padding: '1px 6px',
+                          borderRadius: 4,
+                          background: item.learnCount > 0 ? '#3fb95022' : 'var(--surface2)',
+                          color: item.learnCount > 0 ? '#3fb950' : 'var(--muted)',
                           fontWeight: 700,
                           fontSize: 9
                         }}>
