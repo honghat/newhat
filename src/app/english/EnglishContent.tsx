@@ -124,13 +124,12 @@ function parseMarkdown(text: string) {
       .replace(/^# (.*$)/g, '<h1 style="font-size:16px; margin:12px 0 6px; font-weight:800; color:var(--text-main)">$1</h1>')
       .replace(/^## (.*$)/g, '<h2 style="font-size:14px; margin:10px 0 4px; font-weight:700; color:var(--text-main)">$1</h2>')
       .replace(/^### (.*$)/g, '<h3 style="font-size:13px; margin:8px 0 4px; font-weight:600; color:var(--text-main)">$1</h3>')
-      // Xóa dấu ** và * mà KHÔNG xóa khoảng trắng xung quanh
+      // IN ĐẬM VÀ TÔ MÀU số thứ tự đầu dòng (ví dụ: 1. Sáng kiến)
+      // CHỈ áp dụng nếu sau số là chữ hoặc khoảng trắng, không phải dấu gạch chéo (điểm số)
+      .replace(/^(\d+\.)(?!\d*\/)\s*(.*)/g, '<strong style="color:var(--accent)">$1</strong> $2')
+      // 2. Xóa dấu ** và * mà KHÔNG xóa khoảng trắng xung quanh
       .replace(/\*\*\s*(.*?)\s*\*\*/g, '$1')
       .replace(/\*\s*(.*?)\s*\*/g, '$1')
-      // Xóa dấu * ở ĐẦU dòng
-      .replace(/^\s*\*+\s*/g, '')
-      // IN ĐẬM VÀ TÔ MÀU số thứ tự (ví dụ: 1. Sáng kiến)
-      .replace(/^(\d+\.)\s*(.*)/g, '<strong style="color:var(--accent)">$1</strong> $2')
       // Dọn dẹp key có dấu hai chấm
       .replace(/\s*([^:\n]+)\s*:\s*\*?/g, '$1: ')
       .replace(/^> (.*$)/g, '<blockquote style="border-left:3px solid var(--muted); padding-left:12px; margin:10px 0; font-style:italic; color:var(--muted); font-size:12px">$1</blockquote>')
@@ -744,7 +743,7 @@ Return JSON ONLY (no markdown code blocks, just raw json):
                       <div className="section-title" style={{ margin: 0, fontSize: 16, fontWeight: 800 }}>🎧 Bài Nghe</div>
                       {(() => {
                         const item = history.find(h => h.type === 'listen' && h.content === listenText);
-                        if (item && item.learnCount > 0) {
+                        if (item && (item.learnCount ?? 0) > 0) {
                           return (
                             <div style={{ marginTop: 6, display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 8px', borderRadius: 8, background: '#3fb95022', color: '#3fb950', fontSize: 10, fontWeight: 700, border: '1px solid #3fb95044' }}>
                               ✓ Đã học {item.learnCount} lần
@@ -975,7 +974,7 @@ Return JSON ONLY (no markdown code blocks, just raw json):
                         <div className="section-title" style={{ color: 'var(--green)', display: 'flex', alignItems: 'center', gap: 8, margin: 0, fontSize: 16, fontWeight: 800 }}>
                           <span>📋</span> Kết quả chấm điểm
                         </div>
-                        {spkRecordId && history.find(h => h.id === spkRecordId)?.learnCount && history.find(h => h.id === spkRecordId)!.learnCount > 0 && (
+                        {spkRecordId && (history.find(h => h.id === spkRecordId)?.learnCount ?? 0) > 0 && (
                           <div style={{ marginTop: 6, display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 8px', borderRadius: 8, background: '#3fb95022', color: '#3fb950', fontSize: 10, fontWeight: 700, border: '1px solid #3fb95044' }}>
                             ✓ Đã học {history.find(h => h.id === spkRecordId)!.learnCount} lần
                           </div>
