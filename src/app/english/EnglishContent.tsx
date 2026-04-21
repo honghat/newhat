@@ -287,6 +287,7 @@ export default function EnglishContent() {
   const modeDesc = MODES.find(m => m.id === mode)?.desc || 'developer';
 
   // Listening
+  const [listenLevel, setListenLevel] = useState('A2');
   const [listenText, setListenText] = useState('');
   const [listenVi, setListenVi] = useState('');
   const [listenVocab, setListenVocab] = useState<{ w: string; m: string }[]>([]);
@@ -299,6 +300,7 @@ export default function EnglishContent() {
   const [listenElapsed, setListenElapsed] = useState(0);
 
   // Speaking
+  const [spkLevel, setSpkLevel] = useState('A2');
   const [spkTopic, setSpkTopic] = useState('Tell me about your typical day as a software developer.');
   const [spkTopicError, setSpkTopicError] = useState('');
   const [recognizing, setRecognizing] = useState(false);
@@ -314,6 +316,7 @@ export default function EnglishContent() {
   const chunksRef = useRef<Blob[]>([]);
 
   // Writing
+  const [writeLevel, setWriteLevel] = useState('A2');
   const [writeText, setWriteText] = useState('');
   const [writePrompt, setWritePrompt] = useState(WRITING_PROMPTS[0]);
   const [writeTopicError, setWriteTopicError] = useState('');
@@ -334,7 +337,7 @@ export default function EnglishContent() {
   const [known, setKnown] = useState<number[]>([]);
 
   // Reading
-  const [readLevel, setReadLevel] = useState('B1');
+  const [readLevel, setReadLevel] = useState('A2');
   const [readTopic, setReadTopic] = useState('Web Development');
   const [readLoading, setReadLoading] = useState(false);
   const [readArticle, setReadArticle] = useState<{ title: string; body: string; wordCount: number } | null>(null);
@@ -490,7 +493,7 @@ export default function EnglishContent() {
       ? `\nAvoid these existing topics: ${existingListens.join('; ')}`
       : '';
 
-    const p = `Generate a unique English listening exercise (4-6 sentences) for a B1 learner.
+    const p = `Generate a unique English listening exercise (4-6 sentences) for a ${listenLevel} learner.
 
 Scenario: ${scenario}
 Context: ${modeDesc}${avoidList}
@@ -517,7 +520,7 @@ Return JSON format ONLY:
           setListenText(d.en || '');
           setListenVi(d.vi || '');
           setListenVocab(d.vocab || []);
-          const d2 = await saveToDb('listen', d.en, { title: d.title, vi: d.vi, vocab: d.vocab, topic: scenario }, mode);
+          const d2 = await saveToDb('listen', d.en, { title: d.title, vi: d.vi, vocab: d.vocab, topic: scenario, level: listenLevel }, mode);
           if (d2?.id) {
             setListenRecordId(d2.id);
             loadHistory();
@@ -570,7 +573,7 @@ Return JSON format ONLY:
       ? `\n\nAvoid these existing topics:\n${existingTopics.join('\n')}`
       : '';
 
-    const p = `Give ONE short English speaking question for: ${modeDesc}.${avoidList}
+    const p = `Give ONE short English speaking question for ${spkLevel} level learner: ${modeDesc}.${avoidList}
 
 Reply with the question ONLY, no explanation.`;
     const t = await askAI(p, aiModel);
@@ -581,7 +584,7 @@ Reply with the question ONLY, no explanation.`;
       // Background save — không block UI
       fetch('/api/english', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type: 'speak', content: '', metadata: { topic: clean, mode } }),
+        body: JSON.stringify({ type: 'speak', content: '', metadata: { topic: clean, mode, level: spkLevel } }),
       }).then(r => r.json()).then(d => { setSpkRecordId(d.id); loadHistory(); }).catch(() => setSpkRecordId(null));
     }
     setSpkTopicLoading(false);
@@ -589,7 +592,7 @@ Reply with the question ONLY, no explanation.`;
 
   async function genSpkSample() {
     setSpkSampleLoading(true);
-    const raw = await askAI(`Answer this English question in 3-4 natural sentences: "${spkTopic}"
+    const raw = await askAI(`Answer this English question at ${spkLevel} level in 3-4 natural sentences: "${spkTopic}"
 
 **English:** (3-4 sentences)
 **Tiếng Việt:** (bản dịch ngắn)
@@ -598,7 +601,7 @@ Reply with the question ONLY, no explanation.`;
     if (spkRecordId) {
       fetch('/api/english', {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: spkRecordId, metadata: { topic: spkTopic, sample: raw || '', mode } }),
+        body: JSON.stringify({ id: spkRecordId, metadata: { topic: spkTopic, sample: raw || '', mode, level: spkLevel } }),
       }).catch(() => { });
     }
     setSpkSampleLoading(false);
@@ -606,7 +609,7 @@ Reply with the question ONLY, no explanation.`;
 
   async function genWriteSample() {
     setWriteSampleLoading(true);
-    const raw = await askAI(`Write a concise sample response (80-120 words) for: "${writePrompt}"
+    const raw = await askAI(`Write a concise sample response at ${writeLevel} level (80-120 words) for: "${writePrompt}"
 
 **English:** (1-2 clear paragraphs)
 **Tiếng Việt:** (bản dịch ngắn)
@@ -615,7 +618,7 @@ Reply with the question ONLY, no explanation.`;
     if (writeRecordId) {
       fetch('/api/english', {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: writeRecordId, metadata: { prompt: writePrompt, sample: raw || '', mode } }),
+        body: JSON.stringify({ id: writeRecordId, metadata: { prompt: writePrompt, sample: raw || '', mode, level: writeLevel } }),
       }).catch(() => { });
     }
     setWriteSampleLoading(false);
@@ -658,7 +661,7 @@ Reply with the question ONLY, no explanation.`;
   async function getFeedback() {
     if (!transcript) return;
     setSpkLoading(true);
-    const p = `Bạn là giáo viên tiếng Anh chuyên nghiệp. Hãy chấm điểm bài nói sau trên thang điểm 100 và nhận xét chi tiết.
+    const p = `Bạn là giáo viên tiếng Anh chuyên nghiệp. Hãy chấm điểm bài nói sau trên thang điểm 100 và nhận xét chi tiết cho học viên trình độ ${spkLevel}.
     Chủ đề: "${spkTopic}"
     Bài nói của học viên: "${transcript}"
 
@@ -682,10 +685,10 @@ Reply with the question ONLY, no explanation.`;
       if (spkRecordId) {
         await fetch('/api/english', {
           method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ id: spkRecordId, content: transcript, metadata: { topic: spkTopic, feedback: fb, sample: spkSample, mode } }),
+          body: JSON.stringify({ id: spkRecordId, content: transcript, metadata: { topic: spkTopic, feedback: fb, sample: spkSample, mode, level: spkLevel } }),
         });
       } else {
-        const d2 = await saveToDb('speak', transcript, { topic: spkTopic, feedback: fb, sample: spkSample }, mode);
+        const d2 = await saveToDb('speak', transcript, { topic: spkTopic, feedback: fb, sample: spkSample, level: spkLevel }, mode);
         if (d2?.id) setSpkRecordId(d2.id);
       }
     }
@@ -755,10 +758,10 @@ Reply in Markdown (concise):
       if (writeRecordId) {
         await fetch('/api/english', {
           method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ id: writeRecordId, content: writeText, metadata: { prompt: writePrompt, feedback: fb, sample: writeSample, words: writeText.split(/\s+/).filter(Boolean).length, mode } }),
+          body: JSON.stringify({ id: writeRecordId, content: writeText, metadata: { prompt: writePrompt, feedback: fb, sample: writeSample, words: writeText.split(/\s+/).filter(Boolean).length, mode, level: writeLevel } }),
         });
       } else {
-        const d2 = await saveToDb('writing', writeText, { prompt: writePrompt, feedback: fb, sample: writeSample, words: writeText.split(/\s+/).filter(Boolean).length }, mode);
+        const d2 = await saveToDb('writing', writeText, { prompt: writePrompt, feedback: fb, sample: writeSample, words: writeText.split(/\s+/).filter(Boolean).length, level: writeLevel }, mode);
         if (d2?.id) setWriteRecordId(d2.id);
       }
     }
@@ -834,7 +837,7 @@ Return JSON array ONLY: [{"word":"...","ipa":"IPA pronunciation","def":"short En
         try {
           const meta = JSON.parse(h.metadata || '{}');
           const itemMode = meta.mode || 'coder';
-          const itemLevel = meta.level || 'B1';
+          const itemLevel = meta.level || 'A2';
           const itemTopic = meta.topic || '';
           return itemMode === mode && itemLevel === readLevel && itemTopic === readTopic;
         } catch {
@@ -926,7 +929,6 @@ Return JSON ONLY (no markdown code blocks, just raw json):
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
         <div>
           <h1 className="page-title" style={{ fontSize: '20px', fontWeight: 900, marginBottom: '4px' }}>🇬🇧 Luyện Tiếng Anh</h1>
-          <div style={{ fontSize: '11px', color: 'var(--muted)' }}>Nghe • Nói • Viết — lưu vào PostgreSQL</div>
         </div>
         <div suppressHydrationWarning className="pill" style={{ borderColor: ttsOnline ? 'var(--green)' : 'var(--orange)', color: ttsOnline ? 'var(--green)' : 'var(--orange)', background: ttsOnline ? '#3fb95011' : '#d2992211' }}>
           {ttsOnline ? '🔊 LuxTTS' : '🔇 Browser TTS'}
@@ -936,9 +938,9 @@ Return JSON ONLY (no markdown code blocks, just raw json):
       <div style={{ height: 1 }} />
 
       {/* Tabs */}
-      <div style={{ display: 'flex', gap: '6px', marginBottom: '12px', flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', gap: '4px', marginBottom: '12px', flexWrap: 'nowrap', overflowX: 'auto', paddingBottom: '4px' }}>
         {TABS.map(t => (
-          <button key={t.id} onClick={() => { setTab(t.id); window.scrollTo({ top: 0, behavior: 'smooth' }); }} style={{ padding: '8px 16px', borderRadius: 99, border: '1px solid', whiteSpace: 'nowrap', fontSize: '13px', fontWeight: 600, cursor: 'pointer', transition: 'all 0.15s', borderColor: tab === t.id ? 'var(--accent)' : 'var(--border)', background: tab === t.id ? 'var(--accent)' : 'transparent', color: tab === t.id ? '#000' : 'var(--muted)' }}>
+          <button key={t.id} onClick={() => { setTab(t.id); window.scrollTo({ top: 0, behavior: 'smooth' }); }} style={{ padding: '6px 10px', borderRadius: 99, border: '1px solid', whiteSpace: 'nowrap', fontSize: '12px', fontWeight: 600, cursor: 'pointer', transition: 'all 0.15s', borderColor: tab === t.id ? 'var(--accent)' : 'var(--border)', background: tab === t.id ? 'var(--accent)' : 'transparent', color: tab === t.id ? '#000' : 'var(--muted)' }}>
             {t.l}
           </button>
         ))}
@@ -1003,6 +1005,11 @@ Return JSON ONLY (no markdown code blocks, just raw json):
                         ✓ Đánh dấu đã học
                       </button>
                     )}
+                  </div>
+                  <div style={{ display: 'flex', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
+                    {READ_LEVELS.map(l => (
+                      <button key={l.id} onClick={() => setListenLevel(l.id)} style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid', fontSize: 12, fontWeight: 600, cursor: 'pointer', borderColor: listenLevel === l.id ? 'var(--accent)' : 'var(--border)', background: listenLevel === l.id ? '#58a6ff22' : 'transparent', color: listenLevel === l.id ? 'var(--accent)' : 'var(--muted)' }}>{l.label}</button>
+                    ))}
                   </div>
                   <textarea className="input" value={listenText} onChange={e => setListenText(e.target.value)} rows={6}
                     placeholder="Bấm 'AI tạo đoạn nghe' hoặc tự nhập tiếng Anh..." style={{ marginBottom: 12 }} />
@@ -1123,6 +1130,11 @@ Return JSON ONLY (no markdown code blocks, just raw json):
                     <button onClick={genSpkTopic} disabled={spkTopicLoading || spkLoading} style={{ padding: '6px 12px', borderRadius: 8, border: 'none', background: 'var(--accent)', color: '#000', fontSize: 11, fontWeight: 800, cursor: 'pointer', flexShrink: 0, display: 'flex', alignItems: 'center', gap: 4, boxShadow: '0 2px 8px rgba(0,0,0,0.2)' }}>
                       {spkTopicLoading ? '⏳...' : '🤖 Đổi chủ đề'}
                     </button>
+                  </div>
+                  <div style={{ display: 'flex', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
+                    {READ_LEVELS.map(l => (
+                      <button key={l.id} onClick={() => setSpkLevel(l.id)} style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid', fontSize: 12, fontWeight: 600, cursor: 'pointer', borderColor: spkLevel === l.id ? 'var(--accent)' : 'var(--border)', background: spkLevel === l.id ? '#58a6ff22' : 'transparent', color: spkLevel === l.id ? 'var(--accent)' : 'var(--muted)' }}>{l.label}</button>
+                    ))}
                   </div>
                   <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
                     <button onClick={() => speak(spkTopic, 1.0)} style={{ fontSize: 12, color: 'var(--muted)', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}>
@@ -1624,19 +1636,19 @@ Return JSON ONLY (no markdown code blocks, just raw json):
             <div className="desktop-2col">
               <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                 <div className="card">
-                  <div className="section-title">🔎 Tra từ / cụm từ bằng AI</div>
-                  <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 10 }}>
+                    <div className="section-title" style={{ margin: 0, flexShrink: 0 }}>🔎 Tra từ</div>
                     <input
                       className="input"
                       value={dictInput}
                       onChange={e => setDictInput(e.target.value)}
                       onKeyDown={e => { if (e.key === 'Enter') lookupWord(); }}
                       placeholder="Nhập từ hoặc cụm từ tiếng Anh..."
-                      style={{ flex: 1, marginBottom: 0, fontSize: 16 }}
+                      style={{ flex: 1, marginBottom: 0, fontSize: 14 }}
                       autoFocus
                     />
-                    <button className="btn btn-primary" onClick={lookupWord} disabled={dictLoading || !dictInput.trim()} style={{ flexShrink: 0, minWidth: 80 }}>
-                      {dictLoading ? '⏳' : '🔎 Tra'}
+                    <button className="btn btn-primary" onClick={lookupWord} disabled={dictLoading || !dictInput.trim()} style={{ flexShrink: 0, padding: '8px 16px', fontSize: 13 }}>
+                      {dictLoading ? '⏳' : '🔎'}
                     </button>
                   </div>
                   <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
