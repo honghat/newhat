@@ -58,6 +58,7 @@ export function TimerProvider({ children }: { children: ReactNode }) {
 
   const timerRef = useRef<NodeJS.Timeout|null>(null);
   const isSyncing = useRef(false);
+  const isCompletingWork = useRef(false);
 
   const getToday = () => new Date().toLocaleDateString('en-CA');
 
@@ -156,6 +157,10 @@ export function TimerProvider({ children }: { children: ReactNode }) {
         if (s <= 1) {
           // Xử lý khi hết giờ
           if (isWork) {
+            // Ngăn chặn gọi nhiều lần
+            if (isCompletingWork.current) return BREAK_MIN * 60;
+            isCompletingWork.current = true;
+
             beep('work');
             fetchLatest().then(data => {
               const nextCount = (data?.sessions || todaySessions) + 1;
@@ -165,6 +170,8 @@ export function TimerProvider({ children }: { children: ReactNode }) {
                 method:'PATCH',
                 headers:{'Content-Type':'application/json'},
                 body: JSON.stringify({ date: getToday(), addHours: 0.5, addTopic: 'Pomodoro' })
+              }).finally(() => {
+                isCompletingWork.current = false;
               });
             });
             setIsWork(false);
