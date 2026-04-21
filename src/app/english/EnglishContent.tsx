@@ -121,15 +121,19 @@ function parseMarkdown(text: string) {
     }
 
     let parsed = line
-      .replace(/^# (.*$)/g, '<h1 style="font-size:18px; margin:14px 0 8px; font-weight:900; color:var(--text-main)">$1</h1>')
-      .replace(/^## (.*$)/g, '<h2 style="font-size:16px; margin:12px 0 6px; font-weight:800; color:var(--text-main)">$1</h2>')
-      .replace(/^### (.*$)/g, '<h3 style="font-size:14px; margin:10px 0 4px; font-weight:700; color:var(--text-main)">$1</h3>')
-      // 1. Xử lý in đậm chuẩn Markdown **text** trước, đồng thời loại bỏ dấu **
-      .replace(/\*\*(.*?)\*\*/g, '<strong style="color:var(--accent)">$1</strong>')
-      // 2. Xử lý các trường hợp key có dấu hai chấm đứng sau, có thể nằm sau dấu * (bullet point)
-      // Loại bỏ sạch các dấu ** nếu AI lỡ viết kiểu * **Key:**
-      .replace(/^(\* )?\s*\**([^:\*\n]+)\**\s*:/g, '$1<strong style="color:var(--accent)">$2:</strong>')
-      .replace(/^> (.*$)/g, '<blockquote style="border-left:3px solid var(--muted); padding-left:12px; margin:10px 0; font-style:italic; color:var(--muted)">$1</blockquote>')
+      .replace(/^# (.*$)/g, '<h1 style="font-size:16px; margin:12px 0 6px; font-weight:800; color:var(--text-main)">$1</h1>')
+      .replace(/^## (.*$)/g, '<h2 style="font-size:14px; margin:10px 0 4px; font-weight:700; color:var(--text-main)">$1</h2>')
+      .replace(/^### (.*$)/g, '<h3 style="font-size:13px; margin:8px 0 4px; font-weight:600; color:var(--text-main)">$1</h3>')
+      // Xóa dấu ** và * mà KHÔNG xóa khoảng trắng xung quanh
+      .replace(/\*\*\s*(.*?)\s*\*\*/g, '$1')
+      .replace(/\*\s*(.*?)\s*\*/g, '$1')
+      // Xóa dấu * ở ĐẦU dòng
+      .replace(/^\s*\*+\s*/g, '')
+      // IN ĐẬM VÀ TÔ MÀU số thứ tự (ví dụ: 1. Sáng kiến)
+      .replace(/^(\d+\.)\s*(.*)/g, '<strong style="color:var(--accent)">$1</strong> $2')
+      // Dọn dẹp key có dấu hai chấm
+      .replace(/\s*([^:\n]+)\s*:\s*\*?/g, '$1: ')
+      .replace(/^> (.*$)/g, '<blockquote style="border-left:3px solid var(--muted); padding-left:12px; margin:10px 0; font-style:italic; color:var(--muted); font-size:12px">$1</blockquote>')
       .replace(/^---$/g, '<hr style="border:none; border-top:1px solid var(--surface); margin:16px 0" />');
 
     htmlLines.push(parsed);
