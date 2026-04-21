@@ -424,12 +424,11 @@ ${codeInput}` }] }),
         <>
         {/* Track selector - Horizontal Scroll on Mobile */}
         <div style={{ 
-          display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 8, marginBottom: 12,
-          scrollbarWidth: 'none', msOverflowStyle: 'none', WebkitOverflowScrolling: 'touch'
+          display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10 
         }} className="no-scrollbar">
           {TRACKS.map(t => (
             <button key={t.id} onClick={() => setTrack(t.id)} style={{
-              padding: '10px 18px', borderRadius: 10, border: '1px solid',
+              padding: '7px 10px', borderRadius: 10, border: '1px solid',
               borderColor: track === t.id ? t.color : 'var(--border)',
               background: track === t.id ? t.color + '22' : 'var(--surface)',
               color: track === t.id ? t.color : 'var(--muted)',
@@ -455,10 +454,10 @@ ${codeInput}` }] }),
 
       {mode === 'code' && (
         <>
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 16 }}>
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10 }}>
           {TRACKS.map(t => (
             <button key={t.id} onClick={() => setCodeLang(t.id)} style={{
-              padding: '7px 14px', borderRadius: 8, border: '1px solid',
+              padding: '7px 10px', borderRadius: 8, border: '1px solid',
               borderColor: codeLang === t.id ? t.color : 'var(--border)',
               background: codeLang === t.id ? t.color + '22' : 'var(--surface)',
               color: codeLang === t.id ? t.color : 'var(--muted)',
