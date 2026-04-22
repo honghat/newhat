@@ -54,8 +54,8 @@ class TTSRequest(BaseModel):
 
 @app.get("/health")
 def health():
-    get_tts()  # Ensure voices are loaded
-    return {"status": "ok", "voices": list(encoded_voices.keys()), "whisper": whisper_model is not None}
+    # Không load model ở đây — lazy load khi có request thực sự
+    return {"status": "ok", "voices": list(encoded_voices.keys()), "loaded": lux is not None, "whisper": whisper_model is not None}
 
 @app.post("/v1/audio/transcriptions")
 async def transcribe(file: UploadFile = File(...)):

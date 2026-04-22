@@ -10,6 +10,13 @@ else
   PYTHON="python3"
 fi
 
+# ============ CẤU HÌNH TỐI ƯU ============
+export NODE_OPTIONS="--max-old-space-size=2048"
+ulimit -v 8388608 2>/dev/null || true
+export NEXT_TELEMETRY_DISABLED=1
+export WHISPER_MODEL=medium
+# ==========================================
+
 echo -e "${BLUE}${BOLD}"
 echo "  ███╗   ██╗███████╗██╗    ██╗██╗  ██╗ █████╗ ████████╗"
 echo "  ████╗  ██║██╔════╝██║    ██║██║  ██║██╔══██╗╚══██╔══╝"
@@ -84,8 +91,10 @@ echo ""
   echo -e "  ${GREEN}└─────────────────────────────────────────┘${NC}"
 echo ""
 
-# Chạy app trong background
-nohup npm run dev > /tmp/newhat_app.log 2>&1 &
+# Chạy app trong background (Standalone mode siêu nhẹ)
+export PORT=8006
+export HOSTNAME="0.0.0.0"
+nohup node .next/standalone/server.js > /tmp/newhat_app.log 2>&1 &
 
 echo -n "  Đang kiểm tra kết nối... "
 for i in {1..30}; do

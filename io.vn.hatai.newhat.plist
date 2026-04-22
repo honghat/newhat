@@ -12,7 +12,7 @@
   <key>ProgramArguments</key>
   <array>
     <string>/bin/bash</string>
-    <string>/usr/local/bin/newhat_daemon.sh</string>
+    <string>/Users/nguyenhat/NewHat/daemon_start.sh</string>
   </array>
 
   <!-- Chạy với user nguyenhat (không phải root) -->
@@ -21,9 +21,9 @@
 
   <!-- Thư mục làm việc -->
   <key>WorkingDirectory</key>
-  <string>/Users/nguyenhat/Documents/NewHat</string>
+  <string>/Users/nguyenhat/NewHat</string>
 
-  <!-- Các biến môi trường bổ sung -->
+  <!-- Các biến môi trường -->
   <key>EnvironmentVariables</key>
   <dict>
     <key>HOME</key>
@@ -36,19 +36,25 @@
     <string>en_US.UTF-8</string>
     <key>NODE_ENV</key>
     <string>development</string>
+    <!-- Giới hạn heap Node.js — tránh OOM -->
+    <key>NODE_OPTIONS</key>
+    <string>--max-old-space-size=2048</string>
   </dict>
 
   <!-- Tự động chạy khi load (lúc boot) -->
   <key>RunAtLoad</key>
   <true/>
 
-  <!-- Tự restart nếu crash -->
+  <!-- Chỉ restart khi crash, KHÔNG restart nếu exit bình thường -->
   <key>KeepAlive</key>
-  <true/>
+  <dict>
+    <key>SuccessfulExit</key>
+    <false/>
+  </dict>
 
   <!-- Giới hạn restart quá nhanh (tránh crash loop) -->
   <key>ThrottleInterval</key>
-  <integer>30</integer>
+  <integer>60</integer>
 
   <!-- Log output -->
   <key>StandardOutPath</key>

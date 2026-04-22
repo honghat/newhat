@@ -10,11 +10,14 @@ export USER="nguyenhat"
 export LOGNAME="nguyenhat"
 export PATH="/usr/local/bin:/Users/nguyenhat/miniconda3/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin"
 export LANG="en_US.UTF-8"
+export NODE_OPTIONS="--max-old-space-size=2048"
+export NEXT_TELEMETRY_DISABLED=1
+ulimit -v 8388608 2>/dev/null || true # Giới hạn 8GB RAM tổng cho script này
 
 PYTHON="/Users/nguyenhat/miniconda3/bin/python3"
 NPM="/usr/local/bin/npm"
 NODE="/usr/local/bin/node"
-DIR="/Users/nguyenhat/Documents/NewHat"
+DIR="/Users/nguyenhat/NewHat"
 LOG="/tmp"
 PG_BIN="/opt/homebrew/opt/postgresql@16/bin"
 PG_DATA="/opt/homebrew/var/postgresql@16"
@@ -76,6 +79,7 @@ sleep 1
 echo "  🚀 Khởi động NewHat App..."
 echo ""
 
-# Chạy foreground — launchd monitor process này
-# Nếu crash → launchd tự restart (KeepAlive = true)
-exec "$NPM" run dev 2>&1
+# Chạy foreground (Standalone mode siêu nhẹ)
+export PORT=8006
+export HOSTNAME="0.0.0.0"
+exec "$NODE" .next/standalone/server.js 2>&1
