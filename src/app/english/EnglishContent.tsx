@@ -726,7 +726,7 @@ Reply with the question ONLY, no explanation.`;
       ? `\n\nAvoid these existing prompts:\n${existingPrompts.join('\n')}`
       : '';
 
-    const p = `Give ONE English writing prompt for: ${modeDesc}.${avoidList}
+    const p = `Give ONE English writing prompt for ${writeLevel} level learner: ${modeDesc}.${avoidList}
 
 Reply with the prompt ONLY.`;
     const t = await askAI(p, aiModel);
@@ -746,7 +746,7 @@ Reply with the prompt ONLY.`;
   async function checkWriting() {
     if (!writeText.trim()) return;
     setWriteLoading(true);
-    const p = `Check this English writing. Topic: "${writePrompt}". Text: "${writeText}"
+    const p = `Check this English writing for a ${writeLevel} level learner. Topic: "${writePrompt}". Text: "${writeText}"
 
 Reply in Markdown (concise):
 **Lỗi chính:** (tối đa 4 bullets về grammar/vocab)
@@ -1293,10 +1293,11 @@ Return JSON ONLY (no markdown code blocks, just raw json):
                     <button onClick={genWriteSample} disabled={writeSampleLoading} style={{ fontSize: 12, color: 'var(--green)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600 }}>
                       {writeSampleLoading ? '⏳ Đang soạn bài mẫu...' : '💡 Gợi ý bài viết mẫu'}
                     </button>
-                    <span style={{ fontSize: 11, color: 'var(--muted)' }}>| Mẫu: </span>
-                    {WRITING_PROMPTS.slice(0, 3).map((p, i) => (
-                      <button key={i} onClick={() => { setWritePrompt(p); setWriteFeedback(''); }} style={{ padding: '2px 8px', borderRadius: 6, border: '1px solid var(--border)', fontSize: 10, cursor: 'pointer', color: 'var(--muted)', background: 'transparent' }}>#{i + 1}</button>
-                    ))}
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                      {READ_LEVELS.map(l => (
+                        <button key={l.id} onClick={() => setWriteLevel(l.id)} style={{ padding: '4px 10px', borderRadius: 8, border: '1px solid', fontSize: 11, fontWeight: 600, cursor: 'pointer', borderColor: writeLevel === l.id ? 'var(--accent)' : 'var(--border)', background: writeLevel === l.id ? '#58a6ff22' : 'transparent', color: writeLevel === l.id ? 'var(--accent)' : 'var(--muted)' }}>{l.label}</button>
+                      ))}
+                    </div>
                   </div>
                   {writeTopicError && <div style={{ fontSize: 11, color: '#f85149', marginTop: 8 }}>{writeTopicError}</div>}
                 </div>
