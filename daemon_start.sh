@@ -82,4 +82,19 @@ echo ""
 # Chạy foreground (Standalone mode siêu nhẹ)
 export PORT=8006
 export HOSTNAME="0.0.0.0"
-exec "$NODE" .next/standalone/server.js 2>&1
+
+# Nạp biến môi trường từ .env và .env.local
+if [ -f "$DIR/.env" ]; then
+  set -a; source "$DIR/.env"; set +a
+fi
+if [ -f "$DIR/.env.local" ]; then
+  set -a; source "$DIR/.env.local"; set +a
+fi
+
+# Đảm bảo các file tĩnh và prisma có mặt trong standalone folder
+mkdir -p "$DIR/.next/standalone/.next/static"
+cp -r "$DIR/public" "$DIR/.next/standalone/" 2>/dev/null || true
+cp -r "$DIR/.next/static" "$DIR/.next/standalone/.next/" 2>/dev/null || true
+cp -r "$DIR/prisma" "$DIR/.next/standalone/" 2>/dev/null || true
+
+exec "$NODE" "$DIR/.next/standalone/server.js" 2>&1

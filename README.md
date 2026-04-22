@@ -1,6 +1,6 @@
 # NewHat — 60 Ngày Thay Đổi
 
-Ứng dụng học Full-Stack & Tiếng Anh trong 60 ngày với AI hỗ trợ.
+Ứng dụng học Full-Stack & Tiếng Anh trong 60 ngày với AI hỗ trợ, tối ưu hóa cho Mac Mini M4.
 
 ## 🎯 Tính năng chính
 
@@ -14,118 +14,77 @@
 - **Giải thích code**: Paste code, AI giải thích chi tiết + ví dụ tương tự
 - **Tạo code mẫu**: Mô tả yêu cầu, AI tạo code hoàn chỉnh
 - **Lưu lịch sử**: Tất cả giải thích/code mẫu được lưu vào PostgreSQL
-- **Copy button**: Nhanh chóng copy code từ kết quả
 
 ### 🇬🇧 Tiếng Anh (English)
-- **Luyện nói (Speaking)**: 
-  - Tạo chủ đề ngẫu nhiên
-  - Ghi âm & nhận diện giọng nói (Whisper)
-  - Nhận feedback từ AI
-- **Luyện viết (Writing)**:
-  - Tạo bài viết
-  - Nộp bài & nhận feedback
-- **Tra từ (Dictionary)**:
-  - Hỏi AI giải thích từ vựng
-  - Lưu lịch sử tra cứu
-- **Chế độ học**: Filter theo coder/communication/business/IELTS
+- **Luyện nói (Speaking)**: Ghi âm & nhận diện giọng nói (Whisper), nhận feedback từ AI
+- **Luyện viết (Writing)**: Tạo bài viết & nhận feedback
 - **TTS**: Nghe phát âm với giọng đọc (LuxTTS)
-
-### 👤 Quản lý Tài khoản (Admin)
-- Duyệt/từ chối đăng ký
-- Thay đổi quyền (user/admin)
-- **Sửa tài khoản**: Thay đổi tên, email, mật khẩu
-- Xóa người dùng
 
 ## 🚀 Cổng Dịch Vụ
 
 | Cổng | Dịch vụ | Mô tả |
 |------|---------|-------|
-| **8006** | Next.js App | Web chính — `http://localhost:8006` |
-| **8880** | LuxTTS + Whisper | TTS (giọng đọc) + STT (nhận dạng giọng nói) |
-| **5432** | PostgreSQL | Database — `newhat@localhost` |
-| **8080** | AI Server (remote) | LLM tại `192.168.1.9:8080` |
-| **9000** | Whisper Server | STT riêng biệt (Whisper medium) |
+| **8006** | Next.js App | Web chính (Standalone Mode) |
+| **8880** | LuxTTS + Whisper | TTS + STT Service |
+| **5432** | PostgreSQL | Database |
+| **8080** | AI Server | LLM (Remote) |
 
-## ⚡ Khởi động
+## ⚡ Khởi động (Dành cho Mac Mini M4)
 
+Project hiện tại được đặt tại: `/Users/nguyenhat/NewHat`
+
+### 1. Khởi động thủ công
+Dùng cho phát triển hoặc kiểm tra:
 ```bash
+cd /Users/nguyenhat/NewHat
 ./start.sh
 ```
 
-Script tự động:
-1. Khởi động PostgreSQL
-2. Khởi động LuxTTS + Whisper (port 8880)
-3. Kiểm tra AI Server (192.168.1.9:8080)
-4. Khởi động Next.js (port 8006)
-
-## 🔧 Audio Server (LuxTTS/)
-
-```
-LuxTTS/
-├── server.py       # FastAPI server: TTS + Whisper STT
-├── voices/         # File giọng mẫu .wav
-└── requirements.txt
-```
-
-**Endpoints:**
-- `POST /v1/audio/speech` — Text-to-Speech
-- `POST /v1/audio/transcriptions` — Speech-to-Text (Whisper medium)
-- `GET /health` — Kiểm tra trạng thái
-
-**Cài dependencies:**
+### 2. Tự động khởi động cùng hệ thống (LaunchAgent)
+Dùng để chạy 24/7 như một server:
 ```bash
-cd LuxTTS && pip install -e . && pip install faster-whisper librosa soundfile
+# Đăng ký Agent (Chỉ làm 1 lần)
+cp /Users/nguyenhat/NewHat/io.vn.hatai.newhat.plist ~/Library/LaunchAgents/
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/io.vn.hatai.newhat.plist
 ```
 
-## 🗄️ Database Schema
+## 🧠 Tối ưu hóa Bộ nhớ (RAM)
 
-**Bảng chính:**
-- `User` — Người dùng (name, email, password, role, status)
-- `Lesson` — Bài học lập trình
-- `EnglishLesson` — Bài học tiếng Anh (speaking, writing, vocabulary)
-- `CodeSession` — Lịch sử giải thích/tạo code
-- `DayLog` — Nhật ký học tập hàng ngày
-- `AIReport` — Báo cáo AI
-- `PomodoroSession` — Phiên Pomodoro
-- `RoadmapItem` — Mục tiêu học tập
+Hệ thống đã được cấu hình chạy ở chế độ **Standalone Mode** siêu nhẹ (~1.4GB RAM tổng):
+- **Node.js**: Giới hạn Heap 2GB (`--max-old-space-size=2048`).
+- **System**: Giới hạn bộ nhớ ảo 8GB (`ulimit`).
+- **Build**: Sử dụng `.next/standalone` để giảm tải `node_modules`.
 
-## 📱 Tối ưu Mobile
-
-- Responsive design cho iPhone/tablet
-- Status bar safe-area padding (iOS)
-- Icon-only buttons trên mobile
-- Tab wrapping thay vì scroll
-- Timeout AI: 5 phút
-- Copy button trên code blocks
-
-## 🔑 Biến môi trường (.env.local)
-
+### Cập nhật bản Build mới:
+Mỗi khi sửa code, bạn cần build lại để bản Standalone được cập nhật:
+```bash
+npm run build
+# Sau đó chạy ./start.sh hoặc restart Agent
 ```
-DATABASE_URL=postgresql://user:password@localhost:5432/dbname
+
+## 🔧 Cài đặt & Cấu hình
+
+### Biến môi trường (.env.local)
+```
+DATABASE_URL=postgresql://newhat_user:newhat123@localhost:5432/newhat
+JWT_SECRET=6f5be3de25c9a040b79b5218d8be5bf1...
 AI_SERVER=http://192.168.1.9:8080
 LUXTTS_SERVER=http://localhost:8880
-JWT_SECRET=your-secret-key
-WHISPER_MODEL=medium
 ```
 
+### Database
+Khởi tạo cấu trúc bảng:
+```bash
+npx prisma db push
+```
 
-
-## 📖 Routes chính
-
-| Route | Chức năng |
-|-------|----------|
-| `/` | Dashboard chính |
-| `/learn` | Bài học lập trình + giải thích code |
-| `/english` | Luyện tiếng Anh (speaking/writing/vocabulary) |
-| `/admin` | Quản lý người dùng |
-| `/profile` | Hồ sơ cá nhân |
-| `/roadmap` | Bản đồ kỹ năng |
-| `/timer` | Pomodoro timer |
-
-## 🎨 Ngôn ngữ được hỗ trợ
-
-HTML/CSS, JavaScript, TypeScript, React, Next.js, Node.js, Python, FastAPI, Java, Kotlin, C#/.NET, C++, Go, Rust, PHP, Ruby, Swift, Dart/Flutter, SQL/PostgreSQL, Git, REST API, Docker, Linux/Bash, Excel VBA, Power BI
+## 📈 Quản lý Quy trình (PM2 - Khuyên dùng)
+Để quản lý app chuyên nghiệp và tự động restart khi lỗi:
+```bash
+npm install -g pm2
+pm2 start .next/standalone/server.js --name "newhat-app" --max-memory-restart 2G --env PORT=8006
+pm2 save
+```
 
 ## 📄 License
-
 Hạt

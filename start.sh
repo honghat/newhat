@@ -94,7 +94,22 @@ echo ""
 # Chạy app trong background (Standalone mode siêu nhẹ)
 export PORT=8006
 export HOSTNAME="0.0.0.0"
-nohup node .next/standalone/server.js > /tmp/newhat_app.log 2>&1 &
+
+# Nạp biến môi trường từ .env và .env.local
+if [ -f "$DIR/.env" ]; then
+  set -a; source "$DIR/.env"; set +a
+fi
+if [ -f "$DIR/.env.local" ]; then
+  set -a; source "$DIR/.env.local"; set +a
+fi
+
+# Đảm bảo các file cần thiết có trong standalone folder
+mkdir -p "$DIR/.next/standalone/.next/static"
+cp -r "$DIR/public" "$DIR/.next/standalone/" 2>/dev/null || true
+cp -r "$DIR/.next/static" "$DIR/.next/standalone/.next/" 2>/dev/null || true
+cp -r "$DIR/prisma" "$DIR/.next/standalone/" 2>/dev/null || true
+
+nohup node "$DIR/.next/standalone/server.js" > /tmp/newhat_app.log 2>&1 &
 
 echo -n "  Đang kiểm tra kết nối... "
 for i in {1..30}; do
