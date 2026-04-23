@@ -389,7 +389,7 @@ ${codeInput}` }] }),
   const readContent = async () => {
     if (!current) return;
 
-    // Nếu đang đọc, dừng lại tất cả
+    // Nếu đang đọc, dừng lại
     if (isReading) {
       stopReadingRef.current = true;
       if (abortControllerRef.current) abortControllerRef.current.abort();
@@ -403,101 +403,92 @@ ${codeInput}` }] }),
 
     setIsReading(true);
     stopReadingRef.current = false;
-    const currentReadingId = ++readingIdRef.current;
+    const sessionId = ++readingIdRef.current;
 
-    // 1. Chuẩn bị text: Giữ lại code blocks nhưng format lại để dễ đọc
+    // 1. Chuẩn bị text
     const contentWithoutQuiz = current.content.replace(/## 🧠 Quiz[\s\S]*/, '');
-    let processedText = contentWithoutQuiz
-      .replace(/```(\w*)\n([\s\S]*?)```/g, (match, lang, code) => {
-        return ` . Đoạn code ${lang || ''} như sau: . ${code} . Hết đoạn code . `;
-      })
-      .replace(/#{1,6}\s/g, ' . ')       // Markdown headers
-      .replace(/[`*_\-]/g, ' ')         // Markdown characters
-      .replace(/([\u2700-\u27BF]|[\uE000-\uF8FF]|\uD83C[\uDC00-\uDFFF]|\uD83D[\uDC00-\uDFFF]|[\u2011-\u26FF]|\uD83E[\uDD10-\uDDFF])/g, '') // Emojis
+    const processedText = contentWithoutQuiz
+      .replace(/```(\w*)\n([\s\S]*?)```/g, (_, lang) => ` . Đoạn code ${lang || ''} . `)
+      .replace(/#{1,6}\s/g, ' . ')
+      .replace(/[`*_\-]/g, ' ')
+      .replace(/([\u2700-\u27BF]|[\uE000-\uF8FF]|\uD83C[\uDC00-\uDFFF]|\uD83D[\uDC00-\uDFFF]|[\u2011-\u26FF]|\uD83E[\uDD10-\uDDFF])/g, '')
       .replace(/\s+/g, ' ')
       .trim();
 
-    // 2. Chia nhỏ text thành các đoạn khoảng 300 ký tự (để nói nhanh hơn, không phải chờ lâu)
+    if (!processedText) { setIsReading(false); return; }
+
+    // 2. Chia text thành chunks ~500 ký tự (đủ lớn để nghe mượt, đủ nhỏ để phản hồi nhanh)
     const chunks: string[] = [];
-    const sentences = processedText.match(/[^,.!?]+[,.!?]+/g) || [processedText];
-    let currentChunk = "";
-    
+    const sentences = processedText.split(/(?<=[.!?])\s+/);
+    let buf = '';
     for (const s of sentences) {
-      if ((currentChunk + s).length > 300) {
-        if (currentChunk) chunks.push(currentChunk.trim());
-        currentChunk = s;
+      if (!s.trim()) continue;
+      if (buf.length + s.length > 500 && buf) {
+        chunks.push(buf.trim());
+        buf = s;
       } else {
-        currentChunk += s;
+        buf += (buf ? ' ' : '') + s;
       }
     }
-    if (currentChunk) chunks.push(currentChunk.trim());
+    if (buf.trim()) chunks.push(buf.trim());
+    if (!chunks.length) { setIsReading(false); return; }
 
-    // 3. Hàm đọc từng đoạn
-    const playChunk = async (index: number) => {
-      if (index >= chunks.length || stopReadingRef.current || currentReadingId !== readingIdRef.current) {
-        if (currentReadingId === readingIdRef.current) setIsReading(false);
-        return;
-      }
-
+    // 3. Hàm fetch audio từ persistent server
+    const fetchAudio = async (text: string): Promise<string | null> => {
       try {
-        if (ttsProvider === 'browser') {
-          const utterance = new SpeechSynthesisUtterance(chunks[index]);
-          utterance.lang = 'vi-VN';
-          utterance.onend = () => playChunk(index + 1);
-          window.speechSynthesis.speak(utterance);
-          return;
-        }
-
         const controller = new AbortController();
         abortControllerRef.current = controller;
-
         const res = await fetch('/api/tts', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ 
-            text: chunks[index], 
-            speed: 1.0, 
+          body: JSON.stringify({
+            text,
+            speed: 1.0,
             voice: (ttsProvider === 'edge' || ttsProvider === 'luxtts') ? edgeVoice : 'default',
             lang: ttsProvider === 'luxtts' ? 'en' : 'vi',
-            server: ttsProvider === 'google' ? 'google' : ttsProvider === 'edge' ? 'edge' : ttsProvider === 'piper' ? 'piper' : undefined
+            server: ttsProvider === 'edge' ? 'edge' : ttsProvider === 'piper' ? 'piper' : undefined
           }),
           signal: controller.signal
         });
-
-        if (!res.ok) throw new Error('TTS failed');
-        
+        if (!res.ok) return null;
         const blob = await res.blob();
-        const url = URL.createObjectURL(blob);
-        const audio = new Audio(url);
-        audioRef.current = audio;
-
-        audio.onended = () => {
-          URL.revokeObjectURL(url);
-          if (!stopReadingRef.current && currentReadingId === readingIdRef.current) playChunk(index + 1);
-        };
-
-        audio.onerror = () => {
-          URL.revokeObjectURL(url);
-          setIsReading(false);
-        };
-
-        await audio.play();
-      } catch (err) {
-        if (err instanceof Error && err.name === 'AbortError') return;
-        console.error("TTS Chunk Error:", err);
-        // Fallback sang trình duyệt nếu lỗi API
-        if (!stopReadingRef.current && currentReadingId === readingIdRef.current) {
-          const utterance = new SpeechSynthesisUtterance(chunks[index]);
-          utterance.lang = 'vi-VN';
-          utterance.onend = () => {
-            if (currentReadingId === readingIdRef.current) playChunk(index + 1);
-          };
-          window.speechSynthesis.speak(utterance);
-        }
+        return URL.createObjectURL(blob);
+      } catch {
+        return null;
       }
     };
 
-    playChunk(0);
+    // 4. Pre-buffer playback: fetch đoạn tiếp theo trong lúc đoạn hiện tại đang phát
+    let nextUrl: Promise<string | null> | null = null;
+
+    for (let i = 0; i < chunks.length; i++) {
+      if (stopReadingRef.current || sessionId !== readingIdRef.current) break;
+
+      // Lấy URL audio: từ pre-buffer (nếu có) hoặc fetch mới
+      const url = (i === 0) ? await fetchAudio(chunks[0]) : await nextUrl;
+      if (!url) { console.error(`TTS chunk ${i} failed`); break; }
+
+      // Pre-fetch đoạn tiếp theo ngay lập tức (trong lúc đoạn hiện tại phát)
+      if (i + 1 < chunks.length) {
+        nextUrl = fetchAudio(chunks[i + 1]);
+      }
+
+      // Phát đoạn hiện tại
+      if (stopReadingRef.current || sessionId !== readingIdRef.current) {
+        URL.revokeObjectURL(url);
+        break;
+      }
+
+      await new Promise<void>((resolve) => {
+        const audio = new Audio(url);
+        audioRef.current = audio;
+        audio.onended = () => { URL.revokeObjectURL(url); resolve(); };
+        audio.onerror = () => { URL.revokeObjectURL(url); resolve(); };
+        audio.play().catch(() => resolve());
+      });
+    }
+
+    if (sessionId === readingIdRef.current) setIsReading(false);
   }
 
   const score = quizSubmitted ? userAnswers.filter((a, i) => a === quizAnswers[i]).length : 0;

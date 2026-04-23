@@ -23,7 +23,7 @@ export async function speakText(text: string, speed = 1.0, voice = 'en_female', 
   unlockAudio();
   // Thử API trước
   const ctrl = new AbortController();
-  const to = setTimeout(() => ctrl.abort(), 60000);
+  const to = setTimeout(() => ctrl.abort(), 180000);
   try {
     const res = await fetch('/api/tts', {
       method: 'POST',

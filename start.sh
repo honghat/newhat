@@ -10,10 +10,14 @@ else
   PYTHON="python3"
 fi
 
-# Kiểm tra và cài edge-tts nếu chưa có
+# Kiểm tra và cài edge-tts + aiohttp nếu chưa có
 if ! $PYTHON -c "import edge_tts" 2>/dev/null; then
   echo -e "  ${YELLOW}→ Cài edge-tts cho giọng Hoài My / Nam Minh...${NC}"
   $PYTHON -m pip install edge-tts -q 2>/dev/null || true
+fi
+if ! $PYTHON -c "import aiohttp" 2>/dev/null; then
+  echo -e "  ${YELLOW}→ Cài aiohttp cho Edge TTS Server...${NC}"
+  $PYTHON -m pip install aiohttp -q 2>/dev/null || true
 fi
 
 # ============ CẤU HÌNH TỐI ƯU ============
@@ -83,23 +87,39 @@ else
   echo -e "${YELLOW}– không tìm thấy whisper_server.py${NC}"
 fi
 
-# 5. AI Server
-printf "  ${BLUE}[5/6]${NC} AI Server 192.168.1.9:8080... "
+# 5. Edge TTS Server (Persistent — siêu nhanh)
+printf "  ${BLUE}[5/7]${NC} Edge TTS (5002) [Persistent]... "
+if curl -s --max-time 1 http://127.0.0.1:5002/health > /dev/null 2>&1; then
+  echo -e "${GREEN}✓ đang chạy (port 5002)${NC}"
+else
+  lsof -ti:5002 | xargs kill -9 2>/dev/null || true
+  nohup $PYTHON "$DIR/edge_tts_server.py" > /tmp/edge_tts_server.log 2>&1 &
+  sleep 2
+  if curl -s --max-time 2 http://127.0.0.1:5002/health > /dev/null 2>&1; then
+    echo -e "${GREEN}✓ đã khởi động (port 5002)${NC}"
+  else
+    echo -e "${YELLOW}– lỗi (xem /tmp/edge_tts_server.log)${NC}"
+  fi
+fi
+
+# 6. AI Server
+printf "  ${BLUE}[6/7]${NC} AI Server 192.168.1.9:8080... "
 curl -s --max-time 2 http://192.168.1.9:8080/health > /dev/null 2>&1 \
   && echo -e "${GREEN}✓ online${NC}" || echo -e "${YELLOW}– offline${NC}"
 
-# 6. Next.js
-echo -e "  ${BLUE}[6/6]${NC} Khởi động NewHat App..."
+# 7. Next.js
+echo -e "  ${BLUE}[7/7]${NC} Khởi động NewHat App..."
 lsof -ti:8006 | xargs kill -9 2>/dev/null || true; sleep 1
 
 echo ""
-  echo -e "  ${GREEN}┌─────────────────────────────────────────┐${NC}"
-  echo -e "  ${GREEN}│  🚀  http://localhost:8006              │${NC}"
+  echo -e "  ${GREEN}┌──────────────────────────────────────────┐${NC}"
+  echo -e "  ${GREEN}│  🚀  http://localhost:8006               │${NC}"
+  echo -e "  ${GREEN}│  ⚡  EdgeTTS: http://localhost:5002 (Fast)│${NC}"
   echo -e "  ${GREEN}│  🔊  LuxTTS:  http://localhost:8880 (Lazy)│${NC}"
   echo -e "  ${GREEN}│  🎙️   VN TTS:  http://localhost:5001 (Hybr)│${NC}"
   echo -e "  ${GREEN}│  🎤  Whisper: http://localhost:9000 (Hybr)│${NC}"
-  echo -e "  ${GREEN}│  🗄️   PostgreSQL: newhat@localhost:5432  │${NC}"
-  echo -e "  ${GREEN}└─────────────────────────────────────────┘${NC}"
+  echo -e "  ${GREEN}│  🗄️   PostgreSQL: newhat@localhost:5432   │${NC}"
+  echo -e "  ${GREEN}└──────────────────────────────────────────┘${NC}"
 echo ""
 
 # Chạy app trong background (Standalone mode siêu nhẹ)

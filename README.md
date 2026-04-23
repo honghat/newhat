@@ -97,12 +97,17 @@ PIPER_SERVER=http://localhost:5001
 
 #### Edge TTS (Microsoft Neural — Hoài My / Nam Minh)
 - **Không cần server riêng** — kết nối trực tiếp qua API Microsoft
-- Chạy qua script Python: `edge_tts_helper.py`
+- **Persistent Server** (khuyên dùng): `edge_tts_server.py` chạy trên **port 5002**
+  - Python + edge_tts được load sẵn trong RAM → phản hồi cực nhanh (~0.3s)
+  - Tự khởi động cùng `start.sh`
+  - Log: `/tmp/edge_tts_server.log`
+  - Kiểm tra: `curl http://127.0.0.1:5002/health`
+- **Fallback**: `edge_tts_helper.py` (spawn Python mỗi lần, chậm hơn ~2s)
 - **Python yêu cầu**: `/Users/nguyenhat/miniconda3/bin/python3` (base conda env)
   > ⚠️ **Lưu ý quan trọng**: Dùng **miniconda base env** (`miniconda3/bin/python3`), **KHÔNG** dùng `hatai_env` vì Python 3.10 trong `hatai_env` bị macOS SIGKILL (exit 137) khi chạy asyncio.
 - Cài đặt thư viện:
   ```bash
-  pip install edge-tts  # hoặc: pip install -r requirements.txt
+  pip install edge-tts aiohttp
   ```
 - Voices hỗ trợ:
   - `vi-VN-HoaiMyNeural` — Giọng nữ (Hoài My)
