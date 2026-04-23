@@ -190,7 +190,21 @@ export function TimerProvider({ children }: { children: ReactNode }) {
 
             beep('work');
             fetchLatest().then(data => {
-              const nextCount = (data?.sessions || todaySessions) + 1;
+              // KHÓA BẢO VỆ: Nếu server đã báo hết giờ (endTime=0) hoặc số phiên trên server 
+              // đã lớn hơn local, nghĩa là có thiết bị khác đã ghi nhận rồi.
+              const serverSessions = data?.sessions ?? todaySessions;
+              const serverEndTime = Number(data?.currentEndTime ?? 0);
+              
+              if (serverSessions > todaySessions || serverEndTime === 0) {
+                setTodaySessions(serverSessions);
+                setIsWork(false);
+                setRunning(false);
+                setSession(p => p + 1);
+                isCompletingWork.current = false;
+                return;
+              }
+
+              const nextCount = serverSessions + 1;
               setTodaySessions(nextCount);
               saveState(false, false, nextCount);
               fetch('/api/logs', {

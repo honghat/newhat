@@ -236,6 +236,16 @@ const LISTEN_SCENARIOS = {
     'someone describing a memorable event',
     'a conversation about cultural differences',
     'someone discussing health and fitness'
+  ],
+  finance: [
+    'a banker explaining mortgage options',
+    'an investor discussing stock market trends',
+    'a financial advisor talking about retirement planning',
+    'a conversation about company earnings reports',
+    'someone explaining how blockchain affects banking',
+    'a discussion about inflation and interest rates',
+    'a meeting about personal budgeting and saving',
+    'an analyst describing cryptocurrency fluctuations'
   ]
 };
 
@@ -244,7 +254,7 @@ interface EngLesson { id: number; type: string; content: string; metadata: strin
 const READ_LEVELS = [{ id: 'A2', label: 'A2' }, { id: 'B1', label: 'B1' }, { id: 'B2', label: 'B2' }];
 const READ_TOPICS = ['Web Development', 'Career & Jobs', 'Technology', 'Daily Life', 'Science', 'Business'];
 
-const VOCAB_TOPICS = ['programming', 'web development', 'databases', 'networking', 'AI & ML', 'DevOps', 'career & jobs', 'daily life'];
+const VOCAB_TOPICS = ['programming', 'web development', 'databases', 'networking', 'AI & ML', 'DevOps', 'career & jobs', 'daily life', 'finance', 'investing'];
 
 const TABS = [
   { id: 'listen', l: '🎧 Nghe' },
@@ -258,6 +268,7 @@ const MODES = [
   { id: 'coder', label: '💻 Coder', desc: 'developer, tech, programming' },
   { id: 'communication', label: '💬 Giao tiếp', desc: 'daily life, travel, work, relationships' },
   { id: 'business', label: '💼 Công việc', desc: 'business meetings, emails, interviews' },
+  { id: 'finance', label: '💰 Tài chính', desc: 'finance, banking, stock market, investment' },
   { id: 'ielts', label: '🎓 IELTS', desc: 'academic IELTS-style topics' },
 ] as const;
 
