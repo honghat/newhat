@@ -32,18 +32,15 @@ def get_tts():
     if lux is None:
         from zipvoice.luxvoice import LuxTTS
         device = "mps" if sys.platform == "darwin" else "cpu"
-        print(f"Loading LuxTTS on {device}...")
+        print(f"⏳ Loading LuxTTS on {device} (Lazy Load)...")
         lux = LuxTTS("YatharthS/LuxTTS", device=device)
-        print("LuxTTS ready!")
-        # Load preset voices
-        for f in VOICE_DIR.glob("*.wav"):
-            encode_voice(f.stem, str(f))
+        print("✅ LuxTTS ready!")
     return lux
 
 def encode_voice(name: str, path: str):
     model = get_tts()
     if name not in encoded_voices:
-        print(f"Encoding voice: {name}")
+        print(f"⏳ Encoding voice: {name}")
         encoded_voices[name] = model.encode_prompt(path, rms=0.01)
     return encoded_voices[name]
 
@@ -54,7 +51,6 @@ class TTSRequest(BaseModel):
 
 @app.get("/health")
 def health():
-    # Không load model ở đây — lazy load khi có request thực sự
     return {"status": "ok", "voices": list(encoded_voices.keys()), "loaded": lux is not None, "whisper": whisper_model is not None}
 
 @app.post("/v1/audio/transcriptions")
@@ -78,20 +74,25 @@ async def transcribe(file: UploadFile = File(...)):
 async def tts(req: TTSRequest):
     try:
         model = get_tts()
-        # Dùng voice preset hoặc default
         voice_files = list(VOICE_DIR.glob("*.wav"))
-        if not voice_files:
-            raise HTTPException(status_code=400, detail="Chưa có file giọng mẫu trong thư mục voices/. Thêm file .wav vào đó.")
         
-        voice_name = req.voice if req.voice in encoded_voices else voice_files[0].stem
-        prompt = encode_voice(voice_name, str(VOICE_DIR / f"{voice_name}.wav"))
+        voice_name = req.voice
+        voice_path = VOICE_DIR / f"{voice_name}.wav"
+        
+        if not voice_path.exists():
+            if voice_files:
+                voice_name = voice_files[0].stem
+                voice_path = VOICE_DIR / f"{voice_name}.wav"
+            else:
+                raise HTTPException(status_code=400, detail="Chưa có file giọng mẫu trong thư mục voices/")
+        
+        prompt = encode_voice(voice_name, str(voice_path))
         
         import soundfile as sf
         import numpy as np
         wav = model.generate_speech(req.text, prompt, num_steps=4)
         wav = wav.numpy().squeeze()
         
-        # Speed adjustment
         if req.speed != 1.0:
             import librosa
             wav = librosa.effects.time_stretch(wav, rate=req.speed)
@@ -106,7 +107,6 @@ async def tts(req: TTSRequest):
 
 @app.post("/voices/upload")
 async def upload_voice(name: str):
-    """Upload giọng mẫu qua đường dẫn file"""
     return {"message": f"Đặt file WAV vào {VOICE_DIR}/{name}.wav rồi gọi /voices/reload"}
 
 @app.post("/voices/reload")
@@ -117,11 +117,4 @@ def reload_voices():
     return {"voices": list(encoded_voices.keys())}
 
 if __name__ == "__main__":
-    print("=" * 50)
-    print("LuxTTS + Whisper STT Server")
-    print(f"Voices: {VOICE_DIR}/")
-    print("TTS : POST /v1/audio/speech")
-    print("STT : POST /v1/audio/transcriptions")
-    print("Port: 8880")
-    print("=" * 50)
     uvicorn.run(app, host="0.0.0.0", port=8880, log_level="warning")

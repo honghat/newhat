@@ -15,21 +15,20 @@
 - **Tạo code mẫu**: Mô tả yêu cầu, AI tạo code hoàn chỉnh
 - **Lưu lịch sử**: Tất cả giải thích/code mẫu được lưu vào PostgreSQL
 
-### 🇬🇧 Tiếng Anh (English)
-- **Luyện nói (Speaking)**: Ghi âm & nhận diện giọng nói (Whisper), nhận feedback từ AI
-- **Luyện viết (Writing)**: Tạo bài viết & nhận feedback
-- **TTS đa ngôn ngữ**: 
-  - Tiếng Anh: LuxTTS (giọng tự nhiên)
-  - Tiếng Việt: Piper TTS (giọng chuẩn)
+### 🇬🇧 Tiếng Anh & Tiếng Việt (Language)
+- **Luyện nói (Speaking)**: Ghi âm & nhận diện giọng nói (Whisper Hybrid: Ưu tiên Groq Cloud, dự phòng Local Whisper.cpp).
+- **TTS đa ngôn ngữ (Lazy Load)**:
+  - Tiếng Anh: **LuxTTS** (Lazy Load — chỉ chạy khi cần).
+  - Tiếng Việt: **Edge TTS** (Mặc định - Siêu nhẹ) hoặc **Piper TTS** (Dự phòng Local - Lazy Load).
 
 ## 🚀 Cổng Dịch Vụ
 
 | Cổng | Dịch vụ | Mô tả |
 |------|---------|-------|
 | **8006** | Next.js App | Web chính (Standalone Mode) |
-| **8880** | LuxTTS | TTS tiếng Anh |
-| **5001** | Piper TTS | TTS tiếng Việt |
-| **9000** | Whisper | STT (Speech-to-Text) |
+| **8880** | LuxTTS | TTS Tiếng Anh (**Lazy Load**) |
+| **5001** | TTS Tiếng Việt | Hybrid: **Edge-TTS** + Piper Fallback |
+| **9000** | Whisper Proxy | STT (**Hybrid**: Groq / Local Whisper.cpp) |
 | **5432** | PostgreSQL | Database |
 | **8080** | AI Server | LLM (Remote) |
 
@@ -52,12 +51,17 @@ cp /Users/nguyenhat/NewHat/io.vn.hatai.newhat.plist ~/Library/LaunchAgents/
 launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/io.vn.hatai.newhat.plist
 ```
 
-## 🧠 Tối ưu hóa Bộ nhớ (RAM)
+Hệ thống đã được cấu hình chạy ở chế độ **Siêu tối ưu RAM** (~500MB RAM khi chờ):
+- **Hybrid STT (Port 9000)**: Ưu tiên dùng Groq Cloud (0 MB RAM). Chỉ tự động bật Local Whisper.cpp (dùng Metal GPU) khi Groq lỗi.
+- **Lazy Load TTS (Port 8880 & 5001)**: Các model AI nặng (LuxTTS, Piper) chỉ được nạp vào RAM khi bạn thực sự nhấn nút nghe.
+- **Spotlight Exclude**: Đã chặn macOS đánh chỉ mục thư mục dự án để giảm tải `mds_stores`.
+- **Node.js**: Giới hạn Heap 2GB và dùng bản Standalone siêu gọn.
 
-Hệ thống đã được cấu hình chạy ở chế độ **Standalone Mode** siêu nhẹ (~1.4GB RAM tổng):
-- **Node.js**: Giới hạn Heap 2GB (`--max-old-space-size=2048`).
-- **System**: Giới hạn bộ nhớ ảo 8GB (`ulimit`).
-- **Build**: Sử dụng `.next/standalone` để giảm tải `node_modules`.
+#### Cấu hình Groq Cloud (Khuyên dùng):
+Để đạt tốc độ STT nhanh nhất và RAM nhẹ nhất, thêm vào file `.env`:
+```bash
+GROQ_API_KEY=gsk_your_api_key_here
+```
 
 ### Cập nhật bản Build mới:
 Mỗi khi sửa code, bạn cần build lại để bản Standalone được cập nhật:
@@ -90,6 +94,19 @@ PIPER_SERVER=http://localhost:5001
 - Voice models: `/Users/nguyenhat/NewHat/piper_voices/`
 
 Để thêm voice mới, xem: `piper_voices/README.md`
+
+#### Edge TTS (Microsoft Neural — Hoài My / Nam Minh)
+- **Không cần server riêng** — kết nối trực tiếp qua API Microsoft
+- Chạy qua script Python: `edge_tts_helper.py`
+- **Python yêu cầu**: `/Users/nguyenhat/miniconda3/bin/python3` (base conda env)
+  > ⚠️ **Lưu ý quan trọng**: Dùng **miniconda base env** (`miniconda3/bin/python3`), **KHÔNG** dùng `hatai_env` vì Python 3.10 trong `hatai_env` bị macOS SIGKILL (exit 137) khi chạy asyncio.
+- Cài đặt thư viện:
+  ```bash
+  pip install edge-tts  # hoặc: pip install -r requirements.txt
+  ```
+- Voices hỗ trợ:
+  - `vi-VN-HoaiMyNeural` — Giọng nữ (Hoài My)
+  - `vi-VN-NamMinhNeural` — Giọng nam (Nam Minh)
 
 ### Database
 Khởi tạo cấu trúc bảng:

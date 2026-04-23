@@ -30,6 +30,13 @@ export default function AdminPage() {
   const [shutdownStatus, setShutdownStatus] = useState('');
   const [shutdownLoading, setShutdownLoading] = useState(false);
   const [shutdownConfirm, setShutdownConfirm] = useState(false);
+  const [luxRunning, setLuxRunning] = useState(false);
+  const [luxLoading, setLuxLoading] = useState(false);
+  const [luxMsg, setLuxMsg] = useState('');
+  const [syncLoading, setSyncLoading] = useState(false);
+  const [targetUserName, setTargetUserName] = useState('');
+  const [toUserLoading, setToUserLoading] = useState(false);
+  const [toUserStatus, setToUserStatus] = useState('');
 
   const load = useCallback(async () => {
     // ... load logic unchanged ...
@@ -56,6 +63,9 @@ export default function AdminPage() {
 
   useEffect(() => {
     load();
+    checkLux();
+    const timer = setInterval(checkLux, 10000);
+    return () => clearInterval(timer);
   }, [load]);
 
   async function saveAISettings(override?: any) {
@@ -100,6 +110,77 @@ export default function AdminPage() {
       setWolStatus(d.ok ? '✅ Đã gửi magic packet!' : '❌ ' + d.error);
     } catch { setWolStatus('❌ Lỗi kết nối'); }
     setTimeout(() => setWolStatus(''), 4000);
+  }
+
+  async function syncEnglish() {
+    if (!confirm('Bạn có muốn đồng bộ dữ liệu Tiếng Anh từ tất cả người dùng sang Admin không? (Chỉ copy những nội dung mới)')) return;
+    setSyncLoading(true);
+    try {
+      const res = await fetch('/api/admin/sync/english', { method: 'POST' });
+      const data = await res.json();
+      if (res.ok) {
+        setSaveStatus(`✅ Đã đồng bộ ${data.count} mục mới!`);
+      } else {
+        setSaveStatus(`❌ Lỗi: ${data.error || 'Không xác định'}`);
+      }
+    } catch (e) {
+      setSaveStatus('❌ Lỗi kết nối đồng bộ');
+    }
+    setSyncLoading(false);
+    setTimeout(() => setSaveStatus(''), 5000);
+  }
+
+  async function syncToUser() {
+    if (!targetUserName) return;
+    if (!confirm(`Bạn có muốn đồng bộ toàn bộ bài học Tiếng Anh của Admin sang cho người dùng "${targetUserName}" không?`)) return;
+    setToUserLoading(true);
+    setToUserStatus('⏳ Đang xử lý...');
+    try {
+      const res = await fetch('/api/admin/sync-english', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ targetName: targetUserName })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setToUserStatus(`✅ ${data.message}`);
+        setTargetUserName('');
+      } else {
+        setToUserStatus(`❌ LỖI: ${data.error}`);
+      }
+    } catch {
+      setToUserStatus('❌ Lỗi kết nối server');
+    }
+    setToUserLoading(false);
+    setTimeout(() => setToUserStatus(''), 5000);
+  }
+
+  async function checkLux() {
+    try {
+      const res = await fetch('/api/admin/luxtts');
+      const d = await res.json();
+      setLuxRunning(d.running);
+    } catch (e) {}
+  }
+
+  async function controlLux(action: 'start' | 'stop') {
+    setLuxLoading(true);
+    setLuxMsg(`⏳ Đang thực hiện ${action === 'start' ? 'Bật' : 'Tắt'}...`);
+    try {
+      const res = await fetch('/api/admin/luxtts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action }),
+      });
+      const d = await res.json();
+      setLuxMsg(d.message || d.error);
+      setTimeout(checkLux, 2000);
+    } catch (e: any) {
+      setLuxMsg('❌ Lỗi: ' + e.message);
+    } finally {
+      setLuxLoading(false);
+      setTimeout(() => setLuxMsg(''), 4000);
+    }
   }
 
   async function shutdownAI() {
@@ -155,6 +236,7 @@ export default function AdminPage() {
     load();
   }
 
+
   if (loading) return <div style={{ display:'flex', alignItems:'center', justifyContent:'center', height:'60vh', color:'var(--muted)' }}>Đang tải...</div>;
 
   const filtered = filter === 'all' ? users : users.filter(u => u.status === filter);
@@ -192,7 +274,16 @@ export default function AdminPage() {
       <div className="card">
         {filtered.length === 0 && <div style={{ color:'var(--muted)', padding:'24px', textAlign:'center' }}>Không có người dùng</div>}
         {filtered.map(u => (
-          <div key={u.id} style={{ padding:'10px 0', borderBottom:'1px solid var(--surface2)' }}>
+          <div key={u.id} 
+            onClick={() => {
+              if (u.role !== 'admin') {
+                // Đã gỡ bỏ logic đồng bộ cũ
+              }
+            }}
+            style={{ padding:'10px 0', borderBottom:'1px solid var(--surface2)', cursor: u.role === 'admin' ? 'default' : 'pointer', transition: 'background 0.2s' }}
+            onMouseEnter={(e) => u.role !== 'admin' && (e.currentTarget.style.background = 'var(--surface2)')}
+            onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+          >
             {/* Row 1: Avatar + Info + Status */}
             <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:4 }}>
               <div style={{ width:38, height:38, borderRadius:99, background: u.role==='admin'?'#58a6ff22':'var(--surface2)', display:'flex', alignItems:'center', justifyContent:'center', fontWeight:900, fontSize:15, color: u.role==='admin'?'var(--accent)':'var(--muted)', flexShrink:0, border:`1px solid ${u.role==='admin'?'var(--accent)':'var(--border)'}` }}>
@@ -252,6 +343,7 @@ export default function AdminPage() {
           </div>
         </div>
       )}
+
 
       {/* AI & SERVER MANAGEMENT SECTION */}
       <div style={{ display:'flex', alignItems:'center', gap:10, marginTop:12, marginBottom:8 }}>
@@ -377,6 +469,87 @@ export default function AdminPage() {
             </button>
           </div>
           {shutdownStatus && <div style={{ fontSize: 10, marginTop: 8, color: shutdownStatus.startsWith('✅') ? '#3fb950' : '#f85149', textAlign: 'center' }}>{shutdownStatus}</div>}
+
+          {/* LuxTTS Resource Control */}
+          <div style={{ marginTop: 24, padding: 16, background: 'var(--surface2)', borderRadius: 12, border: '1px solid var(--border)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <div style={{ fontWeight: 800, fontSize: 13 }}>💎 Quản lý LuxTTS (Dùng RAM)</div>
+              <div style={{ padding: '3px 8px', borderRadius: 20, fontSize: 10, fontWeight: 700, background: luxRunning ? '#3fb95022' : '#f8514922', color: luxRunning ? '#3fb950' : '#f85149', border: `1px solid ${luxRunning ? '#3fb95044' : '#f8514944'}` }}>
+                {luxRunning ? '● ĐANG CHẠY' : '○ ĐANG TẮT'}
+              </div>
+            </div>
+            <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 12, lineHeight: 1.5 }}>
+              Bật LuxTTS sẽ chiếm khoảng 1.3GB RAM. Nên tắt khi không sử dụng để máy mượt hơn.
+            </div>
+            <div style={{ display: 'flex', gap: 10 }}>
+              {!luxRunning ? (
+                <button onClick={() => controlLux('start')} disabled={luxLoading} style={{ flex: 1, padding: '10px', borderRadius: 8, border: 'none', background: 'var(--green)', color: '#000', fontWeight: 800, fontSize: 12, cursor: 'pointer' }}>
+                  {luxLoading ? '⏳...' : '▶ KHỞI ĐỘNG LUXTTS'}
+                </button>
+              ) : (
+                <button onClick={() => controlLux('stop')} disabled={luxLoading} style={{ flex: 1, padding: '10px', borderRadius: 8, border: 'none', background: 'var(--red)', color: '#fff', fontWeight: 800, fontSize: 12, cursor: 'pointer' }}>
+                  {luxLoading ? '⏳...' : '⏹ TẮT LUXTTS (GIẢI PHÓNG RAM)'}
+                </button>
+              )}
+            </div>
+            {luxMsg && <div style={{ fontSize: 11, color: 'var(--accent)', marginTop: 10, textAlign: 'center', fontWeight: 600 }}>{luxMsg}</div>}
+          </div>
+
+          {/* CARD 3: DATA SYNC */}
+          <div className="card" style={{ padding: '16px', marginTop: 24, border: '1px solid var(--accent)33', background: 'var(--accent)05' }}>
+            <div style={{ fontWeight: 800, fontSize: 13, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+              🔄 Đồng bộ dữ liệu (Sync)
+            </div>
+            <p style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 16, lineHeight: 1.5 }}>
+              Chức năng này sẽ quét tất cả bài học Tiếng Anh của người dùng khác và sao chép những nội dung <strong>mới</strong> (chưa có trong thư viện) vào tài khoản của bạn.
+            </p>
+            <button 
+              onClick={syncEnglish} 
+              disabled={syncLoading}
+              style={{ 
+                width: '100%', 
+                padding: '12px', 
+                borderRadius: 12, 
+                border: 'none', 
+                background: 'var(--accent)', 
+                color: '#000', 
+                fontWeight: 900, 
+                fontSize: 13, 
+                cursor: syncLoading ? 'not-allowed' : 'pointer',
+                boxShadow: '0 4px 15px rgba(88,166,255,0.2)',
+                transition: 'all 0.2s'
+              }}
+            >
+              {syncLoading ? '⏳ ĐANG QUÉT & ĐỒNG BỘ...' : '🚀 BẮT ĐẦU ĐỒNG BỘ NGAY'}
+            </button>
+          </div>
+
+          {/* CARD 4: SYNC ADMIN TO USER */}
+          <div className="card" style={{ padding: '16px', marginTop: 24, border: '1px solid var(--green)33', background: 'rgba(63,185,80,0.05)' }}>
+            <div style={{ fontWeight: 800, fontSize: 13, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+              📤 Gửi dữ liệu cho User
+            </div>
+            <p style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 12 }}>
+              Sao chép toàn bộ bài học Tiếng Anh của <strong>Admin</strong> sang cho một người dùng cụ thể.
+            </p>
+            <div style={{ display: 'flex', gap: 10 }}>
+              <input 
+                type="text" 
+                placeholder="Tên người dùng mục tiêu..." 
+                value={targetUserName}
+                onChange={(e) => setTargetUserName(e.target.value)}
+                style={{ flex: 1, padding: '10px 12px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface2)', color: 'var(--text)', outline: 'none', fontSize: 12 }}
+              />
+              <button 
+                onClick={syncToUser} 
+                disabled={toUserLoading || !targetUserName}
+                style={{ padding: '0 20px', borderRadius: 8, border: 'none', background: 'var(--green)', color: '#000', fontWeight: 800, fontSize: 12, cursor: 'pointer' }}
+              >
+                {toUserLoading ? '⏳' : 'GỬI NGAY'}
+              </button>
+            </div>
+            {toUserStatus && <div style={{ fontSize: 11, color: toUserStatus.includes('✅') ? '#3fb950' : '#f85149', marginTop: 10, fontWeight: 600 }}>{toUserStatus}</div>}
+          </div>
 
           {/* Confirm dialog */}
           {shutdownConfirm && (

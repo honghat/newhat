@@ -66,6 +66,8 @@ const TRACK_INFO: Record<string, { desc: string, core: string, use: string }> = 
 };
 
 export default function LearnMain() {
+  const [me, setMe] = useState<{ id: number; name: string; role: string } | null>(null);
+  const isAdmin = me?.role === 'admin';
   const [track, setTrack] = useState('javascript');
   const [lessons, setLessons] = useState<Lesson[]>([]);
   const [current, setCurrent] = useState<Lesson|null>(null);
@@ -87,12 +89,22 @@ export default function LearnMain() {
   const [aiModel, setAiModel] = useState('default');
   const [isMounted, setIsMounted] = useState(false);
   const [isReading, setIsReading] = useState(false);
+  const [ttsProvider, setTtsProvider] = useState<'google' | 'edge' | 'piper' | 'luxtts' | 'browser'>('edge');
+  const [edgeVoice, setEdgeVoice] = useState<string>('vi-VN-HoaiMyNeural');
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const stopReadingRef = useRef(false);
+  const readingIdRef = useRef(0);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     setIsMounted(true);
     const savedModel = localStorage.getItem('eng_model');
     if (savedModel) setAiModel(savedModel);
+    
+    // Check auth
+    fetch('/api/auth').then(r => r.json()).then(d => {
+      if (d.user) setMe(d.user);
+    }).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -374,11 +386,13 @@ ${codeInput}` }] }),
     setLoading(false);
   }
 
-  async function readContent() {
+  const readContent = async () => {
     if (!current) return;
 
-    // Nếu đang đọc, dừng lại
+    // Nếu đang đọc, dừng lại tất cả
     if (isReading) {
+      stopReadingRef.current = true;
+      if (abortControllerRef.current) abortControllerRef.current.abort();
       if (audioRef.current) {
         audioRef.current.pause();
         audioRef.current = null;
@@ -388,29 +402,70 @@ ${codeInput}` }] }),
     }
 
     setIsReading(true);
+    stopReadingRef.current = false;
+    const currentReadingId = ++readingIdRef.current;
 
-    // Lấy nội dung text từ bài học (bỏ markdown và code blocks)
+    // 1. Chuẩn bị text: Giữ lại code blocks nhưng format lại để dễ đọc
     const contentWithoutQuiz = current.content.replace(/## 🧠 Quiz[\s\S]*/, '');
-    const textContent = contentWithoutQuiz
-      .replace(/```[\s\S]*?```/g, '') // Bỏ code blocks
-      .replace(/#{1,6}\s/g, '') // Bỏ markdown headers
-      .replace(/\*\*/g, '') // Bỏ bold
-      .replace(/\*/g, '') // Bỏ italic
-      .replace(/`/g, '') // Bỏ inline code
-      .replace(/\[([^\]]+)\]\([^\)]+\)/g, '$1') // Bỏ links, giữ text
+    let processedText = contentWithoutQuiz
+      .replace(/```(\w*)\n([\s\S]*?)```/g, (match, lang, code) => {
+        return ` . Đoạn code ${lang || ''} như sau: . ${code} . Hết đoạn code . `;
+      })
+      .replace(/#{1,6}\s/g, ' . ')       // Markdown headers
+      .replace(/[`*_\-]/g, ' ')         // Markdown characters
+      .replace(/([\u2700-\u27BF]|[\uE000-\uF8FF]|\uD83C[\uDC00-\uDFFF]|\uD83D[\uDC00-\uDFFF]|[\u2011-\u26FF]|\uD83E[\uDD10-\uDDFF])/g, '') // Emojis
+      .replace(/\s+/g, ' ')
       .trim();
 
-    // Giới hạn độ dài văn bản (max 500 ký tự để tránh timeout)
-    const truncatedText = textContent.length > 500 ? textContent.slice(0, 500) + '...' : textContent;
+    // 2. Chia nhỏ text thành các đoạn khoảng 300 ký tự (để nói nhanh hơn, không phải chờ lâu)
+    const chunks: string[] = [];
+    const sentences = processedText.match(/[^,.!?]+[,.!?]+/g) || [processedText];
+    let currentChunk = "";
+    
+    for (const s of sentences) {
+      if ((currentChunk + s).length > 300) {
+        if (currentChunk) chunks.push(currentChunk.trim());
+        currentChunk = s;
+      } else {
+        currentChunk += s;
+      }
+    }
+    if (currentChunk) chunks.push(currentChunk.trim());
 
-    try {
-      const res = await fetch('/api/tts', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: truncatedText, speed: 1.0, lang: 'vi' }),
-      });
+    // 3. Hàm đọc từng đoạn
+    const playChunk = async (index: number) => {
+      if (index >= chunks.length || stopReadingRef.current || currentReadingId !== readingIdRef.current) {
+        if (currentReadingId === readingIdRef.current) setIsReading(false);
+        return;
+      }
 
-      if (res.ok) {
+      try {
+        if (ttsProvider === 'browser') {
+          const utterance = new SpeechSynthesisUtterance(chunks[index]);
+          utterance.lang = 'vi-VN';
+          utterance.onend = () => playChunk(index + 1);
+          window.speechSynthesis.speak(utterance);
+          return;
+        }
+
+        const controller = new AbortController();
+        abortControllerRef.current = controller;
+
+        const res = await fetch('/api/tts', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            text: chunks[index], 
+            speed: 1.0, 
+            voice: (ttsProvider === 'edge' || ttsProvider === 'luxtts') ? edgeVoice : 'default',
+            lang: ttsProvider === 'luxtts' ? 'en' : 'vi',
+            server: ttsProvider === 'google' ? 'google' : ttsProvider === 'edge' ? 'edge' : ttsProvider === 'piper' ? 'piper' : undefined
+          }),
+          signal: controller.signal
+        });
+
+        if (!res.ok) throw new Error('TTS failed');
+        
         const blob = await res.blob();
         const url = URL.createObjectURL(blob);
         const audio = new Audio(url);
@@ -418,39 +473,31 @@ ${codeInput}` }] }),
 
         audio.onended = () => {
           URL.revokeObjectURL(url);
-          setIsReading(false);
-          audioRef.current = null;
+          if (!stopReadingRef.current && currentReadingId === readingIdRef.current) playChunk(index + 1);
         };
 
         audio.onerror = () => {
           URL.revokeObjectURL(url);
           setIsReading(false);
-          audioRef.current = null;
         };
 
         await audio.play();
-        return;
+      } catch (err) {
+        if (err instanceof Error && err.name === 'AbortError') return;
+        console.error("TTS Chunk Error:", err);
+        // Fallback sang trình duyệt nếu lỗi API
+        if (!stopReadingRef.current && currentReadingId === readingIdRef.current) {
+          const utterance = new SpeechSynthesisUtterance(chunks[index]);
+          utterance.lang = 'vi-VN';
+          utterance.onend = () => {
+            if (currentReadingId === readingIdRef.current) playChunk(index + 1);
+          };
+          window.speechSynthesis.speak(utterance);
+        }
       }
-      // API lỗi (503) → fallback browser TTS
-    } catch (e) {
-      console.warn('TTS API lỗi, dùng browser TTS:', e);
-    }
+    };
 
-    // Fallback: Browser SpeechSynthesis
-    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-      window.speechSynthesis.cancel();
-      const u = new SpeechSynthesisUtterance(truncatedText);
-      u.lang = 'vi-VN';
-      u.rate = 1.0;
-      const voices = window.speechSynthesis.getVoices();
-      const viVoice = voices.find(v => v.lang.startsWith('vi')) || null;
-      u.voice = viVoice;
-      u.onend = () => setIsReading(false);
-      u.onerror = () => setIsReading(false);
-      window.speechSynthesis.speak(u);
-    } else {
-      setIsReading(false);
-    }
+    playChunk(0);
   }
 
   const score = quizSubmitted ? userAnswers.filter((a, i) => a === quizAnswers[i]).length : 0;
@@ -732,32 +779,100 @@ ${codeInput}` }] }),
         <div>
           {current && (
             <div className="card" style={{ marginBottom: 16 }} ref={contentRef}>
-              <div style={{ display:'flex', flexDirection:'column', gap:10, marginBottom:16 }}>
-                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', gap:12 }}>
-                  <div style={{ flex:1 }}>
-                    <div style={{ fontSize:18, fontWeight:900, color:'var(--accent)', lineHeight:1.3 }}>{current.topic}</div>
-                    <div style={{ display:'flex', gap:6, marginTop:8, alignItems:'center' }}>
+              <div style={{ display:'flex', flexDirection:'column', gap:12, marginBottom:16 }}>
+                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', flexWrap: 'wrap', gap:12 }}>
+                  <div style={{ flex:1, minWidth: '100%', sm: { minWidth: 0 } } as any}>
+                    <h2 style={{ fontSize:18, fontWeight:900, color:'var(--accent)', margin:'0 0 4px', lineHeight:1.3 }}>{current.topic}</h2>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                       <span style={{ fontSize:10, padding:'2px 8px', borderRadius:99, background:'var(--surface2)', color:'var(--muted)', fontWeight:600, border:'1px solid var(--border)' }}>
-                        {current.track.toUpperCase()}
+                        {(current.track || track).toUpperCase()}
                       </span>
                       {current.learnCount > 0 && (
                         <span style={{ fontSize:10, padding:'2px 8px', borderRadius:99, background:'#3fb95022', color:'#3fb950', fontWeight:700, border:'1px solid #3fb95044' }}>
                           ✓ Đã học {current.learnCount} lần
                         </span>
                       )}
+                      {/* TTS Provider Selector */}
+                      <select 
+                        value={ttsProvider} 
+                        onChange={(e) => setTtsProvider(e.target.value as any)}
+                        style={{ 
+                          background: 'var(--surface2)', 
+                          border: '1px solid var(--border)', 
+                          borderRadius: 6, 
+                          fontSize: 10, 
+                          color: 'var(--muted)', 
+                          padding: '2px 6px',
+                          cursor: 'pointer',
+                          fontWeight: 600
+                        }}
+                      >
+                        <option value="google">👩‍🏫 Chị Google</option>
+                        <option value="edge">🌐 Edge TTS</option>
+                        <option value="piper">🎙️ Piper</option>
+                        {isAdmin && <option value="luxtts">🔊 LuxTTS (Admin)</option>}
+                        <option value="browser">📱 Thiết bị</option>
+                      </select>
+
+                      {/* Edge Voice Selector */}
+                      {ttsProvider === 'edge' && (
+                        <select 
+                          value={edgeVoice} 
+                          onChange={(e) => setEdgeVoice(e.target.value as any)}
+                          style={{ 
+                            background: 'var(--surface2)', 
+                            border: '1px solid var(--border)', 
+                            borderRadius: 6, 
+                            fontSize: 10, 
+                            color: 'var(--muted)', 
+                            padding: '2px 6px',
+                            cursor: 'pointer',
+                            fontWeight: 600
+                          }}
+                        >
+                          <option value="vi-VN-HoaiMyNeural">👩‍💼 Hoài My (VN)</option>
+                          <option value="vi-VN-NamMinhNeural">👨‍💼 Nam Minh (VN)</option>
+                          <option value="en-US-AvaNeural">👩‍💼 Ava (US)</option>
+                          <option value="en-US-AndrewNeural">👨‍💼 Andrew (US)</option>
+                          <option value="en-US-BrianNeural">👨‍💼 Brian (US)</option>
+                        </select>
+                      )}
+
+                      {/* Lux Voice Selector */}
+                      {ttsProvider === 'luxtts' && (
+                        <select 
+                          value={edgeVoice} 
+                          onChange={(e) => setEdgeVoice(e.target.value as any)}
+                          style={{ 
+                            background: 'var(--surface2)', 
+                            border: '1px solid var(--border)', 
+                            borderRadius: 6, 
+                            fontSize: 10, 
+                            color: 'var(--muted)', 
+                            padding: '2px 6px',
+                            cursor: 'pointer',
+                            fontWeight: 600
+                          }}
+                        >
+                          <option value="en_female">👩‍💼 Carissa (Lux)</option>
+                          <option value="en_male">👨‍💼 Dave (Lux)</option>
+                          <option value="paul">👨‍💼 Paul (Lux)</option>
+                        </select>
+                      )}
                     </div>
                   </div>
-                  <div style={{ display:'flex', gap:6, flexShrink:0 }}>
-                    <button onClick={readContent} style={{ padding:'6px 12px', borderRadius:8, background: isReading ? 'var(--orange)' : 'var(--accent)', color:'#000', border:'none', fontSize:12, fontWeight:700, cursor:'pointer', display:'flex', alignItems:'center', gap:4, boxShadow:'0 2px 8px rgba(0,0,0,0.2)' }}>
+                  <div style={{ display:'flex', gap:6, width: '100%', sm: { width: 'auto' } } as any}>
+                    <button onClick={readContent} style={{ flex: 1, height: 36, borderRadius:8, background: isReading ? 'var(--orange)' : 'var(--surface2)', color: isReading ? '#000' : 'var(--text)', border:'1px solid var(--border)', fontSize:12, fontWeight:700, cursor:'pointer', display:'flex', alignItems:'center', justifyContent: 'center', gap:4 }}>
                       <span>{isReading ? '⏸' : '🔊'}</span> {isReading ? 'Dừng' : 'Đọc'}
                     </button>
-                    <button onClick={() => markComplete(current.id)} style={{ padding:'6px 12px', borderRadius:8, background:'#3fb950', color:'#000', border:'none', fontSize:12, fontWeight:700, cursor:'pointer', display:'flex', alignItems:'center', gap:4, boxShadow:'0 2px 8px rgba(63,185,80,0.3)' }}>
-                      <span>📚</span> {current.learnCount > 0 ? 'Học lại' : 'Đã học'}
+                    <button onClick={() => markComplete(current.id)} style={{ flex: 1.5, height: 36, borderRadius:8, background: current.learnCount > 0 ? '#3fb95022' : '#3fb950', color: current.learnCount > 0 ? '#3fb950' : '#000', border: current.learnCount > 0 ? '1px solid #3fb95044' : 'none', fontSize:12, fontWeight:700, cursor:'pointer', display:'flex', alignItems:'center', justifyContent: 'center', gap:4 }} disabled={current.completed}>
+                      <span>✅</span> {current.learnCount > 0 ? 'Học lại' : 'Đã học'}
                     </button>
                     <button onClick={async () => {
+                        if (!confirm('Xóa bài học này?')) return;
                         await fetch('/api/lessons', { method:'DELETE', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ id: current.id }) });
                         setCurrent(null); setQuizAnswers([]); setUserAnswers([]); await load();
-                    }} style={{ width:32, height:32, borderRadius:8, background:'var(--surface2)', color:'#f85149', border:'1px solid var(--border)', fontSize:14, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center' }} title="Xóa">
+                    }} style={{ width:36, height:36, borderRadius:8, background:'var(--surface2)', color:'#f85149', border:'1px solid var(--border)', fontSize:14, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', flexShrink: 0 }} title="Xóa">
                       🗑
                     </button>
                   </div>

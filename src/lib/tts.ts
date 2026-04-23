@@ -19,16 +19,16 @@ export function unlockAudio() {
 }
 
 // Lux TTS → fallback browser TTS
-export async function speakText(text: string, speed = 1.0, voice = 'en_female', lang = 'en'): Promise<void> {
+export async function speakText(text: string, speed = 1.0, voice = 'en_female', server = 'edge', lang = 'en'): Promise<void> {
   unlockAudio();
-  // Thử LuxTTS trước
+  // Thử API trước
   const ctrl = new AbortController();
   const to = setTimeout(() => ctrl.abort(), 60000);
   try {
     const res = await fetch('/api/tts', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text, speed, voice, lang }),
+      body: JSON.stringify({ text, speed, voice, lang, server }),
       signal: ctrl.signal,
     });
     clearTimeout(to);

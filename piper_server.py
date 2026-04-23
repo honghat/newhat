@@ -1,50 +1,42 @@
 #!/usr/bin/env python3
 """
-Piper TTS HTTP Server
-Hỗ trợ cả tiếng Anh và tiếng Việt
+TTS Server (Edge-TTS + Piper Fallback)
+Ưu tiên Edge-TTS để tiết kiệm RAM. Chỉ dùng Piper khi mất mạng.
 """
-import os
+import os, io, wave, asyncio, edge_tts, traceback
 from flask import Flask, request, send_file, jsonify
-from piper import PiperVoice
-import io
-import wave
 
 app = Flask(__name__)
-
-# Đường dẫn đến voice models
 VOICE_DIR = os.path.join(os.path.dirname(__file__), 'piper_voices')
+voices = {} # Chứa Piper models (Lazy Load)
 
-# Load voices
-voices = {}
-
-def load_voice(name, model_path):
-    """Load a Piper voice model"""
-    try:
-        voice = PiperVoice.load(model_path)
-        voices[name] = voice
-        print(f"✓ Loaded voice: {name}")
-        return True
-    except Exception as e:
-        print(f"✗ Failed to load {name}: {e}")
-        return False
-
-# Load Vietnamese voice
-vi_model = os.path.join(VOICE_DIR, 'vi_VN-vais1000-medium.onnx')
-if os.path.exists(vi_model):
-    load_voice('vi_female', vi_model)
+def load_piper_voice(name):
+    """Load Piper model khi thực sự cần"""
+    if name not in voices:
+        from piper import PiperVoice
+        model_path = os.path.join(VOICE_DIR, 'vi_VN-vais1000-medium.onnx')
+        if os.path.exists(model_path):
+            print(f"⏳ Loading Piper fallback model...")
+            voices[name] = PiperVoice.load(model_path)
+    return voices.get(name)
 
 @app.route('/health', methods=['GET'])
 def health():
-    """Health check endpoint"""
-    return jsonify({
-        'status': 'ok',
-        'voices': list(voices.keys()),
-        'loaded': len(voices) > 0
-    })
+    return jsonify({'status': 'ok', 'primary': 'Edge-TTS', 'local_piper_loaded': len(voices) > 0})
+
+async def get_edge_tts(text, voice, speed):
+    # Map voice name
+    edge_voice = "vi-VN-HoaiMyNeural" if "female" in voice else "vi-VN-NamMinhNeural"
+    rate = f"{int((speed - 1) * 100):+d}%"
+    communicate = edge_tts.Communicate(text, edge_voice, rate=rate)
+    audio_data = b""
+    async for chunk in communicate.stream():
+        if chunk["type"] == "audio":
+            audio_data += chunk["data"]
+    return audio_data
 
 @app.route('/v1/audio/speech', methods=['POST'])
 def synthesize():
-    """Synthesize speech from text"""
     data = request.json
     text = data.get('text', '')
     voice_name = data.get('voice', 'vi_female')
@@ -53,46 +45,42 @@ def synthesize():
     if not text:
         return jsonify({'error': 'No text provided'}), 400
 
-    if voice_name not in voices:
-        return jsonify({'error': f'Voice {voice_name} not found'}), 404
-
+    # --- 1. THỬ DÙNG EDGE-TTS TRƯỚC (FREE RAM) ---
     try:
-        voice = voices[voice_name]
+        print(f"🌐 Đang gọi Edge-TTS cho: {text[:20]}...")
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        audio_data = loop.run_until_complete(get_edge_tts(text, voice_name, speed))
+        
+        if audio_data:
+            return send_file(io.BytesIO(audio_data), mimetype='audio/mpeg')
+    except Exception as e:
+        print(f"⚠️ Edge-TTS lỗi (có thể mất mạng): {e}")
+
+    # --- 2. FALLBACK SANG PIPER (LOCAL) ---
+    try:
+        print(f"🏠 Đang dùng Piper Local làm dự phòng...")
+        voice = load_piper_voice('vi_female')
+        if not voice:
+            return jsonify({'error': 'No local model available'}), 500
+            
         from piper.config import SynthesisConfig
-
-        # Synthesis configuration
         config = SynthesisConfig(length_scale=1.0/speed)
-
-        # Synthesize audio chunks
         audio_bytes = io.BytesIO()
         with wave.open(audio_bytes, 'wb') as wav_file:
             wav_file.setnchannels(1)
             wav_file.setsampwidth(2)
             wav_file.setframerate(voice.config.sample_rate)
-
             for chunk in voice.synthesize(text, config):
                 wav_file.writeframes(chunk.audio_int16_bytes)
-
+        
         audio_bytes.seek(0)
-        return send_file(
-            audio_bytes,
-            mimetype='audio/wav',
-            as_attachment=False,
-            download_name='speech.wav'
-        )
+        return send_file(audio_bytes, mimetype='audio/wav')
     except Exception as e:
-        import traceback
-        print(traceback.format_exc())
+        traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
-@app.route('/voices', methods=['GET'])
-def list_voices():
-    """List available voices"""
-    return jsonify(list(voices.keys()))
-
 if __name__ == '__main__':
-    print("🎙️  Piper TTS Server")
-    print(f"📁 Voice directory: {VOICE_DIR}")
-    print(f"🗣️  Loaded voices: {list(voices.keys())}")
-    print("🌐 Starting server on http://localhost:5001")
+    print("🎙️  Vietnamese TTS Server (Hybrid: Edge-TTS + Piper)")
+    print("🌐 Port: 5001")
     app.run(host='0.0.0.0', port=5001, debug=False)

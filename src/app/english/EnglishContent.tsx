@@ -92,8 +92,8 @@ async function saveToDb(type: string, content: string, metadata = {}, mode = 'co
   } catch { return null; }
 }
 
-async function speak(text: string, speed = 1.0, voice = 'en_female') {
-  await speakText(text, speed, voice);
+async function speak(text: string, speed = 1.0, voice = 'en-US-AvaNeural', server = 'edge') {
+  await speakText(text, speed, voice, server);
 }
 
 // Browser TTS for vocabulary (simple, fast)
@@ -273,6 +273,7 @@ const TABS = [
   { id: 'dict', l: '🔎 Tra từ' },
   { id: 'grammar', l: '📐 Ngữ pháp' },
   { id: 'vocab', l: '📚 Từ vựng' },
+  { id: 'guide', l: '📘 Hướng dẫn' },
 ] as const;
 
 const GRAMMAR_TOPICS = [
@@ -297,7 +298,9 @@ const MODES = [
 type LearnMode = typeof MODES[number]['id'];
 
 export default function EnglishContent() {
-  const [tab, setTab] = useState<'listen' | 'speak' | 'write' | 'vocab' | 'read' | 'dict' | 'grammar'>('listen');
+  const [me, setMe] = useState<{ id: number; name: string; role: string } | null>(null);
+  const isAdmin = me?.role === 'admin';
+  const [tab, setTab] = useState<'listen' | 'speak' | 'write' | 'vocab' | 'read' | 'dict' | 'grammar' | 'guide'>('listen');
   const [mode, setMode] = useState<LearnMode>('coder');
   const [aiModel, setAiModel] = useState('default');
   const [isMounted, setIsMounted] = useState(false);
@@ -308,6 +311,11 @@ export default function EnglishContent() {
     if (savedMode) setMode(savedMode);
     const savedModel = localStorage.getItem('eng_model');
     if (savedModel) setAiModel(savedModel);
+
+    // Check auth
+    fetch('/api/auth').then(r => r.json()).then(d => {
+      if (d.user) setMe(d.user);
+    }).catch(() => {});
   }, []);
 
   const [ttsOnline, setTtsOnline] = useState(false);
@@ -319,6 +327,11 @@ export default function EnglishContent() {
   }, [mode, aiModel, isMounted]);
   const modeDesc = MODES.find(m => m.id === mode)?.desc || 'developer';
 
+  // Global Voice Settings (Synced across all tabs)
+  const [globalVoice, setGlobalVoice] = useState('en-US-AvaNeural');
+  const [globalTtsProvider, setGlobalTtsProvider] = useState<'edge' | 'luxtts'>('luxtts');
+  const [globalSpeed, setGlobalSpeed] = useState(1.0);
+
   // Listening
   const [listenLevel, setListenLevel] = useState('A2');
   const [listenCustomTopic, setListenCustomTopic] = useState('');
@@ -326,8 +339,6 @@ export default function EnglishContent() {
   const [listenVi, setListenVi] = useState('');
   const [listenVocab, setListenVocab] = useState<{ w: string; m: string }[]>([]);
   const [showListenVi, setShowListenVi] = useState(false);
-  const [listenSpeed, setListenSpeed] = useState(1.0);
-  const [listenVoice, setListenVoice] = useState('en_female');
   const [listenLoading, setListenLoading] = useState(false);
   const [playing, setPlaying] = useState(false);
   const [listenRecordId, setListenRecordId] = useState<number | null>(null);
@@ -633,7 +644,7 @@ Return JSON format ONLY:
   async function playText(text = listenText) {
     if (!text || playing) return;
     setPlaying(true);
-    await speak(text, listenSpeed, listenVoice);
+    await speak(text, globalSpeed, globalVoice, globalTtsProvider);
     setPlaying(false);
   }
 
@@ -1082,35 +1093,42 @@ Return JSON ONLY (no markdown code blocks, just raw json):
           <h1 className="page-title" style={{ fontSize: '20px', fontWeight: 900, marginBottom: '4px' }}>🇬🇧 Luyện Tiếng Anh</h1>
         </div>
         <div suppressHydrationWarning className="pill" style={{ borderColor: ttsOnline ? 'var(--green)' : 'var(--orange)', color: ttsOnline ? 'var(--green)' : 'var(--orange)', background: ttsOnline ? '#3fb95011' : '#d2992211' }}>
-          {ttsOnline ? '🔊 LuxTTS' : '🔇 Browser TTS'}
+          {ttsOnline ? '☁️ AI Cloud' : '🔇 Browser TTS'}
         </div>
       </div>
-
-      <div style={{ height: 1 }} />
 
       {/* Tabs */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginBottom: '12px' }}>
-        <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
-          {TABS.slice(0, 6).map(t => (
-            <button key={t.id} onClick={() => { setTab(t.id); window.scrollTo({ top: 0, behavior: 'smooth' }); }} style={{ padding: '6px 10px', borderRadius: 99, border: '1px solid', whiteSpace: 'nowrap', fontSize: '12px', fontWeight: 600, cursor: 'pointer', transition: 'all 0.15s', borderColor: tab === t.id ? 'var(--accent)' : 'var(--border)', background: tab === t.id ? 'var(--accent)' : 'transparent', color: tab === t.id ? '#000' : 'var(--muted)' }}>
-              {t.l}
-            </button>
-          ))}
-        </div>
-        <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
-          {TABS.slice(6).map(t => (
-            <button key={t.id} onClick={() => { setTab(t.id); window.scrollTo({ top: 0, behavior: 'smooth' }); }} style={{ padding: '6px 10px', borderRadius: 99, border: '1px solid', whiteSpace: 'nowrap', fontSize: '12px', fontWeight: 600, cursor: 'pointer', transition: 'all 0.15s', borderColor: tab === t.id ? 'var(--accent)' : 'var(--border)', background: tab === t.id ? 'var(--accent)' : 'transparent', color: tab === t.id ? '#000' : 'var(--muted)' }}>
-              {t.l}
-            </button>
-          ))}
-        </div>
+      <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '16px' }}>
+        {TABS.map(t => (
+          <button 
+            key={t.id} 
+            onClick={() => { setTab(t.id); window.scrollTo({ top: 0, behavior: 'smooth' }); }} 
+            style={{ 
+              padding: '8px 14px', 
+              borderRadius: 99, 
+              border: '1px solid', 
+              whiteSpace: 'nowrap', 
+              fontSize: '12.5px', 
+              fontWeight: 600, 
+              cursor: 'pointer', 
+              transition: 'all 0.15s', 
+              borderColor: tab === t.id ? 'var(--accent)' : 'var(--border)', 
+              background: tab === t.id ? 'var(--accent)' : 'var(--surface2)', 
+              color: tab === t.id ? '#000' : 'var(--muted)',
+              boxShadow: tab === t.id ? '0 4px 12px rgba(88,166,255,0.2)' : 'none'
+            }}
+          >
+            {t.l}
+          </button>
+        ))}
       </div>
+
 
       {/* Mode selector */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 20 }}>
-        <span style={{ fontSize: 11, color: 'var(--muted)', whiteSpace: 'nowrap' }}>Chế độ:</span>
+        <span style={{ fontSize: 11, color: 'var(--muted)', whiteSpace: 'nowrap' }}>Chế độ luyện tập:</span>
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-          {MODES.slice(0, 4).map(m => {
+          {MODES.map(m => {
             const mapType = tab === 'write' ? 'writing' : tab === 'read' ? 'reading' : tab;
             const count = m.id === 'all'
               ? history.filter(h => h.type === mapType).length
@@ -1125,30 +1143,7 @@ Return JSON ONLY (no markdown code blocks, just raw json):
                 }).length;
 
             return (
-              <button key={m.id} onClick={() => setMode(m.id)} style={{ padding: '5px 12px', borderRadius: 6, border: '1px solid', whiteSpace: 'nowrap', fontSize: 12, fontWeight: 600, cursor: 'pointer', borderColor: mode === m.id ? 'var(--green)' : 'var(--border)', background: mode === m.id ? 'var(--green)22' : 'transparent', color: mode === m.id ? 'var(--green)' : 'var(--muted)', display: 'flex', alignItems: 'center', gap: 4 }}>
-                {m.label}
-                {count > 0 && <span style={{ fontSize: 10, background: mode === m.id ? 'var(--green)' : 'var(--surface2)', color: mode === m.id ? '#000' : 'var(--muted)', padding: '1px 5px', borderRadius: 99, fontWeight: 800 }}>{count}</span>}
-              </button>
-            );
-          })}
-        </div>
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-          {MODES.slice(4).map(m => {
-            const mapType = tab === 'write' ? 'writing' : tab === 'read' ? 'reading' : tab;
-            const count = m.id === 'all'
-              ? history.filter(h => h.type === mapType).length
-              : history.filter(h => {
-                  if (h.type !== mapType) return false;
-                  try {
-                    const itemMode = JSON.parse(h.metadata || '{}').mode || 'coder';
-                    return itemMode === m.id;
-                  } catch {
-                    return false;
-                  }
-                }).length;
-
-            return (
-              <button key={m.id} onClick={() => setMode(m.id)} style={{ padding: '5px 12px', borderRadius: 6, border: '1px solid', whiteSpace: 'nowrap', fontSize: 12, fontWeight: 600, cursor: 'pointer', borderColor: mode === m.id ? 'var(--green)' : 'var(--border)', background: mode === m.id ? 'var(--green)22' : 'transparent', color: mode === m.id ? 'var(--green)' : 'var(--muted)', display: 'flex', alignItems: 'center', gap: 4 }}>
+              <button key={m.id} onClick={() => setMode(m.id)} style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid', whiteSpace: 'nowrap', fontSize: 12, fontWeight: 600, cursor: 'pointer', borderColor: mode === m.id ? 'var(--green)' : 'var(--border)', background: mode === m.id ? 'var(--green)11' : 'var(--surface2)', color: mode === m.id ? 'var(--green)' : 'var(--muted)', display: 'flex', alignItems: 'center', gap: 6, transition: 'all 0.15s' }}>
                 {m.label}
                 {count > 0 && <span style={{ fontSize: 10, background: mode === m.id ? 'var(--green)' : 'var(--surface2)', color: mode === m.id ? '#000' : 'var(--muted)', padding: '1px 5px', borderRadius: 99, fontWeight: 800 }}>{count}</span>}
               </button>
@@ -1217,24 +1212,39 @@ Return JSON ONLY (no markdown code blocks, just raw json):
                   </div>
                   <textarea className="input" value={listenText} onChange={e => setListenText(e.target.value)} rows={6}
                     placeholder="Bấm 'AI tạo đoạn nghe' hoặc tự nhập tiếng Anh..." style={{ marginBottom: 12 }} />
-                  {/* Voice selector */}
+                  
+                  {/* Voice selector (Back to Listen Tab) */}
                   <div style={{ display: 'flex', gap: 6, marginBottom: 12, flexWrap: 'wrap' }}>
-                    {[{ id: 'en_male', l: '👨 Nam (Dave)' }, { id: 'paul', l: '👨 Nam (Paul)' }, { id: 'en_female', l: '👩 Nữ (Carissa)' }].map(v => (
-                      <button key={v.id} onClick={() => setListenVoice(v.id)} style={{ flex: 1, padding: '7px', borderRadius: 8, border: '1px solid', fontSize: 12, fontWeight: 600, cursor: 'pointer', borderColor: listenVoice === v.id ? 'var(--accent)' : 'var(--border)', background: listenVoice === v.id ? '#58a6ff22' : 'var(--surface2)', color: listenVoice === v.id ? 'var(--accent)' : 'var(--muted)' }}>
+                    {[
+                      { id: 'en-US-AvaNeural', l: '☁️ Nữ (Ava)', s: 'edge' },
+                      { id: 'en-US-AndrewNeural', l: '☁️ Nam (Andrew)', s: 'edge' },
+                      { id: 'en-US-BrianNeural', l: '☁️ Nam (Brian)', s: 'edge' },
+                      ...(isAdmin ? [
+                        { id: 'en_female', l: '💎 Nữ (Carissa)', s: 'luxtts' },
+                        { id: 'en_male', l: '💎 Nam (Dave)', s: 'luxtts' },
+                        { id: 'paul', l: '💎 Nam (Paul)', s: 'luxtts' }
+                      ] : [])
+                    ].map(v => (
+                      <button 
+                        key={v.id} 
+                        onClick={() => {
+                          setGlobalVoice(v.id);
+                          setGlobalTtsProvider(v.s as any);
+                        }} 
+                        style={{ flex: '1 1 30%', padding: '7px', borderRadius: 8, border: '1px solid', fontSize: 11, fontWeight: 600, cursor: 'pointer', borderColor: globalVoice === v.id ? 'var(--accent)' : 'var(--border)', background: globalVoice === v.id ? '#58a6ff22' : 'var(--surface2)', color: globalVoice === v.id ? 'var(--accent)' : 'var(--muted)', whiteSpace: 'nowrap' }}
+                      >
                         {v.l}
                       </button>
                     ))}
                   </div>
+
                   <div style={{ marginBottom: 14 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 6 }}>
                       <span style={{ color: 'var(--muted)' }}>Tốc độ phát</span>
-                      <span style={{ color: 'var(--accent)', fontWeight: 700 }}>{listenSpeed}x</span>
+                      <span style={{ color: 'var(--accent)', fontWeight: 700 }}>{globalSpeed}x</span>
                     </div>
-                    <input type="range" min={0.5} max={1.5} step={0.05} value={listenSpeed}
-                      onChange={e => setListenSpeed(parseFloat(e.target.value))} style={{ width: '100%', accentColor: 'var(--accent)' }} />
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: 'var(--muted)', marginTop: 4 }}>
-                      <span>0.5x chậm</span><span>1.0x bình thường</span><span>1.5x nhanh</span>
-                    </div>
+                    <input type="range" min={0.5} max={1.5} step={0.05} value={globalSpeed}
+                      onChange={e => setGlobalSpeed(parseFloat(e.target.value))} style={{ width: '100%', accentColor: 'var(--accent)' }} />
                   </div>
                   <div style={{ display: 'flex', gap: 8 }}>
                     <button className="btn btn-ghost" style={{ flex: 1 }} onClick={genListenText} disabled={listenLoading}>
@@ -1370,7 +1380,7 @@ Return JSON ONLY (no markdown code blocks, just raw json):
                     />
                   </div>
                   <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-                    <button onClick={() => speak(spkTopic, 1.0)} style={{ fontSize: 12, color: 'var(--muted)', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <button onClick={() => speak(spkTopic, globalSpeed, globalVoice, globalTtsProvider)} style={{ fontSize: 12, color: 'var(--muted)', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}>
                       <span>🔊</span> Nghe câu hỏi
                     </button>
                     <button onClick={genSpkSample} disabled={spkSampleLoading || recognizing} style={{ fontSize: 12, color: 'var(--green)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600 }}>
@@ -1381,9 +1391,9 @@ Return JSON ONLY (no markdown code blocks, just raw json):
                 </div>
                 {spkSample && (
                   <div className="card" style={{ borderLeft: '4px solid var(--green)', background: 'var(--surface2)' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                      <div className="section-title" style={{ color: 'var(--green)', margin: 0 }}>💡 Bài mẫu AI</div>
-                      <div style={{ display: 'flex', gap: 10 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, gap: 12, flexWrap: 'nowrap' }}>
+                      <div className="section-title" style={{ color: 'var(--green)', margin: 0, whiteSpace: 'nowrap', flexShrink: 0 }}>💡 Bài mẫu AI</div>
+                      <div style={{ display: 'flex', gap: 10, flexShrink: 1, flexWrap: 'nowrap' }}>
                         <button
                           onClick={(e) => {
                             const btn = e.currentTarget;
@@ -1402,14 +1412,15 @@ Return JSON ONLY (no markdown code blocks, just raw json):
                             const old = btn.innerText;
                             btn.innerText = '🔊 Đang phát...';
                             btn.style.pointerEvents = 'none';
-                            speak(text, 1.0, 'en_female').finally(() => {
+                            speak(text, globalSpeed, globalVoice, globalTtsProvider).finally(() => {
                               btn.innerText = old;
                               btn.style.pointerEvents = 'auto';
                             });
                           }}
-                          style={{ fontSize: 11, color: 'var(--accent)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700 }}
+                          title="Nghe mẫu"
+                          style={{ fontSize: 14, color: 'var(--accent)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700, padding: '4px 8px' }}
                         >
-                          🔊 Nghe mẫu
+                          🔊
                         </button>
                         <button
                           onClick={(e) => {
@@ -1429,11 +1440,12 @@ Return JSON ONLY (no markdown code blocks, just raw json):
                             btn.innerText = '✓ Đã copy';
                             setTimeout(() => btn.innerText = old, 2000);
                           }}
-                          style={{ fontSize: 11, color: 'var(--accent)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700 }}
+                          title="Copy"
+                          style={{ fontSize: 14, color: 'var(--accent)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700, padding: '4px 8px' }}
                         >
-                          📋 Copy
+                          📋
                         </button>
-                        <button onClick={() => setSpkSample('')} style={{ fontSize: 11, color: 'var(--muted)', background: 'none', border: 'none', cursor: 'pointer' }}>✕ Đóng</button>
+                        <button onClick={() => setSpkSample('')} title="Đóng" style={{ fontSize: 14, color: 'var(--muted)', background: 'none', border: 'none', cursor: 'pointer', padding: '4px 8px' }}>✕</button>
                       </div>
                     </div>
                     <div style={{ fontSize: 13, lineHeight: 1.7, color: 'var(--text)' }} dangerouslySetInnerHTML={{ __html: parseMarkdown(spkSample) }} />
@@ -1574,9 +1586,9 @@ Return JSON ONLY (no markdown code blocks, just raw json):
                 </div>
                 {writeSample && (
                   <div className="card" style={{ marginBottom: 12, borderLeft: '4px solid var(--green)', background: 'var(--surface2)' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                      <div className="section-title" style={{ color: 'var(--green)', margin: 0 }}>💡 Bài viết mẫu AI</div>
-                      <div style={{ display: 'flex', gap: 10 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, gap: 12, flexWrap: 'nowrap' }}>
+                      <div className="section-title" style={{ color: 'var(--green)', margin: 0, whiteSpace: 'nowrap', flexShrink: 0 }}>💡 Bài viết mẫu AI</div>
+                      <div style={{ display: 'flex', gap: 10, flexShrink: 1, flexWrap: 'nowrap' }}>
                         <button
                           onClick={(e) => {
                             const btn = e.currentTarget;
@@ -1595,14 +1607,15 @@ Return JSON ONLY (no markdown code blocks, just raw json):
                             const old = btn.innerText;
                             btn.innerText = '🔊 Đang phát...';
                             btn.style.pointerEvents = 'none';
-                            speak(text, 1.0, 'en_female').finally(() => {
+                            speak(text, globalSpeed, globalVoice, globalTtsProvider).finally(() => {
                               btn.innerText = old;
                               btn.style.pointerEvents = 'auto';
                             });
                           }}
-                          style={{ fontSize: 11, color: 'var(--accent)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700 }}
+                          title="Nghe mẫu"
+                          style={{ fontSize: 14, color: 'var(--accent)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700, padding: '4px 8px' }}
                         >
-                          🔊 Nghe mẫu
+                          🔊
                         </button>
                         <button
                           onClick={(e) => {
@@ -1628,11 +1641,12 @@ Return JSON ONLY (no markdown code blocks, just raw json):
                             btn.innerText = '✓ Đã copy';
                             setTimeout(() => btn.innerText = old, 2000);
                           }}
-                          style={{ fontSize: 11, color: 'var(--accent)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700 }}
+                          title="Copy"
+                          style={{ fontSize: 14, color: 'var(--accent)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700, padding: '4px 8px' }}
                         >
-                          📋 Copy tiếng Anh
+                          📋
                         </button>
-                        <button onClick={() => setWriteSample('')} style={{ fontSize: 11, color: 'var(--muted)', background: 'none', border: 'none', cursor: 'pointer' }}>✕ Đóng</button>
+                        <button onClick={() => setWriteSample('')} title="Đóng" style={{ fontSize: 14, color: 'var(--muted)', background: 'none', border: 'none', cursor: 'pointer', padding: '4px 8px' }}>✕</button>
                       </div>
                     </div>
                     <div style={{ fontSize: 13, lineHeight: 1.7, color: 'var(--text)' }} dangerouslySetInnerHTML={{ __html: parseMarkdown(writeSample) }} />
@@ -1702,7 +1716,7 @@ Return JSON ONLY (no markdown code blocks, just raw json):
                       <div className={`flashcard${flipped ? ' flipped' : ''}`} onClick={() => setFlipped(f => !f)}>
                         <div className="flashcard-front">
                           <div style={{ fontSize: 32, fontWeight: 900, color: 'var(--accent)', marginBottom: 10 }}>{card.word}</div>
-                          <button onClick={e => { e.stopPropagation(); speakBrowser(card.word); }} style={{ fontSize: 12, color: 'var(--muted)', background: 'none', border: 'none', cursor: 'pointer' }}>🔊 Phát âm</button>
+                          <button onClick={e => { e.stopPropagation(); speak(card.word, globalSpeed, globalVoice, globalTtsProvider); }} style={{ fontSize: 12, color: 'var(--muted)', background: 'none', border: 'none', cursor: 'pointer' }}>🔊 Phát âm</button>
                           <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 8 }}>Bấm để xem nghĩa</div>
                         </div>
                         <div className="flashcard-back">
@@ -1851,7 +1865,7 @@ Return JSON ONLY (no markdown code blocks, just raw json):
                             onClick={async () => {
                               setReadSpeaking(true);
                               try {
-                                await speak(`${readArticle.title}. ${readArticle.body}`, 1.0);
+                                await speak(`${readArticle.title}. ${readArticle.body}`, globalSpeed, globalVoice, globalTtsProvider);
                               } finally {
                                 setReadSpeaking(false);
                               }
@@ -2060,6 +2074,73 @@ Return JSON ONLY (no markdown code blocks, just raw json):
             </div>
           )}
 
+          {/* ── GUIDE ── */}
+          {tab === 'guide' && (
+            <div className="fade-in">
+              <div className="card" style={{ borderLeft: '4px solid var(--accent)', background: 'var(--surface2)', padding: '24px' }}>
+                <h2 className="section-title" style={{ color: 'var(--accent)', fontSize: 20, marginBottom: '20px' }}>📘 Hướng dẫn học Tiếng Anh với NewHat AI</h2>
+                
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+                  <section>
+                    <h3 style={{ color: 'var(--green)', fontSize: 16, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span>🎧</span> Luyện Nghe (Listening)
+                    </h3>
+                    <p style={{ fontSize: 13.5, color: 'var(--text)', lineHeight: 1.7 }}>
+                      • Nhấn <strong>"🤖 Tạo đoạn nghe mới"</strong> để AI soạn nội dung theo trình độ (A2-B2).<br/>
+                      • Bạn có thể tự nhập văn bản tiếng Anh vào ô trống để AI đọc cho bạn nghe.<br/>
+                      • Sử dụng thanh trượt để điều chỉnh tốc độ đọc (0.5x cho người mới bắt đầu).
+                    </p>
+                  </section>
+
+                  <section>
+                    <h3 style={{ color: 'var(--purple)', fontSize: 16, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span>🎤</span> Luyện Nói (Speaking)
+                    </h3>
+                    <p style={{ fontSize: 13.5, color: 'var(--text)', lineHeight: 1.7 }}>
+                      • Nhấn giữ biểu tượng Micro để ghi âm câu trả lời của bạn.<br/>
+                      • Sau khi nói xong, nhấn <strong>"🤖 AI chấm điểm"</strong>. AI sẽ phân tích phát âm, chỉ ra lỗi ngữ pháp và gợi ý cách diễn đạt tự nhiên hơn như người bản xứ.
+                    </p>
+                  </section>
+
+                  <section>
+                    <h3 style={{ color: 'var(--orange)', fontSize: 16, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span>📖</span> Luyện Đọc & Tra Từ (Reading & Lookup)
+                    </h3>
+                    <p style={{ fontSize: 13.5, color: 'var(--text)', lineHeight: 1.7 }}>
+                      • <strong>Tra từ nhanh:</strong> Trong khi đọc bài, hãy <strong>bôi đen</strong> bất kỳ từ hoặc cụm từ nào. AI sẽ ngay lập tức giải thích nghĩa, phiên âm và cách dùng ngay bên cạnh.<br/>
+                      • <strong>Hỏi đáp:</strong> Bạn có thể nhắn tin hỏi AI bất kỳ điều gì về nội dung bài đọc ở khung chat phía dưới.
+                    </p>
+                  </section>
+
+                  <section>
+                    <h3 style={{ color: 'var(--blue)', fontSize: 16, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span>📚</span> Từ Vựng (Vocabulary)
+                    </h3>
+                    <p style={{ fontSize: 13.5, color: 'var(--text)', lineHeight: 1.7 }}>
+                      • Hệ thống cung cấp thẻ ghi nhớ (Flashcards) thông minh.<br/>
+                      • Mỗi từ vựng đều đi kèm phiên âm, ví dụ đặt câu và nghĩa tiếng Việt.<br/>
+                      • Bạn nên luyện tập hàng ngày để AI giúp ghi nhớ từ vựng vào bộ nhớ dài hạn.
+                    </p>
+                  </section>
+
+                  <section>
+                    <h3 style={{ color: 'var(--red)', fontSize: 16, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span>📐</span> Ngữ Pháp (Grammar)
+                    </h3>
+                    <p style={{ fontSize: 13.5, color: 'var(--text)', lineHeight: 1.7 }}>
+                      • Chọn một chủ đề ngữ pháp bạn muốn học hoặc tự nhập chủ đề riêng.<br/>
+                      • AI sẽ giảng giải lý thuyết một cách dễ hiểu và đưa ra <strong>bài tập trắc nghiệm</strong> ngay phía dưới để bạn thực hành và chấm điểm trực tiếp.
+                    </p>
+                  </section>
+
+                  <div style={{ marginTop: 10, padding: '12px 16px', background: 'rgba(88,166,255,0.08)', borderRadius: 12, border: '1px dashed var(--accent)', fontSize: 13, color: 'var(--muted)', lineHeight: 1.6 }}>
+                    💡 <strong>Mẹo nhỏ:</strong> Hệ thống NewHat được thiết kế để học tập chủ động. Đừng ngần ngại yêu cầu AI tạo thêm ví dụ hoặc giải thích lại những phần bạn chưa rõ nhé!
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* ── DICT ── */}
           {tab === 'dict' && (
             <div className="desktop-2col">
@@ -2092,7 +2173,7 @@ Return JSON ONLY (no markdown code blocks, just raw json):
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
                       <div style={{ fontWeight: 800, fontSize: 15, color: 'var(--accent)' }}>{dictInput}</div>
                       <div style={{ display: 'flex', gap: 8 }}>
-                        <button onClick={() => speakBrowser(dictInput)} style={{ fontSize: 12, color: 'var(--muted)', background: 'none', border: 'none', cursor: 'pointer' }}>🔊 Nghe</button>
+                        <button onClick={() => speak(dictInput, globalSpeed, globalVoice, globalTtsProvider)} style={{ fontSize: 12, color: 'var(--muted)', background: 'none', border: 'none', cursor: 'pointer' }}>🔊 Nghe</button>
                       </div>
                     </div>
                     <div style={{ fontSize: 13, lineHeight: 1.9 }} dangerouslySetInnerHTML={{ __html: parseMarkdown(dictResult) }} />
@@ -2131,7 +2212,7 @@ Return JSON ONLY (no markdown code blocks, just raw json):
                                 <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)' }}>{word}</div>
                                 <div style={{ fontSize: 10, color: 'var(--muted)' }}>{new Date(item.createdAt).toLocaleString('vi')}</div>
                               </div>
-                              <button onClick={e => { e.stopPropagation(); speakBrowser(word); }} style={{ fontSize: 12, color: 'var(--muted)', background: 'none', border: 'none', cursor: 'pointer' }}>🔊</button>
+                              <button onClick={e => { e.stopPropagation(); speak(word, globalSpeed, globalVoice, globalTtsProvider); }} style={{ fontSize: 12, color: 'var(--muted)', background: 'none', border: 'none', cursor: 'pointer' }}>🔊</button>
                               <button onClick={async e => { e.stopPropagation(); await fetch('/api/english', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: item.id }) }); loadHistory(); }} style={{ fontSize: 11, color: '#f85149', background: '#f8514915', border: 'none', cursor: 'pointer', padding: '3px 7px', borderRadius: 5 }}>🗑</button>
                             </div>
                           );
@@ -2290,7 +2371,7 @@ Return JSON ONLY (no markdown code blocks, just raw json):
                         </button>
                       )}
                       {mapType === 'vocab' && (
-                        <button onClick={(e) => { e.stopPropagation(); speakBrowser(item.content); }} style={{ fontSize: 14, background: 'var(--accent)15', border: 'none', cursor: 'pointer', padding: '4px 8px', borderRadius: 6, color: 'var(--accent)' }}>
+                        <button onClick={(e) => { e.stopPropagation(); speak(item.content, globalSpeed, globalVoice, globalTtsProvider); }} style={{ fontSize: 14, background: 'var(--accent)15', border: 'none', cursor: 'pointer', padding: '4px 8px', borderRadius: 6, color: 'var(--accent)' }}>
                           🔊
                         </button>
                       )}

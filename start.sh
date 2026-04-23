@@ -10,6 +10,12 @@ else
   PYTHON="python3"
 fi
 
+# Kiểm tra và cài edge-tts nếu chưa có
+if ! $PYTHON -c "import edge_tts" 2>/dev/null; then
+  echo -e "  ${YELLOW}→ Cài edge-tts cho giọng Hoài My / Nam Minh...${NC}"
+  $PYTHON -m pip install edge-tts -q 2>/dev/null || true
+fi
+
 # ============ CẤU HÌNH TỐI ƯU ============
 export NODE_OPTIONS="--max-old-space-size=2048"
 ulimit -v 8388608 2>/dev/null || true
@@ -40,34 +46,20 @@ else
   pg_isready -q && echo -e "${GREEN}✓ đã khởi động${NC}" || echo -e "${RED}✗ lỗi${NC}"
 fi
 
-# 2. LuxTTS
-printf "  ${BLUE}[2/6]${NC} LuxTTS TTS (8880)... "
-LUXTTS_DIR="$DIR/LuxTTS"
+# 2. LuxTTS (Manual Start from Admin)
+printf "  ${BLUE}[2/6]${NC} LuxTTS (8880) [Off]... "
 if curl -s --max-time 1 http://localhost:8880/health > /dev/null 2>&1; then
   echo -e "${GREEN}✓ đang chạy (port 8880)${NC}"
-elif [ -f "$LUXTTS_DIR/server.py" ]; then
-  echo -e "${YELLOW}↻ khởi động...${NC}"
-  # Cài dependencies nếu chưa có
-  if ! $PYTHON -c "import zipvoice" 2>/dev/null; then
-    echo -e "     ${YELLOW}→ Cài dependencies LuxTTS...${NC}"
-    cd "$LUXTTS_DIR" && $PYTHON -m pip install -e . -q 2>/tmp/luxtts_install.log && cd "$DIR"
-  fi
-  cd "$LUXTTS_DIR"
-  $PYTHON server.py > /tmp/luxtts.log 2>&1 &
-  sleep 4
-  cd "$DIR"
-  curl -s --max-time 2 http://localhost:8880/health > /dev/null && echo -e "     ${GREEN}✓ LuxTTS OK${NC}" || echo -e "     ${YELLOW}– đang load model (xem /tmp/luxtts.log)${NC}"
 else
-  echo -e "${YELLOW}– không tìm thấy $LUXTTS_DIR${NC}"
+  echo -e "${YELLOW}– Đang tắt (Bật thủ công từ trang Admin nếu cần)${NC}"
 fi
 
-# 3. Piper TTS (Tiếng Việt)
-printf "  ${BLUE}[3/6]${NC} Piper TTS (5001)... "
+# 3. Vietnamese TTS (Hybrid)
+printf "  ${BLUE}[3/6]${NC} VN TTS (5001) [Edge+Piper]... "
 if curl -s --max-time 1 http://localhost:5001/health > /dev/null 2>&1; then
   echo -e "${GREEN}✓ đang chạy (port 5001)${NC}"
 elif [ -f "$DIR/piper_server.py" ]; then
   echo -e "${YELLOW}↻ khởi động...${NC}"
-  # Kiểm tra conda env hatai_env
   if command -v conda &> /dev/null; then
     conda run -n hatai_env python "$DIR/piper_server.py" > /tmp/piper.log 2>&1 &
     sleep 3
@@ -79,13 +71,13 @@ else
   echo -e "${YELLOW}– không tìm thấy piper_server.py${NC}"
 fi
 
-# 4. Whisper STT
-printf "  ${BLUE}[4/6]${NC} Whisper STT (9000)... "
+# 4. Whisper STT (Hybrid)
+printf "  ${BLUE}[4/6]${NC} Whisper Proxy (9000) [Hybrid]... "
 if curl -s --max-time 1 http://localhost:9000/health > /dev/null 2>&1; then
   echo -e "${GREEN}✓ đang chạy${NC}"
 elif [ -f "$DIR/whisper_server.py" ]; then
   echo -e "${YELLOW}↻ khởi động...${NC}"
-  WHISPER_MODEL=medium WHISPER_PORT=9000 nohup $PYTHON "$DIR/whisper_server.py" > /tmp/whisper.log 2>&1 &
+  WHISPER_MODEL=$WHISPER_MODEL WHISPER_PORT=9000 nohup $PYTHON "$DIR/whisper_server.py" > /tmp/whisper.log 2>&1 &
   sleep 2
 else
   echo -e "${YELLOW}– không tìm thấy whisper_server.py${NC}"
@@ -103,9 +95,9 @@ lsof -ti:8006 | xargs kill -9 2>/dev/null || true; sleep 1
 echo ""
   echo -e "  ${GREEN}┌─────────────────────────────────────────┐${NC}"
   echo -e "  ${GREEN}│  🚀  http://localhost:8006              │${NC}"
-  echo -e "  ${GREEN}│  🔊  LuxTTS:  http://localhost:8880     │${NC}"
-  echo -e "  ${GREEN}│  🎙️   Piper:   http://localhost:5001     │${NC}"
-  echo -e "  ${GREEN}│  🎤  Whisper: http://localhost:9000     │${NC}"
+  echo -e "  ${GREEN}│  🔊  LuxTTS:  http://localhost:8880 (Lazy)│${NC}"
+  echo -e "  ${GREEN}│  🎙️   VN TTS:  http://localhost:5001 (Hybr)│${NC}"
+  echo -e "  ${GREEN}│  🎤  Whisper: http://localhost:9000 (Hybr)│${NC}"
   echo -e "  ${GREEN}│  🗄️   PostgreSQL: newhat@localhost:5432  │${NC}"
   echo -e "  ${GREEN}└─────────────────────────────────────────┘${NC}"
 echo ""
