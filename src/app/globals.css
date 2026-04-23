@@ -340,13 +340,14 @@ pre {
   border: 6px solid transparent;
   border-top-color: var(--accent);
 }
-@media (min-width: 900px) {
+/* Tắt hiệu ứng hover tooltip */
+/* @media (min-width: 900px) {
   .track-wrapper:hover .track-tooltip {
     opacity: 1;
     visibility: visible;
     transform: translateX(-50%) translateY(0);
   }
-}
+} */
 @media (max-width: 899px) {
   .track-tooltip { display: none !important; }
 }

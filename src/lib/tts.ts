@@ -18,7 +18,7 @@ export function unlockAudio() {
   } catch {}
 }
 
-// Kokoro TTS → fallback browser TTS
+// Lux TTS → fallback browser TTS
 export async function speakText(text: string, speed = 1.0, voice = 'en_female'): Promise<void> {
   unlockAudio();
   // Thử LuxTTS trước

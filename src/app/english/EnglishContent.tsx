@@ -269,9 +269,10 @@ const VOCAB_TOPICS = ['programming', 'web development', 'databases', 'networking
 const TABS = [
   { id: 'listen', l: '🎧 Nghe' },
   { id: 'speak', l: '🎤 Nói' }, { id: 'write', l: '✍️ Viết' },
-  { id: 'grammar', l: '📐 Ngữ pháp' },
-  { id: 'vocab', l: '📚 Từ vựng' }, { id: 'read', l: '📖 Đọc' },
+  { id: 'read', l: '📖 Đọc' },
   { id: 'dict', l: '🔎 Tra từ' },
+  { id: 'grammar', l: '📐 Ngữ pháp' },
+  { id: 'vocab', l: '📚 Từ vựng' },
 ] as const;
 
 const GRAMMAR_TOPICS = [
@@ -287,8 +288,8 @@ const GRAMMAR_TOPICS = [
 const MODES = [
   { id: 'all', label: '🌐 All', desc: 'all topics' },
   { id: 'coder', label: '💻 Coder', desc: 'developer, tech, programming' },
-  { id: 'communication', label: '💬 Giao tiếp', desc: 'daily life, travel, work, relationships' },
   { id: 'business', label: '💼 Công việc', desc: 'business meetings, emails, interviews' },
+  { id: 'communication', label: '💬 Giao tiếp', desc: 'daily life, travel, work, relationships' },
   { id: 'finance', label: '💰 Tài chính', desc: 'finance, banking, stock market, investment' },
   { id: 'ielts', label: '🎓 IELTS', desc: 'academic IELTS-style topics' },
 ] as const;
@@ -384,6 +385,7 @@ export default function EnglishContent() {
   const [readChatInput, setReadChatInput] = useState('');
   const [readChatLoading, setReadChatLoading] = useState(false);
   const [readError, setReadError] = useState('');
+  const [readSpeaking, setReadSpeaking] = useState(false);
 
   // Grammar
   const [grammarTopic, setGrammarTopic] = useState(GRAMMAR_TOPICS[0]);
@@ -994,8 +996,8 @@ Return JSON ONLY (no markdown code blocks, just raw json):
     setDictLoading(true); setDictResult('');
     const isPhrase = w.split(/\s+/).length > 3;
     const p = isPhrase
-      ? `Giải thích cụm từ/câu tiếng Anh: "${w}". Trả lời Markdown # "${w}" \n## Nghĩa tiếng Việt...`
-      : `Tra từ tiếng Anh: "${w}". Trả lời Markdown # ${w} \n## Phiên âm...`;
+      ? `Giải thích cụm từ/câu tiếng Anh: "${w}". Trả lời Markdown:\n# ${w}\n## Nghĩa tiếng Việt\n## Ví dụ`
+      : `Tra từ tiếng Anh: "${w}". Trả lời Markdown:\n# ${w}\n## Phiên âm IPA\n## Loại từ\n## Nghĩa tiếng Việt\n## Ví dụ`;
     const raw = await askAI(p);
     if (raw) {
       setDictResult(raw);
@@ -1019,38 +1021,72 @@ Return JSON ONLY (no markdown code blocks, just raw json):
       <div style={{ height: 1 }} />
 
       {/* Tabs */}
-      <div style={{ display: 'flex', gap: '4px', marginBottom: '12px', flexWrap: 'nowrap', overflowX: 'auto', paddingBottom: '4px' }}>
-        {TABS.map(t => (
-          <button key={t.id} onClick={() => { setTab(t.id); window.scrollTo({ top: 0, behavior: 'smooth' }); }} style={{ padding: '6px 10px', borderRadius: 99, border: '1px solid', whiteSpace: 'nowrap', fontSize: '12px', fontWeight: 600, cursor: 'pointer', transition: 'all 0.15s', borderColor: tab === t.id ? 'var(--accent)' : 'var(--border)', background: tab === t.id ? 'var(--accent)' : 'transparent', color: tab === t.id ? '#000' : 'var(--muted)' }}>
-            {t.l}
-          </button>
-        ))}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginBottom: '12px' }}>
+        <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
+          {TABS.slice(0, 6).map(t => (
+            <button key={t.id} onClick={() => { setTab(t.id); window.scrollTo({ top: 0, behavior: 'smooth' }); }} style={{ padding: '6px 10px', borderRadius: 99, border: '1px solid', whiteSpace: 'nowrap', fontSize: '12px', fontWeight: 600, cursor: 'pointer', transition: 'all 0.15s', borderColor: tab === t.id ? 'var(--accent)' : 'var(--border)', background: tab === t.id ? 'var(--accent)' : 'transparent', color: tab === t.id ? '#000' : 'var(--muted)' }}>
+              {t.l}
+            </button>
+          ))}
+        </div>
+        <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
+          {TABS.slice(6).map(t => (
+            <button key={t.id} onClick={() => { setTab(t.id); window.scrollTo({ top: 0, behavior: 'smooth' }); }} style={{ padding: '6px 10px', borderRadius: 99, border: '1px solid', whiteSpace: 'nowrap', fontSize: '12px', fontWeight: 600, cursor: 'pointer', transition: 'all 0.15s', borderColor: tab === t.id ? 'var(--accent)' : 'var(--border)', background: tab === t.id ? 'var(--accent)' : 'transparent', color: tab === t.id ? '#000' : 'var(--muted)' }}>
+              {t.l}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Mode selector */}
-      <div style={{ display: 'flex', gap: 6, marginBottom: 20, flexWrap: 'wrap', alignItems: 'center' }}>
-        <span style={{ fontSize: 11, color: 'var(--muted)', whiteSpace: 'nowrap', marginRight: 4 }}>Chế độ:</span>
-        {MODES.map(m => {
-          const mapType = tab === 'write' ? 'writing' : tab === 'read' ? 'reading' : tab;
-          const count = m.id === 'all'
-            ? history.filter(h => h.type === mapType).length
-            : history.filter(h => {
-                if (h.type !== mapType) return false;
-                try {
-                  const itemMode = JSON.parse(h.metadata || '{}').mode || 'coder';
-                  return itemMode === m.id;
-                } catch {
-                  return false;
-                }
-              }).length;
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 20 }}>
+        <span style={{ fontSize: 11, color: 'var(--muted)', whiteSpace: 'nowrap' }}>Chế độ:</span>
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          {MODES.slice(0, 4).map(m => {
+            const mapType = tab === 'write' ? 'writing' : tab === 'read' ? 'reading' : tab;
+            const count = m.id === 'all'
+              ? history.filter(h => h.type === mapType).length
+              : history.filter(h => {
+                  if (h.type !== mapType) return false;
+                  try {
+                    const itemMode = JSON.parse(h.metadata || '{}').mode || 'coder';
+                    return itemMode === m.id;
+                  } catch {
+                    return false;
+                  }
+                }).length;
 
-          return (
-            <button key={m.id} onClick={() => setMode(m.id)} style={{ padding: '5px 12px', borderRadius: 6, border: '1px solid', whiteSpace: 'nowrap', fontSize: 12, fontWeight: 600, cursor: 'pointer', borderColor: mode === m.id ? 'var(--green)' : 'var(--border)', background: mode === m.id ? 'var(--green)22' : 'transparent', color: mode === m.id ? 'var(--green)' : 'var(--muted)', display: 'flex', alignItems: 'center', gap: 4 }}>
-              {m.label}
-              {count > 0 && <span style={{ fontSize: 10, background: mode === m.id ? 'var(--green)' : 'var(--surface2)', color: mode === m.id ? '#000' : 'var(--muted)', padding: '1px 5px', borderRadius: 99, fontWeight: 800 }}>{count}</span>}
-            </button>
-          );
-        })}
+            return (
+              <button key={m.id} onClick={() => setMode(m.id)} style={{ padding: '5px 12px', borderRadius: 6, border: '1px solid', whiteSpace: 'nowrap', fontSize: 12, fontWeight: 600, cursor: 'pointer', borderColor: mode === m.id ? 'var(--green)' : 'var(--border)', background: mode === m.id ? 'var(--green)22' : 'transparent', color: mode === m.id ? 'var(--green)' : 'var(--muted)', display: 'flex', alignItems: 'center', gap: 4 }}>
+                {m.label}
+                {count > 0 && <span style={{ fontSize: 10, background: mode === m.id ? 'var(--green)' : 'var(--surface2)', color: mode === m.id ? '#000' : 'var(--muted)', padding: '1px 5px', borderRadius: 99, fontWeight: 800 }}>{count}</span>}
+              </button>
+            );
+          })}
+        </div>
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          {MODES.slice(4).map(m => {
+            const mapType = tab === 'write' ? 'writing' : tab === 'read' ? 'reading' : tab;
+            const count = m.id === 'all'
+              ? history.filter(h => h.type === mapType).length
+              : history.filter(h => {
+                  if (h.type !== mapType) return false;
+                  try {
+                    const itemMode = JSON.parse(h.metadata || '{}').mode || 'coder';
+                    return itemMode === m.id;
+                  } catch {
+                    return false;
+                  }
+                }).length;
+
+            return (
+              <button key={m.id} onClick={() => setMode(m.id)} style={{ padding: '5px 12px', borderRadius: 6, border: '1px solid', whiteSpace: 'nowrap', fontSize: 12, fontWeight: 600, cursor: 'pointer', borderColor: mode === m.id ? 'var(--green)' : 'var(--border)', background: mode === m.id ? 'var(--green)22' : 'transparent', color: mode === m.id ? 'var(--green)' : 'var(--muted)', display: 'flex', alignItems: 'center', gap: 4 }}>
+                {m.label}
+                {count > 0 && <span style={{ fontSize: 10, background: mode === m.id ? 'var(--green)' : 'var(--surface2)', color: mode === m.id ? '#000' : 'var(--muted)', padding: '1px 5px', borderRadius: 99, fontWeight: 800 }}>{count}</span>}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       <div className="desktop-main-side">
@@ -1233,7 +1269,8 @@ Return JSON ONLY (no markdown code blocks, just raw json):
                       <div className="section-title" style={{ color: 'var(--green)', margin: 0 }}>💡 Bài mẫu AI</div>
                       <div style={{ display: 'flex', gap: 10 }}>
                         <button
-                          onClick={() => {
+                          onClick={(e) => {
+                            const btn = e.currentTarget;
                             let text = spkSample;
                             const enStartMatch = text.match(/English:?\s*/i);
                             const enStartIdx = enStartMatch ? enStartMatch.index! + enStartMatch[0].length : 0;
@@ -1244,7 +1281,15 @@ Return JSON ONLY (no markdown code blocks, just raw json):
                               if (m && m.index! > enStartIdx && m.index! < firstViIdx) firstViIdx = m.index!;
                             });
                             text = text.slice(enStartIdx, firstViIdx).replace(/(\*\*|##|#|>\s|[:])/g, '').trim();
-                            speak(text, 1.0);
+                            // Loại bỏ phiên âm IPA (trong ngoặc vuông hoặc dấu gạch chéo)
+                            text = text.replace(/\[.*?\]/g, '').replace(/\/.*?\//g, '').trim();
+                            const old = btn.innerText;
+                            btn.innerText = '🔊 Đang phát...';
+                            btn.style.pointerEvents = 'none';
+                            speak(text, 1.0, 'en_female').finally(() => {
+                              btn.innerText = old;
+                              btn.style.pointerEvents = 'auto';
+                            });
                           }}
                           style={{ fontSize: 11, color: 'var(--accent)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700 }}
                         >
@@ -1387,6 +1432,33 @@ Return JSON ONLY (no markdown code blocks, just raw json):
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                       <div className="section-title" style={{ color: 'var(--green)', margin: 0 }}>💡 Bài viết mẫu AI</div>
                       <div style={{ display: 'flex', gap: 10 }}>
+                        <button
+                          onClick={(e) => {
+                            const btn = e.currentTarget;
+                            let text = writeSample;
+                            const enStartMatch = text.match(/English:?\s*/i);
+                            const enStartIdx = enStartMatch ? enStartMatch.index! + enStartMatch[0].length : 0;
+                            const viMarkers = [/Tiếng Việt/i, /Bản dịch/i, /Dịch/i, /Từ hay/i, /Từ vựng/i];
+                            let firstViIdx = text.length;
+                            viMarkers.forEach(regex => {
+                              const m = text.match(regex);
+                              if (m && m.index! > enStartIdx && m.index! < firstViIdx) firstViIdx = m.index!;
+                            });
+                            text = text.slice(enStartIdx, firstViIdx).replace(/(\*\*|##|#|>\s|[:])/g, '').trim();
+                            // Loại bỏ phiên âm IPA (trong ngoặc vuông hoặc dấu gạch chéo)
+                            text = text.replace(/\[.*?\]/g, '').replace(/\/.*?\//g, '').trim();
+                            const old = btn.innerText;
+                            btn.innerText = '🔊 Đang phát...';
+                            btn.style.pointerEvents = 'none';
+                            speak(text, 1.0, 'en_female').finally(() => {
+                              btn.innerText = old;
+                              btn.style.pointerEvents = 'auto';
+                            });
+                          }}
+                          style={{ fontSize: 11, color: 'var(--accent)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700 }}
+                        >
+                          🔊 Nghe mẫu
+                        </button>
                         <button
                           onClick={(e) => {
                             const btn = e.currentTarget;
@@ -1612,10 +1684,31 @@ Return JSON ONLY (no markdown code blocks, just raw json):
 
                         <div style={{ display: 'flex', gap: 6 }}>
                           <button
-                            onClick={() => speak(`${readArticle.title}. ${readArticle.body}`, 1.0)}
-                            style={{ padding: '6px 12px', borderRadius: 8, background: 'var(--surface2)', border: '1px solid var(--border)', color: 'var(--accent)', cursor: 'pointer', fontSize: 12, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 4 }}
+                            onClick={async () => {
+                              setReadSpeaking(true);
+                              try {
+                                await speak(`${readArticle.title}. ${readArticle.body}`, 1.0);
+                              } finally {
+                                setReadSpeaking(false);
+                              }
+                            }}
+                            disabled={readSpeaking}
+                            style={{
+                              padding: '6px 12px',
+                              borderRadius: 8,
+                              background: readSpeaking ? 'var(--accent)' : 'var(--surface2)',
+                              border: '1px solid var(--border)',
+                              color: readSpeaking ? '#000' : 'var(--accent)',
+                              cursor: readSpeaking ? 'not-allowed' : 'pointer',
+                              fontSize: 12,
+                              fontWeight: 700,
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 4,
+                              animation: readSpeaking ? 'pulse 1.5s ease-in-out infinite' : 'none'
+                            }}
                           >
-                            🔊 Nghe bài
+                            {readSpeaking ? '🔊 Đang phát...' : '🔊 Nghe bài'}
                           </button>
                           {(() => {
                             const itemId = readRecordId || history.find(h => h.type === 'reading' && h.content === readArticle.body)?.id;
@@ -1835,8 +1928,7 @@ Return JSON ONLY (no markdown code blocks, just raw json):
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
                       <div style={{ fontWeight: 800, fontSize: 15, color: 'var(--accent)' }}>{dictInput}</div>
                       <div style={{ display: 'flex', gap: 8 }}>
-                        <button onClick={() => speak(dictInput, 1.0)} style={{ fontSize: 12, color: 'var(--muted)', background: 'none', border: 'none', cursor: 'pointer' }}>🔊 Nghe</button>
-                        <button onClick={() => speak(dictInput, 0.7)} style={{ fontSize: 12, color: 'var(--muted)', background: 'none', border: 'none', cursor: 'pointer' }}>🐢 Chậm</button>
+                        <button onClick={() => speakBrowser(dictInput)} style={{ fontSize: 12, color: 'var(--muted)', background: 'none', border: 'none', cursor: 'pointer' }}>🔊 Nghe</button>
                       </div>
                     </div>
                     <div style={{ fontSize: 13, lineHeight: 1.9 }} dangerouslySetInnerHTML={{ __html: parseMarkdown(dictResult) }} />
@@ -1875,7 +1967,7 @@ Return JSON ONLY (no markdown code blocks, just raw json):
                                 <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)' }}>{word}</div>
                                 <div style={{ fontSize: 10, color: 'var(--muted)' }}>{new Date(item.createdAt).toLocaleString('vi')}</div>
                               </div>
-                              <button onClick={e => { e.stopPropagation(); speak(word, 1.0); }} style={{ fontSize: 12, color: 'var(--muted)', background: 'none', border: 'none', cursor: 'pointer' }}>🔊</button>
+                              <button onClick={e => { e.stopPropagation(); speakBrowser(word); }} style={{ fontSize: 12, color: 'var(--muted)', background: 'none', border: 'none', cursor: 'pointer' }}>🔊</button>
                               <button onClick={async e => { e.stopPropagation(); await fetch('/api/english', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: item.id }) }); loadHistory(); }} style={{ fontSize: 11, color: '#f85149', background: '#f8514915', border: 'none', cursor: 'pointer', padding: '3px 7px', borderRadius: 5 }}>🗑</button>
                             </div>
                           );

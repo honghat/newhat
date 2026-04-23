@@ -190,12 +190,14 @@ export function TimerProvider({ children }: { children: ReactNode }) {
 
             beep('work');
             fetchLatest().then(data => {
-              // KHÓA BẢO VỆ: Nếu server đã báo hết giờ (endTime=0) hoặc số phiên trên server 
-              // đã lớn hơn local, nghĩa là có thiết bị khác đã ghi nhận rồi.
+              // KHÓA BẢO VỆ: Nếu server đã báo hết giờ (endTime=0) hoặc số phiên trên server
+              // đã lớn hơn hoặc bằng local + 1, nghĩa là có thiết bị khác đã ghi nhận rồi.
               const serverSessions = data?.sessions ?? todaySessions;
               const serverEndTime = Number(data?.currentEndTime ?? 0);
-              
-              if (serverSessions > todaySessions || serverEndTime === 0) {
+              const expectedNext = todaySessions + 1;
+
+              if (serverSessions >= expectedNext || serverEndTime === 0) {
+                // Server đã có phiên này rồi, chỉ sync state
                 setTodaySessions(serverSessions);
                 setIsWork(false);
                 setRunning(false);
@@ -204,9 +206,9 @@ export function TimerProvider({ children }: { children: ReactNode }) {
                 return;
               }
 
-              const nextCount = serverSessions + 1;
-              setTodaySessions(nextCount);
-              saveState(false, false, nextCount);
+              // Chỉ tăng nếu server chưa có phiên này
+              setTodaySessions(expectedNext);
+              saveState(false, false, expectedNext);
               fetch('/api/logs', {
                 method:'PATCH',
                 headers:{'Content-Type':'application/json'},
