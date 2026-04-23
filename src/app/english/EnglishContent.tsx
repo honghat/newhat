@@ -31,7 +31,7 @@ async function genTopicTask(
   prompt: string,
   onTick: (elapsed: number) => void,
   model = 'default'
-): Promise<string | null> {
+): Promise<{ content: string, id: number } | null> {
   const startRes = await fetch('/api/ai/task', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ type, prompt, model }),
@@ -415,7 +415,7 @@ Hãy trình bày súc tích, tập trung vào trọng tâm.`;
     try {
       const result = await genTopicTask('grammar', p, () => {});
       if (result) {
-        const { content, id } = result as { content: string, id: number };
+        const { content, id } = result;
         setGrammarLesson(content);
         const ans: string[] = [];
         const ms = content.matchAll(/ANSWER:\s*([ABC])/g);
