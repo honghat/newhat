@@ -106,13 +106,18 @@ export async function POST(req: Request) {
       }
       const data = await res.json();
       const rawContent = data.choices?.[0]?.message?.content || '';
-      const cleaned = cleanTopic(rawContent);
-      if (cleaned && cleaned.length > 10) {
+      
+      // CHỈ làm sạch (clean) đối với các task dạng "chủ đề ngắn" (1 câu)
+      // KHÔNG làm sạch các bài giảng dài như grammar, reading, sample...
+      const skipClean = ['grammar', 'reading', 'writing_sample', 'speak_sample', 'listen'].includes(type);
+      const contentToSave = skipClean ? rawContent.trim() : cleanTopic(rawContent);
+
+      if (contentToSave && contentToSave.length > 5) {
         await prisma.englishLesson.create({
           data: {
             userId: user.id,
             type,
-            content: cleaned,
+            content: contentToSave,
             metadata: JSON.stringify({ taskId, generated: true }),
           },
         });

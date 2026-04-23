@@ -39,7 +39,7 @@ async function genTopicTask(
   if (!startRes.ok) throw new Error('Không khởi động được task');
   const { taskId } = await startRes.json();
   const start = Date.now();
-  while (Date.now() - start < 60000) {
+  while (Date.now() - start < 120000) { // Tăng lên 2 phút cho các bài giảng chi tiết
     await new Promise(r => setTimeout(r, 2000));
     onTick(Math.floor((Date.now() - start) / 1000));
     const res = await fetch(`/api/ai/task?taskId=${taskId}&type=${encodeURIComponent(type)}`);
@@ -268,7 +268,10 @@ const GRAMMAR_TOPICS = [
   'Present Simple', 'Present Continuous', 'Present Perfect',
   'Past Simple', 'Past Continuous', 'Future Simple',
   'Passive Voice', 'Relative Clauses', 'Conditionals (If)',
-  'Reported Speech', 'Gerund & Infinitive', 'Modal Verbs', 'Prepositions'
+  'Reported Speech', 'Gerund & Infinitive', 'Modal Verbs', 'Prepositions',
+  'Articles (A, An, The)', 'Comparisons', 'Wish Clauses', 'Used to / Get used to',
+  'Causative Form', 'Conjunctions (Although, Despite...)', 'Question Tags',
+  'Inversion (Đảo ngữ)', 'Subjunctive Mood', 'Phrasal Verbs Basics'
 ];
 
 const MODES = [
@@ -374,6 +377,7 @@ export default function EnglishContent() {
 
   // Grammar
   const [grammarTopic, setGrammarTopic] = useState(GRAMMAR_TOPICS[0]);
+  const [grammarCustomTopic, setGrammarCustomTopic] = useState('');
   const [grammarLoading, setGrammarLoading] = useState(false);
   const [grammarLesson, setGrammarLesson] = useState<string | null>(null);
   const [grammarRecordId, setGrammarRecordId] = useState<number | null>(null);
@@ -383,18 +387,22 @@ export default function EnglishContent() {
 
   async function genGrammarLesson() {
     setGrammarLoading(true); setGrammarLesson(null); setGrammarSubmitted(false); setGrammarUserAnswers([]);
-    const p = `Generate a comprehensive English grammar lesson for topic: "${grammarTopic}".
-Include:
-1. **Explanation**: Clear rules in Vietnamese.
-2. **Examples**: 3-5 English examples with translations.
-3. **Usage**: When to use this structure.
-4. **Quiz**: 3 multiple choice questions (A, B, C).
-   Format:
-   Q1: [Question]
-   A) [Opt] B) [Opt] C) [Opt]
-   ANSWER: [A/B/C]
+    const p = `Bạn là một giáo viên dạy Tiếng Anh chuyên nghiệp. Hãy soạn một bài giảng NGỮ PHÁP CHI TIẾT về chủ đề: "${grammarTopic}".
 
-Reply in Markdown. Keep it concise but professional.`;
+Yêu cầu bài giảng (Tất cả giải thích bằng Tiếng Việt):
+1. **Khái niệm**: Định nghĩa rõ ràng, ngắn gọn nhưng đầy đủ.
+2. **Cấu trúc**: Liệt kê các công thức (Khẳng định, Phủ định, Nghi vấn).
+3. **Cách dùng**: Giải thích chi tiết các trường hợp sử dụng, có lưu ý hoặc mẹo nhỏ để ghi nhớ.
+4. **Ví dụ**: 5 câu ví dụ tiếng Anh tiêu biểu, kèm theo phiên âm và bản dịch tiếng Việt.
+5. **Dấu hiệu nhận biết**: Các trạng từ hoặc cụm từ thường đi kèm (nếu có).
+6. **Quiz**: 3 câu hỏi trắc nghiệm (A, B, C) để kiểm tra kiến thức.
+
+Định dạng Quiz bắt buộc:
+Q1: [Câu hỏi]
+A) [Lựa chọn] B) [Lựa chọn] C) [Lựa chọn]
+ANSWER: [A hoặc B hoặc C]
+
+Hãy trình bày bằng Markdown chuyên nghiệp, sử dụng bảng nếu cần để so sánh.`;
     
     try {
       const content = await genTopicTask('grammar', p, () => {});
@@ -688,7 +696,7 @@ Reply with the question ONLY, no explanation.`;
   }
 
   async function startRec() {
-    setTranscript(''); setSpkFeedback(''); setRecognizing(true); setSttStatus('');
+    setRecognizing(true); setSttStatus('');
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       chunksRef.current = [];
@@ -1700,11 +1708,25 @@ Return JSON ONLY (no markdown code blocks, just raw json):
                 <div className="section-title">📐 Luyện Ngữ Pháp AI</div>
                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12 }}>
                   {GRAMMAR_TOPICS.map(t => (
-                    <button key={t} onClick={() => setGrammarTopic(t)} style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid', fontSize: 11, fontWeight: 600, cursor: 'pointer', borderColor: grammarTopic === t ? 'var(--accent)' : 'var(--border)', background: grammarTopic === t ? 'var(--accent)22' : 'transparent', color: grammarTopic === t ? 'var(--accent)' : 'var(--muted)' }}>{t}</button>
+                    <button key={t} onClick={() => { setGrammarTopic(t); setGrammarCustomTopic(''); }} style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid', fontSize: 11, fontWeight: 600, cursor: 'pointer', borderColor: grammarTopic === t && !grammarCustomTopic ? 'var(--accent)' : 'var(--border)', background: grammarTopic === t && !grammarCustomTopic ? 'var(--accent)22' : 'transparent', color: grammarTopic === t && !grammarCustomTopic ? 'var(--accent)' : 'var(--muted)' }}>{t}</button>
                   ))}
                 </div>
-                <button className="btn btn-primary" style={{ width: '100%' }} onClick={genGrammarLesson} disabled={grammarLoading}>
-                  {grammarLoading ? '⏳ AI đang soạn bài giảng...' : `📖 Học về ${grammarTopic}`}
+                
+                <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+                  <input 
+                    className="input" 
+                    placeholder="Hoặc tự nhập chủ đề (VD: Câu chẻ, Đảo ngữ loại 3...)" 
+                    value={grammarCustomTopic}
+                    onChange={(e) => {
+                      setGrammarCustomTopic(e.target.value);
+                      if (e.target.value) setGrammarTopic(e.target.value);
+                    }}
+                    style={{ flex: 1, marginBottom: 0, fontSize: 13 }}
+                  />
+                </div>
+
+                <button className="btn btn-primary" style={{ width: '100%' }} onClick={genGrammarLesson} disabled={grammarLoading || (grammarCustomTopic === '' && !grammarTopic)}>
+                  {grammarLoading ? '⏳ AI đang soạn bài giảng...' : `📖 Học về ${grammarCustomTopic || grammarTopic}`}
                 </button>
               </div>
 
@@ -1934,6 +1956,19 @@ Return JSON ONLY (no markdown code blocks, just raw json):
                         setReadRecordId(item.id);
                         try { const m = JSON.parse(item.metadata || '{}'); setReadTopic(m.topic || ''); setReadLevel(m.level || 'B1'); setReadQuestions(m.questions || []); setReadAnswers([]); setReadSubmitted(false); setReadArticle({ title: m.title || '', body: item.content, wordCount: item.content.split(/\s+/).length }); } catch { /**/ }
                         setReadSelected(''); setReadLookup(''); setReadChat([]);
+                      } else if (mapType === 'grammar') {
+                        setGrammarLesson(item.content);
+                        setGrammarRecordId(item.id);
+                        setGrammarSubmitted(false);
+                        try {
+                          const m = JSON.parse(item.metadata || '{}');
+                          if (m.topic) setGrammarTopic(m.topic);
+                          const ans: string[] = [];
+                          const ms = item.content.matchAll(/ANSWER:\s*([ABC])/g);
+                          for (const m of ms) ans.push(m[1]);
+                          setGrammarQuizAnswers(ans);
+                          setGrammarUserAnswers(ans.map(() => ''));
+                        } catch { /**/ }
                       }
                       window.scrollTo({ top: 0, behavior: 'smooth' });
                     }}
@@ -1950,7 +1985,7 @@ Return JSON ONLY (no markdown code blocks, just raw json):
                             return item.content.slice(0, 60);
                           }
                         })()
-                          : (mapType === 'speak' || mapType === 'writing') ? (() => { try { const m = JSON.parse(item.metadata || '{}'); return m.topic || m.prompt || item.content.slice(0, 50) || 'Dự án mới'; } catch { return item.content.slice(0, 50) || 'Dự án mới'; } })()
+                          : (mapType === 'speak' || mapType === 'writing' || mapType === 'grammar') ? (() => { try { const m = JSON.parse(item.metadata || '{}'); return m.topic || m.prompt || item.content.slice(0, 50) || 'Dự án mới'; } catch { return item.content.slice(0, 50) || 'Dự án mới'; } })()
                             : (mapType === 'reading') ? (() => { try { return JSON.parse(item.metadata || '{}').title; } catch { return item.content.slice(0, 50); } })()
                               : item.content.slice(0, 60)}
                       </div>
@@ -1983,7 +2018,7 @@ Return JSON ONLY (no markdown code blocks, just raw json):
                     </div>
 
                     <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
-                      {(mapType === 'speak' || mapType === 'writing' || mapType === 'reading') && (
+                      {(mapType === 'speak' || mapType === 'writing' || mapType === 'reading' || mapType === 'grammar') && (
                         <button onClick={(e) => { e.stopPropagation(); markLessonLearned(item.id); }} style={{ fontSize: 12, background: item.learnCount > 0 ? '#3fb95033' : 'var(--surface2)', border: '1px solid var(--border)', cursor: 'pointer', padding: '4px 8px', borderRadius: 6, color: item.learnCount > 0 ? '#3fb950' : 'var(--muted)', fontWeight: 700 }}>
                           ✓
                         </button>
