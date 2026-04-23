@@ -33,6 +33,7 @@ async def transcribe(
     language: str = Form("en"),
     response_format: str = Form("json"),
 ):
+    tmp_path = None
     try:
         suffix = os.path.splitext(file.filename or "audio.webm")[1] or ".webm"
         with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
@@ -41,7 +42,6 @@ async def transcribe(
 
         segments, info = whisper.transcribe(tmp_path, language=language or None, beam_size=3)
         text = " ".join(s.text.strip() for s in segments).strip()
-        os.unlink(tmp_path)
 
         if response_format == "text":
             return text
@@ -49,6 +49,9 @@ async def transcribe(
     except Exception as e:
         traceback.print_exc()
         return JSONResponse({"error": str(e)}, status_code=500)
+    finally:
+        if tmp_path and os.path.exists(tmp_path):
+            os.unlink(tmp_path)
 
 if __name__ == "__main__":
     import uvicorn
