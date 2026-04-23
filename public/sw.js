@@ -1,5 +1,5 @@
-const CACHE = 'newhat-v3';
-const STATIC = ['/', '/timer', '/learn', '/english', '/roadmap', '/entertainment', '/manifest.json'];
+const CACHE = 'newhat-v4';
+const STATIC = ['/', '/timer', '/learn', '/english', '/roadmap', '/manifest.json'];
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(STATIC)).catch(() => {}));
