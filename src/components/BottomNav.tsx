@@ -9,6 +9,7 @@ const tabs = [
   { href: '/', label: 'Trang Chủ', icon: '🏠' },
   { href: '/learn', label: 'Học Code', icon: '🧑‍💻' },
   { href: '/english', label: 'Tiếng Anh', icon: '🇬🇧' },
+  // { href: '/entertainment', label: 'Giải Trí', icon: '🎧' },
   { href: '/roadmap', label: 'Lộ Trình', icon: '🗺' },
   { href: '/timer', label: 'Pomodoro', icon: '⏱' },
 ];

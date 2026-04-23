@@ -24,6 +24,8 @@ async def handle_tts(request: web.Request) -> web.StreamResponse:
         if not text:
             return web.json_response({'error': 'No text'}, status=400)
         
+        print(f"[EdgeTTS Server] Synthesizing: {text[:50]}... ({len(text)} chars) | Voice: {voice}")
+        
         # Tạo communicator
         communicate = edge_tts.Communicate(text, voice, rate=rate)
         
@@ -35,6 +37,7 @@ async def handle_tts(request: web.Request) -> web.StreamResponse:
         
         audio_data = audio_buffer.getvalue()
         if not audio_data:
+            print(f"[EdgeTTS Server] FAILED: No audio generated for text: {text[:100]}", file=sys.stderr)
             return web.json_response({'error': 'Empty audio'}, status=500)
         
         return web.Response(
