@@ -39,7 +39,7 @@ async function genTopicTask(
   if (!startRes.ok) throw new Error('Không khởi động được task');
   const { taskId } = await startRes.json();
   const start = Date.now();
-  while (Date.now() - start < 120000) { // Tăng lên 2 phút cho các bài giảng chi tiết
+  while (Date.now() - start < 300000) { // Tăng lên 5 phút cho các bài giảng cực kỳ chi tiết
     await new Promise(r => setTimeout(r, 2000));
     onTick(Math.floor((Date.now() - start) / 1000));
     const res = await fetch(`/api/ai/task?taskId=${taskId}&type=${encodeURIComponent(type)}`);
@@ -49,7 +49,7 @@ async function genTopicTask(
     if (data.status === 'error') throw new Error(data.error || 'AI lỗi');
     if (data.status === 'unknown') return null;
   }
-  throw new Error('Quá 60s');
+  throw new Error('Quá 5 phút: AI không phản hồi kịp');
 }
 
 // Làm sạch output AI khi tạo chủ đề (1 câu) — bỏ quotes, markdown, prefixes
