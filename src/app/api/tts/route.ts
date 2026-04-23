@@ -1,4 +1,5 @@
 const LUXTTS = process.env.LUXTTS_SERVER || 'http://localhost:8880';
+const PIPER = process.env.PIPER_SERVER || 'http://localhost:5001';
 
 // Lightweight health check — no synthesis, just ping
 export async function GET() {
@@ -15,14 +16,20 @@ export async function GET() {
 
 export async function POST(req: Request) {
   const { text, voice = 'default', speed = 1.0 } = await req.json();
+
+  // Detect language: if Vietnamese, use Piper; otherwise use LuxTTS
+  const isVietnamese = /[àáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđ]/i.test(text);
+  const server = isVietnamese ? PIPER : LUXTTS;
+  const voiceToUse = isVietnamese ? 'vi_female' : voice;
+
   try {
-    const res = await fetch(`${LUXTTS}/v1/audio/speech`, {
+    const res = await fetch(`${server}/v1/audio/speech`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text, voice, speed }),
+      body: JSON.stringify({ text, voice: voiceToUse, speed }),
       signal: AbortSignal.timeout(30000),
     });
-    if (!res.ok) throw new Error(`LuxTTS HTTP ${res.status}`);
+    if (!res.ok) throw new Error(`TTS HTTP ${res.status}`);
     const audio = await res.arrayBuffer();
     return new Response(audio, {
       headers: {
@@ -32,6 +39,6 @@ export async function POST(req: Request) {
     });
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e);
-    return Response.json({ error: `LuxTTS offline: ${msg}` }, { status: 503 });
+    return Response.json({ error: `TTS offline: ${msg}` }, { status: 503 });
   }
 }

@@ -18,14 +18,18 @@
 ### 🇬🇧 Tiếng Anh (English)
 - **Luyện nói (Speaking)**: Ghi âm & nhận diện giọng nói (Whisper), nhận feedback từ AI
 - **Luyện viết (Writing)**: Tạo bài viết & nhận feedback
-- **TTS**: Nghe phát âm với giọng đọc (LuxTTS)
+- **TTS đa ngôn ngữ**: 
+  - Tiếng Anh: LuxTTS (giọng tự nhiên)
+  - Tiếng Việt: Piper TTS (giọng chuẩn)
 
 ## 🚀 Cổng Dịch Vụ
 
 | Cổng | Dịch vụ | Mô tả |
 |------|---------|-------|
 | **8006** | Next.js App | Web chính (Standalone Mode) |
-| **8880** | LuxTTS + Whisper | TTS + STT Service |
+| **8880** | LuxTTS | TTS tiếng Anh |
+| **5001** | Piper TTS | TTS tiếng Việt |
+| **9000** | Whisper | STT (Speech-to-Text) |
 | **5432** | PostgreSQL | Database |
 | **8080** | AI Server | LLM (Remote) |
 
@@ -66,11 +70,26 @@ npm run build
 
 ### Biến môi trường (.env.local)
 ```
-DATABASE_URL=postgresql://newhat_user:newhat123@localhost:5432/newhat
 JWT_SECRET=6f5be3de25c9a040b79b5218d8be5bf1...
 AI_SERVER=http://192.168.1.9:8080
 LUXTTS_SERVER=http://localhost:8880
+PIPER_SERVER=http://localhost:5001
 ```
+
+### TTS Servers
+
+#### LuxTTS (Tiếng Anh)
+- Port: 8880
+- Voices: paul, en_female, en_male, en_us
+- Tự động khởi động qua start.sh
+
+#### Piper TTS (Tiếng Việt)
+- Port: 5001
+- Voice: vi_female (vi_VN-vais1000-medium)
+- Tự động khởi động qua start.sh với conda env `hatai_env`
+- Voice models: `/Users/nguyenhat/NewHat/piper_voices/`
+
+Để thêm voice mới, xem: `piper_voices/README.md`
 
 ### Database
 Khởi tạo cấu trúc bảng:

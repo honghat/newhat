@@ -41,7 +41,7 @@ else
 fi
 
 # 2. LuxTTS
-printf "  ${BLUE}[2/5]${NC} LuxTTS TTS (8880)... "
+printf "  ${BLUE}[2/6]${NC} LuxTTS TTS (8880)... "
 LUXTTS_DIR="$DIR/LuxTTS"
 if curl -s --max-time 1 http://localhost:8880/health > /dev/null 2>&1; then
   echo -e "${GREEN}✓ đang chạy (port 8880)${NC}"
@@ -61,8 +61,26 @@ else
   echo -e "${YELLOW}– không tìm thấy $LUXTTS_DIR${NC}"
 fi
 
-# 3. Whisper STT
-printf "  ${BLUE}[3/5]${NC} Whisper STT (9000)... "
+# 3. Piper TTS (Tiếng Việt)
+printf "  ${BLUE}[3/6]${NC} Piper TTS (5001)... "
+if curl -s --max-time 1 http://localhost:5001/health > /dev/null 2>&1; then
+  echo -e "${GREEN}✓ đang chạy (port 5001)${NC}"
+elif [ -f "$DIR/piper_server.py" ]; then
+  echo -e "${YELLOW}↻ khởi động...${NC}"
+  # Kiểm tra conda env hatai_env
+  if command -v conda &> /dev/null; then
+    conda run -n hatai_env python "$DIR/piper_server.py" > /tmp/piper.log 2>&1 &
+    sleep 3
+    curl -s --max-time 2 http://localhost:5001/health > /dev/null && echo -e "     ${GREEN}✓ Piper OK (Tiếng Việt)${NC}" || echo -e "     ${YELLOW}– đang load model (xem /tmp/piper.log)${NC}"
+  else
+    echo -e "${YELLOW}– conda không tìm thấy${NC}"
+  fi
+else
+  echo -e "${YELLOW}– không tìm thấy piper_server.py${NC}"
+fi
+
+# 4. Whisper STT
+printf "  ${BLUE}[4/6]${NC} Whisper STT (9000)... "
 if curl -s --max-time 1 http://localhost:9000/health > /dev/null 2>&1; then
   echo -e "${GREEN}✓ đang chạy${NC}"
 elif [ -f "$DIR/whisper_server.py" ]; then
@@ -73,20 +91,21 @@ else
   echo -e "${YELLOW}– không tìm thấy whisper_server.py${NC}"
 fi
 
-# 4. AI Server
-printf "  ${BLUE}[4/5]${NC} AI Server 192.168.1.9:8080... "
+# 5. AI Server
+printf "  ${BLUE}[5/6]${NC} AI Server 192.168.1.9:8080... "
 curl -s --max-time 2 http://192.168.1.9:8080/health > /dev/null 2>&1 \
   && echo -e "${GREEN}✓ online${NC}" || echo -e "${YELLOW}– offline${NC}"
 
-# 5. Next.js
-echo -e "  ${BLUE}[5/5]${NC} Khởi động NewHat App..."
+# 6. Next.js
+echo -e "  ${BLUE}[6/6]${NC} Khởi động NewHat App..."
 lsof -ti:8006 | xargs kill -9 2>/dev/null || true; sleep 1
 
 echo ""
   echo -e "  ${GREEN}┌─────────────────────────────────────────┐${NC}"
   echo -e "  ${GREEN}│  🚀  http://localhost:8006              │${NC}"
   echo -e "  ${GREEN}│  🔊  LuxTTS:  http://localhost:8880     │${NC}"
-  echo -e "  ${GREEN}│  🎙️   Whisper: http://localhost:9000     │${NC}"
+  echo -e "  ${GREEN}│  🎙️   Piper:   http://localhost:5001     │${NC}"
+  echo -e "  ${GREEN}│  🎤  Whisper: http://localhost:9000     │${NC}"
   echo -e "  ${GREEN}│  🗄️   PostgreSQL: newhat@localhost:5432  │${NC}"
   echo -e "  ${GREEN}└─────────────────────────────────────────┘${NC}"
 echo ""
