@@ -45,11 +45,21 @@ async function genTopicTask(
     const res = await fetch(`/api/ai/task?taskId=${taskId}&type=${encodeURIComponent(type)}`);
     if (!res.ok) continue;
     const data = await res.json();
-    if (data.status === 'done') return data.content;
+    if (data.status === 'done') return { content: data.content, id: data.id } as any;
     if (data.status === 'error') throw new Error(data.error || 'AI lỗi');
     if (data.status === 'unknown') return null;
   }
   throw new Error('Quá 5 phút: AI không phản hồi kịp');
+}
+
+async function updateLessonMetadata(id: number, metadata: any) {
+  try {
+    await fetch('/api/english', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, metadata }),
+    });
+  } catch (e) { console.error('Failed to update metadata', e); }
 }
 
 // Làm sạch output AI khi tạo chủ đề (1 câu) — bỏ quotes, markdown, prefixes
@@ -389,32 +399,32 @@ export default function EnglishContent() {
     setGrammarLoading(true); setGrammarLesson(null); setGrammarSubmitted(false); setGrammarUserAnswers([]);
     const p = `Bạn là một giáo viên dạy Tiếng Anh chuyên nghiệp. Hãy soạn một bài giảng NGỮ PHÁP CHI TIẾT về chủ đề: "${grammarTopic}".
 
-Yêu cầu bài giảng (Tất cả giải thích bằng Tiếng Việt):
-1. **Khái niệm**: Định nghĩa rõ ràng, ngắn gọn nhưng đầy đủ.
-2. **Cấu trúc**: Liệt kê các công thức (Khẳng định, Phủ định, Nghi vấn).
-3. **Cách dùng**: Giải thích chi tiết các trường hợp sử dụng, có lưu ý hoặc mẹo nhỏ để ghi nhớ.
-4. **Ví dụ**: 5 câu ví dụ tiếng Anh tiêu biểu, kèm theo phiên âm và bản dịch tiếng Việt.
-5. **Dấu hiệu nhận biết**: Các trạng từ hoặc cụm từ thường đi kèm (nếu có).
-6. **Quiz**: 3 câu hỏi trắc nghiệm (A, B, C) để kiểm tra kiến thức.
+Yêu cầu bài giảng (Giải thích bằng Tiếng Việt, ngắn gọn súc tích):
+1. **Khái niệm & Cấu trúc**: Định nghĩa và công thức chính.
+2. **Cách dùng**: Các trường hợp sử dụng phổ biến nhất.
+3. **Ví dụ**: 3 câu ví dụ tiêu biểu (có bản dịch, không cần phiên âm IPA để tăng tốc độ).
+4. **Quiz**: 3 câu trắc nghiệm nhanh.
 
-Định dạng Quiz bắt buộc:
+Định dạng Quiz:
 Q1: [Câu hỏi]
 A) [Lựa chọn] B) [Lựa chọn] C) [Lựa chọn]
-ANSWER: [A hoặc B hoặc C]
+ANSWER: [A/B/C]
 
-Hãy trình bày bằng Markdown chuyên nghiệp, sử dụng bảng nếu cần để so sánh.`;
+Hãy trình bày súc tích, tập trung vào trọng tâm.`;
     
     try {
-      const content = await genTopicTask('grammar', p, () => {});
-      if (content) {
+      const result = await genTopicTask('grammar', p, () => {});
+      if (result) {
+        const { content, id } = result as { content: string, id: number };
         setGrammarLesson(content);
         const ans: string[] = [];
         const ms = content.matchAll(/ANSWER:\s*([ABC])/g);
         for (const m of ms) ans.push(m[1]);
         setGrammarQuizAnswers(ans);
         setGrammarUserAnswers(ans.map(() => ''));
-        const saved = await saveToDb('grammar', content, { topic: grammarTopic }, mode);
-        if (saved) setGrammarRecordId(saved.id);
+        setGrammarRecordId(id);
+        // Update metadata for the record already created by server
+        await updateLessonMetadata(id, { topic: grammarTopic, mode });
         loadHistory();
       }
     } catch (e) {
@@ -652,7 +662,7 @@ Reply with the question ONLY, no explanation.`;
       const clean = cleanTopic(t);
       setSpkTopic(clean);
       setTranscript(''); setSpkFeedback(''); setSpkSample('');
-      // Background save — không block UI
+      // Lưu chủ đề mới (Chỉ 1 bản ghi)
       fetch('/api/english', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ type: 'speak', content: '', metadata: { topic: clean, mode, level: spkLevel } }),
@@ -805,10 +815,10 @@ Reply with the prompt ONLY.`;
       const clean = cleanTopic(t);
       setWritePrompt(clean);
       setWriteText(''); setWriteFeedback(''); setWriteSample('');
-      // Background save — không block UI
+      // Lưu chủ đề mới (Chỉ 1 bản ghi)
       fetch('/api/english', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type: 'writing', content: '', metadata: { prompt: clean, mode } }),
+        body: JSON.stringify({ type: 'writing', content: '', metadata: { prompt: clean, mode, level: writeLevel } }),
       }).then(r => r.json()).then(d => { setWriteRecordId(d.id); loadHistory(); }).catch(() => setWriteRecordId(null));
     }
     setWriteTopicLoading(false);
@@ -1726,7 +1736,7 @@ Return JSON ONLY (no markdown code blocks, just raw json):
                 </div>
 
                 <button className="btn btn-primary" style={{ width: '100%' }} onClick={genGrammarLesson} disabled={grammarLoading || (grammarCustomTopic === '' && !grammarTopic)}>
-                  {grammarLoading ? '⏳ AI đang soạn bài giảng...' : `📖 Học về ${grammarCustomTopic || grammarTopic}`}
+                  {grammarLoading ? '⏳ AI đang soạn bài...' : `📖 Học về ${grammarCustomTopic || grammarTopic}`}
                 </button>
               </div>
 

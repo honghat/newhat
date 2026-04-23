@@ -9,7 +9,7 @@ export async function GET(req: Request) {
   try {
     const where = type ? { userId: user.id, type } : { userId: user.id };
     const lessons = await prisma.englishLesson.findMany({
-      where, orderBy: { order: 'asc' }, take: 100,
+      where, orderBy: { createdAt: 'desc' }, take: 100,
     });
     return Response.json(lessons);
   } catch { return Response.json([]); }

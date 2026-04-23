@@ -169,7 +169,7 @@ export async function GET(req: Request) {
     orderBy: { createdAt: 'desc' },
   });
   if (result && result.metadata?.includes(taskId)) {
-    return Response.json({ status: 'done', content: result.content });
+    return Response.json({ status: 'done', content: result.content, id: result.id });
   }
   return Response.json({ status: 'unknown' });
 }

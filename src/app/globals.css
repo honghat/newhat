@@ -308,3 +308,50 @@ pre {
     -webkit-tap-highlight-color: transparent;
   }
 }
+/* ─── Track Tooltip ─── */
+.track-wrapper {
+  position: relative;
+  display: inline-block;
+}
+.track-tooltip {
+  position: absolute;
+  bottom: 120%;
+  left: 50%;
+  transform: translateX(-50%) translateY(10px);
+  width: 240px;
+  padding: 12px;
+  background: var(--surface2);
+  border: 1px solid var(--accent);
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.5), 0 0 10px var(--accent)33;
+  z-index: 1000;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  text-align: left;
+}
+.track-tooltip::after {
+  content: "";
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  margin-left: -6px;
+  border: 6px solid transparent;
+  border-top-color: var(--accent);
+}
+@media (min-width: 900px) {
+  .track-wrapper:hover .track-tooltip {
+    opacity: 1;
+    visibility: visible;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+@media (max-width: 899px) {
+  .track-tooltip { display: none !important; }
+}
+.tooltip-title { font-size: 13px; fontWeight: 900; margin-bottom: 4px; display: block; }
+
+.tooltip-desc { fontSize: 11px; color: var(--text); marginBottom: 8px; display: block; line-height: 1.4; }
+.tooltip-item { fontSize: 10px; color: var(--muted); display: block; line-height: 1.5; }
+.tooltip-item strong { color: var(--text); }

@@ -34,6 +34,37 @@ const TRACKS = [
   {id: 'langchain', label: '🦜 LangChain', color: '#00add8' },
 ];
 
+const TRACK_INFO: Record<string, { desc: string, core: string, use: string }> = {
+  'html-css': { desc: "Nền tảng của mọi website", core: "Tags, Selectors, Box Model, Flexbox/Grid", use: "Xây dựng cấu trúc và giao diện trang web" },
+  'javascript': { desc: "Ngôn ngữ lập trình phổ biến nhất thế giới", core: "Event-driven, Async, DOM Manipulation", use: "Tạo tính tương tác cho web và làm Backend (Node.js)" },
+  'typescript': { desc: "Phiên bản an toàn hơn của JavaScript", core: "Static Typing, Interfaces, Generics", use: "Dự án lớn, chuyên nghiệp, hạn chế lỗi runtime" },
+  'react': { desc: "Thư viện UI mạnh mẽ từ Facebook", core: "Components, Hooks, State Management", use: "Xây dựng ứng dụng Web Single Page hiện đại" },
+  'nextjs': { desc: "Framework React tốt nhất hiện nay", core: "SSR, SSG, Server Components, SEO optimization", use: "Website hiệu năng cao và chuẩn SEO" },
+  'nodejs': { desc: "Chạy JavaScript trên máy tính/server", core: "V8 Engine, Non-blocking I/O, NPM ecosystem", use: "Xây dựng Server, API, công cụ dòng lệnh" },
+  'python': { desc: "Ngôn ngữ đa năng, dễ học nhất", core: "Simple Syntax, Rich Libraries, Data structures", use: "AI, Data Science, Backend, Tự động hóa" },
+  'fastapi': { desc: "Framework Python tạo API cực nhanh", core: "Pydantic, Async/Await, Auto Documentation", use: "Xây dựng API hiệu năng cao, hiện đại" },
+  'java': { desc: "Ngôn ngữ doanh nghiệp ổn định", core: "OOP, Strong Typing, JVM, Multithreading", use: "Hệ thống ngân hàng, App Android, Backend lớn" },
+  'kotlin': { desc: "Ngôn ngữ hiện đại cho Android", core: "Null Safety, Coroutines, Interoperable with Java", use: "Phát triển ứng dụng Android hiện đại" },
+  'csharp': { desc: "Ngôn ngữ mạnh mẽ từ Microsoft", core: ".NET ecosystem, LINQ, Async/Await", use: "Game (Unity), App Windows, Web Backend" },
+  'cpp': { desc: "Ngôn ngữ hiệu năng cực cao", core: "Memory Management, Pointers, Low-level access", use: "Game Engine, Hệ điều hành, Phần mềm nhúng" },
+  'go': { desc: "Ngôn ngữ của hệ thống hiện đại", core: "Concurrency, Goroutines, Static Binary", use: "Hệ thống Cloud, Microservices (Docker, K8s)" },
+  'rust': { desc: "Ngôn ngữ an toàn bộ nhớ nhất", core: "Ownership, Borrow Checker, Zero-cost abstractions", use: "Hệ thống cần hiệu năng cao và cực kỳ an toàn" },
+  'php': { desc: "Ngôn ngữ truyền thống của Web", core: "Server-side scripting, WordPress, Composer", use: "Xây dựng Website nhanh, Thương mại điện tử" },
+  'ruby': { desc: "Ngôn ngữ tập trung vào sự hạnh phúc của dev", core: "Elegant syntax, Rails framework, OOP", use: "Khởi nghiệp nhanh (Startup), Web Backend" },
+  'swift': { desc: "Ngôn ngữ của hệ sinh thái Apple", core: "Safety, Speed, Modern Syntax, SwiftUI", use: "Phát triển App cho iPhone, iPad, Mac" },
+  'dart': { desc: "Ngôn ngữ của Google cho đa nền tảng", core: "JIT/AOT compilation, Flutter framework", use: "Làm App Mobile (iOS/Android) từ một bộ code" },
+  'postgresql': { desc: "CSDL quan hệ mã nguồn mở mạnh nhất", core: "SQL, ACID, Relational data, Extensions", use: "Lưu trữ dữ liệu lớn, an toàn, ổn định" },
+  'mssql': { desc: "Hệ quản trị CSDL từ Microsoft", core: "T-SQL, Enterprise Security, Integration", use: "Hệ thống quản lý doanh nghiệp, SQL Server" },
+  'git': { desc: "Công cụ quản lý phiên bản mã nguồn", core: "Commits, Branches, Merging, Rebase", use: "Làm việc nhóm, quản lý lịch sử code" },
+  'api': { desc: "Giao thức kết nối các hệ thống", core: "REST, HTTP Methods, JSON, Authentication", use: "Kết nối Frontend với Backend, tích hợp dịch vụ" },
+  'docker': { desc: "Công nghệ đóng gói ứng dụng", core: "Containers, Images, Dockerfile, Compose", use: "Triển khai ứng dụng nhất quán mọi nơi" },
+  'linux': { desc: "Hệ điều hành của Server", core: "Terminal, Bash Scripting, Permissions", use: "Quản trị Server, DevOps, Lập trình hệ thống" },
+  'excel-vba': { desc: "Tự động hóa trên Microsoft Excel", core: "Macros, Scripts, Office Automation", use: "Xử lý dữ liệu văn phòng, báo cáo tự động" },
+  'powerbi': { desc: "Công cụ phân tích dữ liệu kinh doanh", core: "DAX, Data Modeling, Visualization", use: "Tạo báo cáo, Dashboard phân tích dữ liệu" },
+  'ai-ml': { desc: "Trí tuệ nhân tạo và Máy học", core: "Models, Training, Neural Networks, Inference", use: "Nhận diện hình ảnh, chatbot, dự đoán dữ liệu" },
+  'langchain': { desc: "Công cụ xây dựng ứng dụng với LLM", core: "Chains, Agents, Vector DBs, Prompt Engineering", use: "Xây dựng ứng dụng tích hợp AI chuyên sâu" }
+};
+
 export default function LearnMain() {
   const [track, setTrack] = useState('javascript');
   const [lessons, setLessons] = useState<Lesson[]>([]);
@@ -446,16 +477,25 @@ ${codeInput}` }] }),
           display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10 
         }} className="no-scrollbar">
           {TRACKS.map(t => (
-            <button key={t.id} onClick={() => setTrack(t.id)} style={{
-              padding: '7px 10px', borderRadius: 10, border: '1px solid',
-              borderColor: track === t.id ? t.color : 'var(--border)',
-              background: track === t.id ? t.color + '22' : 'var(--surface)',
-              color: track === t.id ? t.color : 'var(--muted)',
-              fontSize: 13, cursor: 'pointer', fontWeight: track === t.id ? 700 : 400,
-              whiteSpace: 'nowrap',
-              flexShrink: 0,
-              touchAction: 'manipulation'
-            }}>{t.label}</button>
+            <div key={t.id} className="track-wrapper">
+              <button onClick={() => setTrack(t.id)} style={{
+                padding: '7px 10px', borderRadius: 10, border: '1px solid',
+                borderColor: track === t.id ? t.color : 'var(--border)',
+                background: track === t.id ? t.color + '22' : 'var(--surface)',
+                color: track === t.id ? t.color : 'var(--muted)',
+                fontSize: 13, cursor: 'pointer', fontWeight: track === t.id ? 700 : 400,
+                whiteSpace: 'nowrap',
+                flexShrink: 0,
+                touchAction: 'manipulation'
+              }}>{t.label}</button>
+              
+              <div className="track-tooltip" style={{ borderColor: t.color }}>
+                <span className="tooltip-title" style={{ color: t.color }}>{t.label}</span>
+                <span className="tooltip-desc">{TRACK_INFO[t.id]?.desc || 'Đang cập nhật...'}</span>
+                <span className="tooltip-item"><strong>Cốt lõi:</strong> {TRACK_INFO[t.id]?.core || '...'}</span>
+                <span className="tooltip-item"><strong>Dùng cho:</strong> {TRACK_INFO[t.id]?.use || '...'}</span>
+              </div>
+            </div>
           ))}
         </div>
 
@@ -468,6 +508,23 @@ ${codeInput}` }] }),
         <button className="btn btn-primary" style={{ width: '100%', marginBottom: 20, height: 56, fontSize: 16, boxShadow: '0 4px 12px rgba(88,166,255,0.2)', touchAction: 'manipulation' }} onClick={genLesson} disabled={loading}>
           {loading ? '⏳ AI đang soạn bài...' : `🤖 Tạo bài ${trackObj?.label} mới`}
         </button>
+
+        {/* Mobile-only Info Card */}
+        <div className="card-sm" style={{ 
+          marginBottom: 20, 
+          borderLeft: `4px solid ${trackObj?.color || 'var(--accent)'}`,
+          background: 'var(--surface2)',
+          display: 'block'
+        }} id="mobile-track-info">
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+            <span style={{ fontSize: 16 }}>{trackObj?.label}</span>
+            <span style={{ fontSize: 11, color: 'var(--muted)' }}>• {TRACK_INFO[track]?.desc}</span>
+          </div>
+          <div style={{ fontSize: 12, lineHeight: 1.6 }}>
+            <div><strong style={{ color: 'var(--accent)' }}>Cốt lõi:</strong> {TRACK_INFO[track]?.core}</div>
+            <div><strong style={{ color: 'var(--green)' }}>Dùng cho:</strong> {TRACK_INFO[track]?.use}</div>
+          </div>
+        </div>
         </>
       )}
 
@@ -475,14 +532,36 @@ ${codeInput}` }] }),
         <>
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10 }}>
           {TRACKS.map(t => (
-            <button key={t.id} onClick={() => setCodeLang(t.id)} style={{
-              padding: '7px 10px', borderRadius: 8, border: '1px solid',
-              borderColor: codeLang === t.id ? t.color : 'var(--border)',
-              background: codeLang === t.id ? t.color + '22' : 'var(--surface)',
-              color: codeLang === t.id ? t.color : 'var(--muted)',
-              fontSize: 13, cursor: 'pointer', fontWeight: codeLang === t.id ? 700 : 400,
-            }}>{t.label}</button>
+            <div key={t.id} className="track-wrapper">
+              <button onClick={() => setCodeLang(t.id)} style={{
+                padding: '7px 10px', borderRadius: 8, border: '1px solid',
+                borderColor: codeLang === t.id ? t.color : 'var(--border)',
+                background: codeLang === t.id ? t.color + '22' : 'var(--surface)',
+                color: codeLang === t.id ? t.color : 'var(--muted)',
+                fontSize: 13, cursor: 'pointer', fontWeight: codeLang === t.id ? 700 : 400,
+              }}>{t.label}</button>
+
+              <div className="track-tooltip" style={{ borderColor: t.color }}>
+                <span className="tooltip-title" style={{ color: t.color }}>{t.label}</span>
+                <span className="tooltip-desc">{TRACK_INFO[t.id]?.desc || 'Đang cập nhật...'}</span>
+                <span className="tooltip-item"><strong>Cốt lõi:</strong> {TRACK_INFO[t.id]?.core || '...'}</span>
+                <span className="tooltip-item"><strong>Dùng cho:</strong> {TRACK_INFO[t.id]?.use || '...'}</span>
+              </div>
+            </div>
           ))}
+        </div>
+
+        {/* Mobile-only Info Card for Code Mode */}
+        <div className="card-sm" style={{ 
+          marginBottom: 20, 
+          borderLeft: `4px solid ${TRACKS.find(t=>t.id===codeLang)?.color || 'var(--accent)'}`,
+          background: 'var(--surface2)'
+        }}>
+          <div style={{ fontSize: 12, lineHeight: 1.6 }}>
+            <div style={{ fontWeight: 800, marginBottom: 4 }}>{TRACKS.find(t=>t.id===codeLang)?.label}</div>
+            <div>{TRACK_INFO[codeLang]?.desc}</div>
+            <div style={{ fontSize: 11, marginTop: 4 }}><strong style={{ color: 'var(--accent)' }}>Cốt lõi:</strong> {TRACK_INFO[codeLang]?.core}</div>
+          </div>
         </div>
 
         <div className="card" style={{ marginBottom: 20 }}>
