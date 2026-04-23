@@ -1,3 +1,4 @@
+
 # Các bước cần làm khi di chuyển thư mục dự án NewHat
 
 Nếu bạn di chuyển thư mục dự án sang một vị trí mới, hãy thực hiện đúng các bước sau để đảm bảo hệ thống tự động (Agent) và App hoạt động bình thường:
