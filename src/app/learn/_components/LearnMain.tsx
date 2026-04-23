@@ -86,6 +86,8 @@ export default function LearnMain() {
   const contentRef = useRef<HTMLDivElement>(null);
   const [aiModel, setAiModel] = useState('default');
   const [isMounted, setIsMounted] = useState(false);
+  const [isReading, setIsReading] = useState(false);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
     setIsMounted(true);
@@ -370,6 +372,85 @@ ${codeInput}` }] }),
       setError('Lỗi: ' + String(e));
     }
     setLoading(false);
+  }
+
+  async function readContent() {
+    if (!current) return;
+
+    // Nếu đang đọc, dừng lại
+    if (isReading) {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current = null;
+      }
+      setIsReading(false);
+      return;
+    }
+
+    setIsReading(true);
+
+    // Lấy nội dung text từ bài học (bỏ markdown và code blocks)
+    const contentWithoutQuiz = current.content.replace(/## 🧠 Quiz[\s\S]*/, '');
+    const textContent = contentWithoutQuiz
+      .replace(/```[\s\S]*?```/g, '') // Bỏ code blocks
+      .replace(/#{1,6}\s/g, '') // Bỏ markdown headers
+      .replace(/\*\*/g, '') // Bỏ bold
+      .replace(/\*/g, '') // Bỏ italic
+      .replace(/`/g, '') // Bỏ inline code
+      .replace(/\[([^\]]+)\]\([^\)]+\)/g, '$1') // Bỏ links, giữ text
+      .trim();
+
+    // Giới hạn độ dài văn bản (max 500 ký tự để tránh timeout)
+    const truncatedText = textContent.length > 500 ? textContent.slice(0, 500) + '...' : textContent;
+
+    try {
+      const res = await fetch('/api/tts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: truncatedText, speed: 1.0, lang: 'vi' }),
+      });
+
+      if (res.ok) {
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const audio = new Audio(url);
+        audioRef.current = audio;
+
+        audio.onended = () => {
+          URL.revokeObjectURL(url);
+          setIsReading(false);
+          audioRef.current = null;
+        };
+
+        audio.onerror = () => {
+          URL.revokeObjectURL(url);
+          setIsReading(false);
+          audioRef.current = null;
+        };
+
+        await audio.play();
+        return;
+      }
+      // API lỗi (503) → fallback browser TTS
+    } catch (e) {
+      console.warn('TTS API lỗi, dùng browser TTS:', e);
+    }
+
+    // Fallback: Browser SpeechSynthesis
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+      const u = new SpeechSynthesisUtterance(truncatedText);
+      u.lang = 'vi-VN';
+      u.rate = 1.0;
+      const voices = window.speechSynthesis.getVoices();
+      const viVoice = voices.find(v => v.lang.startsWith('vi')) || null;
+      u.voice = viVoice;
+      u.onend = () => setIsReading(false);
+      u.onerror = () => setIsReading(false);
+      window.speechSynthesis.speak(u);
+    } else {
+      setIsReading(false);
+    }
   }
 
   const score = quizSubmitted ? userAnswers.filter((a, i) => a === quizAnswers[i]).length : 0;
@@ -667,6 +748,9 @@ ${codeInput}` }] }),
                     </div>
                   </div>
                   <div style={{ display:'flex', gap:6, flexShrink:0 }}>
+                    <button onClick={readContent} style={{ padding:'6px 12px', borderRadius:8, background: isReading ? 'var(--orange)' : 'var(--accent)', color:'#000', border:'none', fontSize:12, fontWeight:700, cursor:'pointer', display:'flex', alignItems:'center', gap:4, boxShadow:'0 2px 8px rgba(0,0,0,0.2)' }}>
+                      <span>{isReading ? '⏸' : '🔊'}</span> {isReading ? 'Dừng' : 'Đọc'}
+                    </button>
                     <button onClick={() => markComplete(current.id)} style={{ padding:'6px 12px', borderRadius:8, background:'#3fb950', color:'#000', border:'none', fontSize:12, fontWeight:700, cursor:'pointer', display:'flex', alignItems:'center', gap:4, boxShadow:'0 2px 8px rgba(63,185,80,0.3)' }}>
                       <span>📚</span> {current.learnCount > 0 ? 'Học lại' : 'Đã học'}
                     </button>

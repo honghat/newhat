@@ -58,11 +58,20 @@ def synthesize():
 
     try:
         voice = voices[voice_name]
+        from piper.config import SynthesisConfig
 
-        # Synthesize audio
+        # Synthesis configuration
+        config = SynthesisConfig(length_scale=1.0/speed)
+
+        # Synthesize audio chunks
         audio_bytes = io.BytesIO()
         with wave.open(audio_bytes, 'wb') as wav_file:
-            voice.synthesize(text, wav_file, length_scale=1.0/speed)
+            wav_file.setnchannels(1)
+            wav_file.setsampwidth(2)
+            wav_file.setframerate(voice.config.sample_rate)
+
+            for chunk in voice.synthesize(text, config):
+                wav_file.writeframes(chunk.audio_int16_bytes)
 
         audio_bytes.seek(0)
         return send_file(
@@ -72,6 +81,8 @@ def synthesize():
             download_name='speech.wav'
         )
     except Exception as e:
+        import traceback
+        print(traceback.format_exc())
         return jsonify({'error': str(e)}), 500
 
 @app.route('/voices', methods=['GET'])

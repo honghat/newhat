@@ -46,7 +46,7 @@ else
 fi
 
 # ── 2. LuxTTS (port 8880) ────────────────────────────────
-echo "[2/4] LuxTTS (port 8880)..."
+echo "[2/5] LuxTTS (port 8880)..."
 if curl -s --max-time 2 http://localhost:8880/health > /dev/null 2>&1; then
   echo "  ✓ LuxTTS đang chạy"
 elif [ -f "$DIR/LuxTTS/server.py" ]; then
@@ -58,8 +58,25 @@ else
   echo "  – Không tìm thấy LuxTTS/server.py"
 fi
 
-# ── 3. Whisper STT (port 9000) ───────────────────────────
-echo "[3/4] Whisper STT (port 9000)..."
+# ── 3. Piper TTS — tiếng Việt (port 5001) ────────────────
+echo "[3/5] Piper TTS (port 5001)..."
+if curl -s --max-time 2 http://localhost:5001/health > /dev/null 2>&1; then
+  echo "  ✓ Piper đang chạy"
+elif [ -f "$DIR/piper_server.py" ]; then
+  # Ưu tiên conda env hatai_env, fallback sang PYTHON thường
+  if /Users/nguyenhat/miniconda3/bin/conda run -n hatai_env python -c "import piper" 2>/dev/null; then
+    nohup /Users/nguyenhat/miniconda3/bin/conda run -n hatai_env \
+      python "$DIR/piper_server.py" > "$LOG/newhat_piper.log" 2>&1 &
+  else
+    nohup "$PYTHON" "$DIR/piper_server.py" > "$LOG/newhat_piper.log" 2>&1 &
+  fi
+  echo "  ↻ Piper đã khởi động (PID $!) — xem $LOG/newhat_piper.log"
+else
+  echo "  – Không tìm thấy piper_server.py"
+fi
+
+# ── 4. Whisper STT (port 9000) ───────────────────────────
+echo "[4/5] Whisper STT (port 9000)..."
 if curl -s --max-time 2 http://localhost:9000/health > /dev/null 2>&1; then
   echo "  ✓ Whisper đang chạy"
 elif [ -f "$DIR/whisper_server.py" ]; then
@@ -70,8 +87,8 @@ else
   echo "  – Không tìm thấy whisper_server.py"
 fi
 
-# ── 4. Next.js (port 8006) ───────────────────────────────
-echo "[4/4] Next.js (port 8006)..."
+# ── 5. Next.js (port 8006) ───────────────────────────────
+echo "[5/5] Next.js (port 8006)..."
 # Kill process cũ trên port 8006 nếu còn
 lsof -ti:8006 | xargs kill -9 2>/dev/null || true
 sleep 1
