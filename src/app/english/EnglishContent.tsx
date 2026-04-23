@@ -321,6 +321,7 @@ export default function EnglishContent() {
 
   // Listening
   const [listenLevel, setListenLevel] = useState('A2');
+  const [listenCustomTopic, setListenCustomTopic] = useState('');
   const [listenText, setListenText] = useState('');
   const [listenVi, setListenVi] = useState('');
   const [listenVocab, setListenVocab] = useState<{ w: string; m: string }[]>([]);
@@ -335,6 +336,8 @@ export default function EnglishContent() {
   // Speaking
   const [spkLevel, setSpkLevel] = useState('A2');
   const [spkTopic, setSpkTopic] = useState('Tell me about your typical day as a software developer.');
+  const [spkCustomTopic, setSpkCustomTopic] = useState('');
+  const [spkSampleDirection, setSpkSampleDirection] = useState('');
   const [spkTopicError, setSpkTopicError] = useState('');
   const [recognizing, setRecognizing] = useState(false);
   const [transcript, setTranscript] = useState('');
@@ -352,6 +355,8 @@ export default function EnglishContent() {
   const [writeLevel, setWriteLevel] = useState('A2');
   const [writeText, setWriteText] = useState('');
   const [writePrompt, setWritePrompt] = useState(WRITING_PROMPTS[0]);
+  const [writeCustomPrompt, setWriteCustomPrompt] = useState('');
+  const [writeSampleDirection, setWriteSampleDirection] = useState('');
   const [writeTopicError, setWriteTopicError] = useState('');
   const [writeFeedback, setWriteFeedback] = useState('');
   const [writeLoading, setWriteLoading] = useState(false);
@@ -372,6 +377,7 @@ export default function EnglishContent() {
   // Reading
   const [readLevel, setReadLevel] = useState('A2');
   const [readTopic, setReadTopic] = useState('Web Development');
+  const [readCustomTopic, setReadCustomTopic] = useState('');
   const [readLoading, setReadLoading] = useState(false);
   const [readArticle, setReadArticle] = useState<{ title: string; body: string; wordCount: number } | null>(null);
   const [readRecordId, setReadRecordId] = useState<number | null>(null);
@@ -568,9 +574,14 @@ Hãy trình bày súc tích, tập trung vào trọng tâm.`;
         }
       });
 
-    // Chọn scenario ngẫu nhiên theo mode
-    const scenarios = LISTEN_SCENARIOS[mode as keyof typeof LISTEN_SCENARIOS] || LISTEN_SCENARIOS.coder;
-    const scenario = scenarios[Math.floor(Math.random() * scenarios.length)];
+    // Nếu có custom topic, dùng nó; nếu không thì chọn scenario ngẫu nhiên
+    let scenario = '';
+    if (listenCustomTopic.trim()) {
+      scenario = listenCustomTopic.trim();
+    } else {
+      const scenarios = LISTEN_SCENARIOS[mode as keyof typeof LISTEN_SCENARIOS] || LISTEN_SCENARIOS.coder;
+      scenario = scenarios[Math.floor(Math.random() * scenarios.length)];
+    }
 
     const avoidList = existingListens.length > 0
       ? `\nAvoid these existing topics: ${existingListens.join('; ')}`
@@ -615,6 +626,7 @@ Return JSON format ONLY:
         setListenText(raw);
       }
     }
+    setListenCustomTopic(''); // Clear custom topic sau khi dùng
     setListenLoading(false); loadHistory();
   }
 
@@ -632,6 +644,27 @@ Return JSON format ONLY:
       return;
     }
     setSpkTopicLoading(true); setSpkTopicError('');
+
+    // Nếu có custom topic, dùng nó để tạo câu hỏi tiếng Anh
+    if (spkCustomTopic.trim()) {
+      const p = `Translate this Vietnamese topic into a natural English speaking question for ${spkLevel} level learner: "${spkCustomTopic.trim()}"
+
+Reply with the English question ONLY, no explanation.`;
+      const t = await askAI(p, aiModel);
+      if (t) {
+        const clean = cleanTopic(t);
+        setSpkTopic(clean);
+        setTranscript(''); setSpkFeedback(''); setSpkSample('');
+        setSpkCustomTopic(''); // Clear sau khi dùng
+        // Lưu chủ đề mới
+        fetch('/api/english', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ type: 'speak', content: '', metadata: { topic: clean, mode, level: spkLevel } }),
+        }).then(r => r.json()).then(d => { setSpkRecordId(d.id); loadHistory(); }).catch(() => setSpkRecordId(null));
+      }
+      setSpkTopicLoading(false);
+      return;
+    }
 
     // Lấy TẤT CẢ chủ đề speaking cùng mode
     const existingTopics = history
@@ -675,7 +708,10 @@ Reply with the question ONLY, no explanation.`;
 
   async function genSpkSample() {
     setSpkSampleLoading(true);
-    const raw = await askAI(`Answer this English question at ${spkLevel} level in 3-4 natural sentences: "${spkTopic}"
+    const directionText = spkSampleDirection.trim()
+      ? `\n\nĐịnh hướng trả lời: ${spkSampleDirection.trim()}`
+      : '';
+    const raw = await askAI(`Answer this English question at ${spkLevel} level in 3-4 natural sentences: "${spkTopic}"${directionText}
 
 **English:** (3-4 sentences)
 **Tiếng Việt:** (bản dịch ngắn)
@@ -692,7 +728,10 @@ Reply with the question ONLY, no explanation.`;
 
   async function genWriteSample() {
     setWriteSampleLoading(true);
-    const raw = await askAI(`Write a concise sample response at ${writeLevel} level (80-120 words) for: "${writePrompt}"
+    const directionText = writeSampleDirection.trim()
+      ? `\n\nĐịnh hướng viết: ${writeSampleDirection.trim()}`
+      : '';
+    const raw = await askAI(`Write a concise sample response at ${writeLevel} level (80-120 words) for: "${writePrompt}"${directionText}
 
 **English:** (1-2 clear paragraphs)
 **Tiếng Việt:** (bản dịch ngắn)
@@ -785,6 +824,27 @@ Reply with the question ONLY, no explanation.`;
       return;
     }
     setWriteTopicLoading(true); setWriteTopicError('');
+
+    // Nếu có custom prompt, dùng nó để tạo đề viết tiếng Anh
+    if (writeCustomPrompt.trim()) {
+      const p = `Translate this Vietnamese writing topic into a natural English writing prompt for ${writeLevel} level learner: "${writeCustomPrompt.trim()}"
+
+Reply with the English prompt ONLY, no explanation.`;
+      const t = await askAI(p, aiModel);
+      if (t) {
+        const clean = cleanTopic(t);
+        setWritePrompt(clean);
+        setWriteText(''); setWriteFeedback(''); setWriteSample('');
+        setWriteCustomPrompt(''); // Clear sau khi dùng
+        // Lưu chủ đề mới
+        fetch('/api/english', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ type: 'writing', content: '', metadata: { prompt: clean, mode, level: writeLevel } }),
+        }).then(r => r.json()).then(d => { setWriteRecordId(d.id); loadHistory(); }).catch(() => setWriteRecordId(null));
+      }
+      setWriteTopicLoading(false);
+      return;
+    }
 
     // Lấy TẤT CẢ đề viết cùng mode
     const existingPrompts = history
@@ -913,6 +973,14 @@ Return JSON array ONLY: [{"word":"...","ipa":"IPA pronunciation","def":"short En
     setReadArticle(null); setReadQuestions([]); setReadAnswers([]); setReadSubmitted(false);
     setReadSelected(''); setReadLookup(''); setReadChat([]);
 
+    // Nếu có custom topic, dùng nó
+    let topicToUse = readTopic;
+    if (readCustomTopic.trim()) {
+      topicToUse = readCustomTopic.trim();
+      setReadTopic(topicToUse);
+      setReadCustomTopic(''); // Clear sau khi dùng
+    }
+
     // Lấy TẤT CẢ bài đọc cùng mode, level, topic
     const existingArticles = history
       .filter(h => {
@@ -922,7 +990,7 @@ Return JSON array ONLY: [{"word":"...","ipa":"IPA pronunciation","def":"short En
           const itemMode = meta.mode || 'coder';
           const itemLevel = meta.level || 'A2';
           const itemTopic = meta.topic || '';
-          return itemMode === mode && itemLevel === readLevel && itemTopic === readTopic;
+          return itemMode === mode && itemLevel === readLevel && itemTopic === topicToUse;
         } catch {
           return false;
         }
@@ -941,7 +1009,7 @@ Return JSON array ONLY: [{"word":"...","ipa":"IPA pronunciation","def":"short En
 
     const p = `You are an English reading teacher. Create a reading passage for a Vietnamese learner. Context: ${modeDesc}.
 Level: ${readLevel}
-Topic: ${readTopic}${avoidList}
+Topic: ${topicToUse}${avoidList}
 
 Return JSON ONLY (no markdown code blocks, just raw json):
 {"title":"...","body":"4-6 paragraphs separated by \\n\\n, ${readLevel === 'A2' ? '80-120' : readLevel === 'B1' ? '150-200' : '200-280'} words","questions":[{"q":"...","options":["A","B","C","D"],"answer":0},{"q":"...","options":["A","B","C","D"],"answer":2},{"q":"...","options":["A","B","C","D"],"answer":1},{"q":"...","options":["A","B","C","D"],"answer":3}]}`;
@@ -955,7 +1023,7 @@ Return JSON ONLY (no markdown code blocks, just raw json):
           setReadArticle({ title: parsed.title, body: parsed.body, wordCount: parsed.body.split(/\s+/).length });
           setReadQuestions(parsed.questions || []);
           setReadAnswers((parsed.questions || []).map(() => -1));
-          const saved = await saveToDb('reading', parsed.body, { title: parsed.title, level: readLevel, topic: readTopic, questions: parsed.questions }, mode);
+          const saved = await saveToDb('reading', parsed.body, { title: parsed.title, level: readLevel, topic: topicToUse, questions: parsed.questions }, mode);
           if (saved) setReadRecordId(saved.id);
         }
       }
@@ -1128,6 +1196,25 @@ Return JSON ONLY (no markdown code blocks, just raw json):
                       <button key={l.id} onClick={() => setListenLevel(l.id)} style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid', fontSize: 12, fontWeight: 600, cursor: 'pointer', borderColor: listenLevel === l.id ? 'var(--accent)' : 'var(--border)', background: listenLevel === l.id ? '#58a6ff22' : 'transparent', color: listenLevel === l.id ? 'var(--accent)' : 'var(--muted)' }}>{l.label}</button>
                     ))}
                   </div>
+                  <div style={{ marginBottom: 12 }}>
+                    <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 6 }}>✏️ Hoặc tự nhập chủ đề (tiếng Việt):</div>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <input
+                        className="input"
+                        value={listenCustomTopic}
+                        onChange={e => setListenCustomTopic(e.target.value)}
+                        placeholder="Ví dụ: Cuộc trò chuyện tại quán cà phê..."
+                        style={{ flex: 1, fontSize: 13 }}
+                      />
+                      <button
+                        onClick={genListenText}
+                        disabled={!listenCustomTopic.trim() || listenLoading}
+                        style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: listenCustomTopic.trim() && !listenLoading ? 'var(--green)' : 'var(--surface2)', color: listenCustomTopic.trim() && !listenLoading ? '#000' : 'var(--muted)', fontSize: 12, fontWeight: 700, cursor: listenCustomTopic.trim() && !listenLoading ? 'pointer' : 'not-allowed', whiteSpace: 'nowrap' }}
+                      >
+                        {listenLoading ? '⏳...' : '🤖 Tạo'}
+                      </button>
+                    </div>
+                  </div>
                   <textarea className="input" value={listenText} onChange={e => setListenText(e.target.value)} rows={6}
                     placeholder="Bấm 'AI tạo đoạn nghe' hoặc tự nhập tiếng Anh..." style={{ marginBottom: 12 }} />
                   {/* Voice selector */}
@@ -1252,6 +1339,35 @@ Return JSON ONLY (no markdown code blocks, just raw json):
                     {READ_LEVELS.map(l => (
                       <button key={l.id} onClick={() => setSpkLevel(l.id)} style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid', fontSize: 12, fontWeight: 600, cursor: 'pointer', borderColor: spkLevel === l.id ? 'var(--accent)' : 'var(--border)', background: spkLevel === l.id ? '#58a6ff22' : 'transparent', color: spkLevel === l.id ? 'var(--accent)' : 'var(--muted)' }}>{l.label}</button>
                     ))}
+                  </div>
+                  <div style={{ marginBottom: 12 }}>
+                    <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 6 }}>✏️ Hoặc tự nhập chủ đề (tiếng Việt):</div>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <input
+                        className="input"
+                        value={spkCustomTopic}
+                        onChange={e => setSpkCustomTopic(e.target.value)}
+                        placeholder="Ví dụ: Nói về sở thích của bạn..."
+                        style={{ flex: 1, fontSize: 13 }}
+                      />
+                      <button
+                        onClick={genSpkTopic}
+                        disabled={!spkCustomTopic.trim() || spkTopicLoading || spkLoading}
+                        style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: spkCustomTopic.trim() && !spkTopicLoading && !spkLoading ? 'var(--green)' : 'var(--surface2)', color: spkCustomTopic.trim() && !spkTopicLoading && !spkLoading ? '#000' : 'var(--muted)', fontSize: 12, fontWeight: 700, cursor: spkCustomTopic.trim() && !spkTopicLoading && !spkLoading ? 'pointer' : 'not-allowed', whiteSpace: 'nowrap' }}
+                      >
+                        {spkTopicLoading ? '⏳...' : '🤖 Tạo'}
+                      </button>
+                    </div>
+                  </div>
+                  <div style={{ marginBottom: 12 }}>
+                    <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 6 }}>💡 Định hướng bài mẫu (tùy chọn):</div>
+                    <input
+                      className="input"
+                      value={spkSampleDirection}
+                      onChange={e => setSpkSampleDirection(e.target.value)}
+                      placeholder="Ví dụ: Tập trung vào lợi ích, đưa ra ví dụ cụ thể..."
+                      style={{ fontSize: 13 }}
+                    />
                   </div>
                   <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
                     <button onClick={() => speak(spkTopic, 1.0)} style={{ fontSize: 12, color: 'var(--muted)', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}>
@@ -1424,6 +1540,35 @@ Return JSON ONLY (no markdown code blocks, just raw json):
                         <button key={l.id} onClick={() => setWriteLevel(l.id)} style={{ padding: '4px 10px', borderRadius: 8, border: '1px solid', fontSize: 11, fontWeight: 600, cursor: 'pointer', borderColor: writeLevel === l.id ? 'var(--accent)' : 'var(--border)', background: writeLevel === l.id ? '#58a6ff22' : 'transparent', color: writeLevel === l.id ? 'var(--accent)' : 'var(--muted)' }}>{l.label}</button>
                       ))}
                     </div>
+                  </div>
+                  <div style={{ marginTop: 12 }}>
+                    <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 6 }}>✏️ Hoặc tự nhập đề tài (tiếng Việt):</div>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <input
+                        className="input"
+                        value={writeCustomPrompt}
+                        onChange={e => setWriteCustomPrompt(e.target.value)}
+                        placeholder="Ví dụ: Viết về công việc mơ ước của bạn..."
+                        style={{ flex: 1, fontSize: 13 }}
+                      />
+                      <button
+                        onClick={genWriteTopic}
+                        disabled={!writeCustomPrompt.trim() || writeTopicLoading || writeLoading}
+                        style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: writeCustomPrompt.trim() && !writeTopicLoading && !writeLoading ? 'var(--green)' : 'var(--surface2)', color: writeCustomPrompt.trim() && !writeTopicLoading && !writeLoading ? '#000' : 'var(--muted)', fontSize: 12, fontWeight: 700, cursor: writeCustomPrompt.trim() && !writeTopicLoading && !writeLoading ? 'pointer' : 'not-allowed', whiteSpace: 'nowrap' }}
+                      >
+                        {writeTopicLoading ? '⏳...' : '🤖 Tạo'}
+                      </button>
+                    </div>
+                  </div>
+                  <div style={{ marginTop: 12 }}>
+                    <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 6 }}>💡 Định hướng bài mẫu (tùy chọn):</div>
+                    <input
+                      className="input"
+                      value={writeSampleDirection}
+                      onChange={e => setWriteSampleDirection(e.target.value)}
+                      placeholder="Ví dụ: Sử dụng cấu trúc 3 đoạn, đưa ra ví dụ thực tế..."
+                      style={{ fontSize: 13 }}
+                    />
                   </div>
                   {writeTopicError && <div style={{ fontSize: 11, color: '#f85149', marginTop: 8 }}>{writeTopicError}</div>}
                 </div>
@@ -1652,6 +1797,25 @@ Return JSON ONLY (no markdown code blocks, just raw json):
                     {READ_LEVELS.map(l => (
                       <button key={l.id} onClick={() => setReadLevel(l.id)} style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid', fontSize: 12, fontWeight: 600, cursor: 'pointer', borderColor: readLevel === l.id ? 'var(--accent)' : 'var(--border)', background: readLevel === l.id ? '#58a6ff22' : 'transparent', color: readLevel === l.id ? 'var(--accent)' : 'var(--muted)' }}>{l.label}</button>
                     ))}
+                  </div>
+                  <div style={{ marginBottom: 12 }}>
+                    <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 6 }}>✏️ Hoặc tự nhập chủ đề (tiếng Việt hoặc tiếng Anh):</div>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <input
+                        className="input"
+                        value={readCustomTopic}
+                        onChange={e => setReadCustomTopic(e.target.value)}
+                        placeholder="Ví dụ: Trí tuệ nhân tạo..."
+                        style={{ flex: 1, fontSize: 13 }}
+                      />
+                      <button
+                        onClick={generateReading}
+                        disabled={!readCustomTopic.trim() || readLoading}
+                        style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: readCustomTopic.trim() && !readLoading ? 'var(--green)' : 'var(--surface2)', color: readCustomTopic.trim() && !readLoading ? '#000' : 'var(--muted)', fontSize: 12, fontWeight: 700, cursor: readCustomTopic.trim() && !readLoading ? 'pointer' : 'not-allowed', whiteSpace: 'nowrap' }}
+                      >
+                        {readLoading ? '⏳...' : '🤖 Tạo'}
+                      </button>
+                    </div>
                   </div>
                   <button className="btn btn-primary" style={{ width: '100%', height: 44 }} onClick={generateReading} disabled={readLoading}>
                     {readLoading ? '⏳ AI đang tạo bài...' : '🤖 Tạo bài đọc mới'}
