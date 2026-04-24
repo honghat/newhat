@@ -86,30 +86,44 @@ model MissionConfig {
 }
 
 model Lesson {
-  id         Int      @id @default(autoincrement())
-  topic      String
-  content    String
-  createdAt  DateTime @default(now())
-  userId     Int
-  track      String   @default("javascript")
-  order      Int      @default(0)
-  completed  Boolean  @default(false)
-  learnCount Int      @default(0)
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id             Int       @id @default(autoincrement())
+  topic          String
+  content        String
+  createdAt      DateTime  @default(now())
+  userId         Int
+  track          String    @default("javascript")
+  order          Int       @default(0)
+  completed      Boolean   @default(false)
+  learnCount     Int       @default(0)
+  nextReviewAt   DateTime?
+  lastReviewedAt DateTime?
+  intervalDays   Int       @default(0)
+  easeFactor     Float     @default(2.5)
+  reviewCount    Int       @default(0)
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, nextReviewAt])
 }
 
 model EnglishLesson {
-  id         Int      @id @default(autoincrement())
-  type       String
-  content    String
-  metadata   String   @default("{}")
-  createdAt  DateTime @default(now())
-  userId     Int
-  title      String   @default("")
-  order      Int      @default(0)
-  completed  Boolean  @default(false)
-  learnCount Int      @default(0)
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id             Int       @id @default(autoincrement())
+  type           String
+  content        String
+  metadata       String    @default("{}")
+  createdAt      DateTime  @default(now())
+  userId         Int
+  title          String    @default("")
+  order          Int       @default(0)
+  completed      Boolean   @default(false)
+  learnCount     Int       @default(0)
+  nextReviewAt   DateTime?
+  lastReviewedAt DateTime?
+  intervalDays   Int       @default(0)
+  easeFactor     Float     @default(2.5)
+  reviewCount    Int       @default(0)
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, nextReviewAt])
 }
 
 model AIReport {

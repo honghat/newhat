@@ -638,9 +638,11 @@ export default function MindmapPage() {
         .mm-editor-box {
           border: 1px solid var(--border); border-radius: 12px;
           overflow: hidden; background: var(--surface);
-          transition: border-color 0.15s;
+          transition: all 0.2s ease;
+          box-shadow: 0 4px 12px rgba(0,0,0,0.1);
         }
-        .mm-editor-box:focus-within { border-color: var(--accent); }
+        .mm-editor-box:hover { border-color: var(--muted); box-shadow: 0 6px 16px rgba(0,0,0,0.15); }
+        .mm-editor-box:focus-within { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(88,166,255,0.15); }
         .mm-md-toolbar {
           display: flex; align-items: center; gap: 4px;
           padding: 6px 8px; background: var(--surface2);
@@ -673,6 +675,12 @@ export default function MindmapPage() {
           outline: none !important;
         }
 
+        .mm-main-grid {
+          display: flex;
+          flex-direction: column;
+          gap: 16px;
+        }
+
         @media (min-width: 900px) {
           .mm-main-grid {
             display: grid;
@@ -699,7 +707,10 @@ export default function MindmapPage() {
           overflow: hidden;
           min-height: 520px;
           flex: 1;
+          box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+          transition: box-shadow 0.2s ease;
         }
+        .mm-canvas-wrap:hover { box-shadow: 0 6px 16px rgba(0,0,0,0.15); }
         .mm-zoom-ctrl {
           position: absolute; bottom: 12px; right: 12px; z-index: 10;
           display: flex; gap: 2px;
@@ -744,9 +755,10 @@ export default function MindmapPage() {
         /* ── RESPONSIVE ── */
         @media (max-width: 720px) {
           .mm-page { gap: 12px; }
+          .mm-main-grid { gap: 20px; }
           :global(.mm-title-input) { font-size: 22px !important; }
           .mm-canvas-wrap { min-height: 50vh; }
-          .mm-canvas { padding: 14px; }
+          .mm-canvas { padding: 20px 14px; }
           .mm-head-save { padding: 0 14px; font-size: 12px; }
         }
       `}</style>

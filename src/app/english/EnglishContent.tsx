@@ -1,6 +1,13 @@
 'use client';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { speakText } from '@/lib/tts';
+import GuideTab from './_tabs/GuideTab';
+import DictTab from './_tabs/DictTab';
+import VocabTab from './_tabs/VocabTab';
+import ReadTab from './_tabs/ReadTab';
+import GrammarTab from './_tabs/GrammarTab';
+import WriteTab from './_tabs/WriteTab';
+import SpeakTab from './_tabs/SpeakTab';
 
 const AI_OFFLINE = '__AI_OFFLINE__';
 async function askAI(prompt: string, model = 'default', timeoutMs = 300000): Promise<string> {
@@ -259,7 +266,7 @@ const LISTEN_SCENARIOS = {
   ]
 };
 
-interface EngLesson { id: number; type: string; content: string; metadata: string; completed: boolean; learnCount: number; createdAt: string; }
+interface EngLesson { id: number; type: string; content: string; metadata: string; completed: boolean; learnCount: number; createdAt: string; nextReviewAt?: string | null; lastReviewedAt?: string | null; intervalDays?: number; easeFactor?: number; reviewCount?: number; }
 
 const READ_LEVELS = [{ id: 'A2', label: 'A2' }, { id: 'B1', label: 'B1' }, { id: 'B2', label: 'B2' }];
 const READ_TOPICS = ['Web Development', 'Career & Jobs', 'Technology', 'Daily Life', 'Science', 'Business'];
@@ -476,7 +483,7 @@ Hãy trình bày súc tích, tập trung vào trọng tâm.`;
     speechSynthesis.getVoices();
     speechSynthesis.addEventListener('voiceschanged', () => { }, { once: true });
     // Lightweight health check — GET instead of POST synthesis
-    fetch('/api/tts', { signal: AbortSignal.timeout(4000) })
+    fetch('/api/tts?text=__health__', { signal: AbortSignal.timeout(4000) })
       .then(r => r.json()).then(d => setTtsOnline(!!d.available)).catch(() => setTtsOnline(false));
     // Check Whisper
     fetch('/api/stt').then(r => r.json()).catch(() => { });
@@ -581,11 +588,16 @@ Hãy trình bày súc tích, tập trung vào trọng tâm.`;
     }
   }, [tab, mode, history.length]); // Chạy khi tab đổi, mode đổi hoặc history có thêm bài mới
 
-  const markLessonLearned = useCallback(async (lessonId: number) => {
+  const markLessonLearned = useCallback(async (lessonId: number, quizScore?: number, quizTotal?: number) => {
+    const body: any = { id: lessonId, completed: true, incrementLearnCount: true };
+    if (typeof quizScore === 'number' && typeof quizTotal === 'number' && quizTotal > 0) {
+      body.quizScore = quizScore;
+      body.quizTotal = quizTotal;
+    }
     await fetch('/api/english', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: lessonId, completed: true, incrementLearnCount: true })
+      body: JSON.stringify(body)
     });
 
     // Nhật ký trang chủ
@@ -848,7 +860,15 @@ Reply with the question ONLY, no explanation.`;
   async function startRec() {
     setRecognizing(true); setSttStatus('');
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        audio: {
+          echoCancellation: { ideal: true },
+          noiseSuppression: { ideal: true },
+          autoGainControl: { ideal: true },
+          sampleRate: { ideal: 44100 },
+          channelCount: { ideal: 1 }
+        } 
+      });
       chunksRef.current = [];
       const mimeType = ['audio/webm', 'audio/mp4', 'audio/ogg', ''].find(m => !m || MediaRecorder.isTypeSupported(m)) || '';
       const mr = new MediaRecorder(stream, mimeType ? { mimeType } : {});
@@ -865,6 +885,8 @@ Reply with the question ONLY, no explanation.`;
 
         const form = new FormData();
         form.append('audio', blob, `audio.${ext}`);
+        form.append('language', 'en'); 
+        form.append('prompt', 'English conversation practice, focus on English grammar and vocabulary.');
         const res = await fetch('/api/stt', { method: 'POST', body: form });
         const data = await res.json();
         if (data.text) { setTranscript(data.text); setSttStatus(''); }
@@ -1061,7 +1083,6 @@ Return JSON array ONLY: [{"word":"...","ipa":"IPA pronunciation","def":"short En
     setVocabLoading(false); loadHistory();
   }
 
-  const card = cards[cardIdx];
   const wordCount = writeText.split(/\s+/).filter(Boolean).length;
   async function generateReading() {
     if (mode === 'all') {
@@ -1391,925 +1412,104 @@ Return JSON ONLY (no markdown code blocks, just raw json):
 
           {/* ── SPEAK ── */}
           {tab === 'speak' && (
-            <div className="desktop-2col">
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                <div className="card" style={{ borderLeft: '4px solid var(--purple)', position: 'relative' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
-                    <div style={{ flex: 1 }}>
-                      <div className="section-title" style={{ marginBottom: 4 }}>Chủ đề luyện nói</div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                        <div style={{ fontSize: 15, color: 'var(--purple)', fontWeight: 800, lineHeight: 1.4 }}>
-                          {spkTopicLoading ? getGenMessage(genElapsed) : spkTopic}
-                          {spkTopicLoading && <button onClick={() => stopTask('speak')} style={{ color: 'var(--orange)', background: 'none', border: 'none', fontSize: 10, cursor: 'pointer', fontWeight: 800, marginLeft: 6 }}>[Dừng]</button>}
-                        </div>
-                        {(() => {
-                          const item = history.find(h => h.id === spkRecordId);
-                          if (item && item.learnCount > 0) {
-                            return (
-                              <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 4, background: '#3fb95022', color: '#3fb950', fontWeight: 700, border: '1px solid #3fb95044' }}>
-                                ✓ {item.learnCount} lần
-                              </span>
-                            );
-                          }
-                          return null;
-                        })()}
-                      </div>
-                      {(() => {
-                        const activeId = spkRecordId || history.find(h => h.type === 'speak' && h.content === transcript)?.id;
-                        if (activeId) {
-                          return (
-                            <button
-                              onClick={() => markLessonLearned(activeId)}
-                              style={{ marginTop: 10, padding: '6px 14px', borderRadius: 8, background: '#3fb950', color: '#000', border: 'none', fontSize: 11, fontWeight: 700, cursor: 'pointer', boxShadow: '0 2px 8px rgba(63,185,80,0.2)' }}
-                            >
-                              ✓ Đã luyện nói xong
-                            </button>
-                          );
-                        }
-                        return null;
-                      })()}
-                    </div>
-                    <button onClick={genSpkTopic} disabled={spkTopicLoading || spkLoading} style={{ padding: '6px 12px', borderRadius: 8, border: 'none', background: 'var(--accent)', color: '#000', fontSize: 11, fontWeight: 800, cursor: 'pointer', flexShrink: 0, display: 'flex', alignItems: 'center', gap: 4, boxShadow: '0 2px 8px rgba(0,0,0,0.2)' }}>
-                      {spkTopicLoading ? '⏳...' : '🤖 Đổi chủ đề'}
-                    </button>
-                  </div>
-                  <div style={{ display: 'flex', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
-                    {READ_LEVELS.map(l => (
-                      <button key={l.id} onClick={() => setSpkLevel(l.id)} style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid', fontSize: 12, fontWeight: 600, cursor: 'pointer', borderColor: spkLevel === l.id ? 'var(--accent)' : 'var(--border)', background: spkLevel === l.id ? '#58a6ff22' : 'transparent', color: spkLevel === l.id ? 'var(--accent)' : 'var(--muted)' }}>{l.label}</button>
-                    ))}
-                  </div>
-                  <div style={{ marginBottom: 12 }}>
-                    <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 6 }}>✏️ Hoặc tự nhập chủ đề (tiếng Việt):</div>
-                    <div style={{ display: 'flex', gap: 8 }}>
-                      <input
-                        className="input"
-                        value={spkCustomTopic}
-                        onChange={e => setSpkCustomTopic(e.target.value)}
-                        placeholder="Ví dụ: Nói về sở thích của bạn..."
-                        style={{ flex: 1, fontSize: 16 }}
-                      />
-                      <button
-                        onClick={genSpkTopic}
-                        disabled={!spkCustomTopic.trim() || spkTopicLoading || spkLoading}
-                        style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: spkCustomTopic.trim() && !spkTopicLoading && !spkLoading ? 'var(--green)' : 'var(--surface2)', color: spkCustomTopic.trim() && !spkTopicLoading && !spkLoading ? '#000' : 'var(--muted)', fontSize: 12, fontWeight: 700, cursor: spkCustomTopic.trim() && !spkTopicLoading && !spkLoading ? 'pointer' : 'not-allowed', whiteSpace: 'nowrap' }}
-                      >
-                        {spkTopicLoading ? '⏳...' : '🤖 Tạo'}
-                      </button>
-                    </div>
-                  </div>
-                  <div style={{ marginBottom: 12 }}>
-                    <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 6 }}>💡 Định hướng bài mẫu (tùy chọn):</div>
-                    <input
-                      className="input"
-                      value={spkSampleDirection}
-                      onChange={e => setSpkSampleDirection(e.target.value)}
-                      placeholder="Ví dụ: Tập trung vào lợi ích, đưa ra ví dụ cụ thể..."
-                      style={{ fontSize: 13 }}
-                    />
-                  </div>
-                  <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-                    <button onClick={() => speak(spkTopic, globalSpeed, globalVoice, globalTtsProvider)} style={{ fontSize: 12, color: 'var(--muted)', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}>
-                      <span>🔊</span> Nghe câu hỏi
-                    </button>
-                    <button onClick={genSpkSample} disabled={spkSampleLoading || recognizing} style={{ fontSize: 12, color: 'var(--green)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600 }}>
-                      {spkSampleLoading ? '⏳ Đang tạo bài mẫu...' : '💡 Gợi ý trả lời mẫu'}
-                    </button>
-                  </div>
-                  {spkTopicError && <div style={{ fontSize: 11, color: '#f85149', marginTop: 8 }}>{spkTopicError}</div>}
-                </div>
-                {spkSample && (
-                  <div className="card" style={{ borderLeft: '4px solid var(--green)', background: 'var(--surface2)' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, gap: 12, flexWrap: 'nowrap' }}>
-                      <div className="section-title" style={{ color: 'var(--green)', margin: 0, whiteSpace: 'nowrap', flexShrink: 0 }}>💡 Bài mẫu AI</div>
-                      <div style={{ display: 'flex', gap: 10, flexShrink: 1, flexWrap: 'nowrap' }}>
-                        <button
-                          onClick={(e) => {
-                            const btn = e.currentTarget;
-                            let text = spkSample;
-                            const enStartMatch = text.match(/English:?\s*/i);
-                            const enStartIdx = enStartMatch ? enStartMatch.index! + enStartMatch[0].length : 0;
-                            const viMarkers = [/Tiếng Việt/i, /Bản dịch/i, /Dịch/i, /Từ hay/i];
-                            let firstViIdx = text.length;
-                            viMarkers.forEach(regex => {
-                              const m = text.match(regex);
-                              if (m && m.index! > enStartIdx && m.index! < firstViIdx) firstViIdx = m.index!;
-                            });
-                            text = text.slice(enStartIdx, firstViIdx).replace(/(\*\*|##|#|>\s|[:])/g, '').trim();
-                            // Loại bỏ phiên âm IPA (trong ngoặc vuông hoặc dấu gạch chéo)
-                            text = text.replace(/\[.*?\]/g, '').replace(/\/.*?\//g, '').trim();
-                            const old = btn.innerText;
-                            btn.innerText = '🔊 Đang phát...';
-                            btn.style.pointerEvents = 'none';
-                            speak(text, globalSpeed, globalVoice, globalTtsProvider).finally(() => {
-                              btn.innerText = old;
-                              btn.style.pointerEvents = 'auto';
-                            });
-                          }}
-                          title="Nghe mẫu"
-                          style={{ fontSize: 14, color: 'var(--accent)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700, padding: '4px 8px' }}
-                        >
-                          🔊
-                        </button>
-                        <button
-                          onClick={(e) => {
-                            const btn = e.currentTarget;
-                            let text = spkSample;
-                            const enStartMatch = text.match(/English:?\s*/i);
-                            const enStartIdx = enStartMatch ? enStartMatch.index! + enStartMatch[0].length : 0;
-                            const viMarkers = [/Tiếng Việt/i, /Bản dịch/i, /Dịch/i, /Từ hay/i, /Từ vựng/i];
-                            let firstViIdx = text.length;
-                            viMarkers.forEach(regex => {
-                              const m = text.match(regex);
-                              if (m && m.index! > enStartIdx && m.index! < firstViIdx) firstViIdx = m.index!;
-                            });
-                            text = text.slice(enStartIdx, firstViIdx).replace(/(\*\*|##|#|>\s|[:])/g, '').trim();
-                            navigator.clipboard.writeText(text);
-                            const old = btn.innerText;
-                            btn.innerText = '✓ Đã copy';
-                            setTimeout(() => btn.innerText = old, 2000);
-                          }}
-                          title="Copy"
-                          style={{ fontSize: 14, color: 'var(--accent)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700, padding: '4px 8px' }}
-                        >
-                          📋
-                        </button>
-                        <button onClick={() => setSpkSample('')} title="Đóng" style={{ fontSize: 14, color: 'var(--muted)', background: 'none', border: 'none', cursor: 'pointer', padding: '4px 8px' }}>✕</button>
-                      </div>
-                    </div>
-                    <div style={{ fontSize: 13, lineHeight: 1.7, color: 'var(--text)' }} dangerouslySetInnerHTML={{ __html: parseMarkdown(spkSample) }} />
-                  </div>
-                )}
-
-                <div className="card" style={{ textAlign: 'center', padding: 24 }}>
-                  <button onClick={recognizing ? stopRec : startRec} style={{ width: 88, height: 88, borderRadius: 99, border: 'none', fontSize: 36, cursor: 'pointer', background: recognizing ? 'var(--red)' : 'var(--green)', color: '#000', marginBottom: 14, boxShadow: recognizing ? '0 0 0 8px rgba(248,81,73,0.25)' : 'none', transition: 'all 0.2s' }}>
-                    {recognizing ? '⏹' : '🎤'}
-                  </button>
-                  <div style={{ fontSize: 13, color: 'var(--muted)' }}>
-                    {sttStatus || (recognizing ? 'Đang ghi âm — bấm để dừng' : 'Bấm để nói · Whisper AI')}
-                  </div>
-                </div>
-              </div>
-
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                {transcript && (
-                  <div className="card">
-                    <div className="section-title">Bạn vừa nói</div>
-                    <div style={{ fontSize: 14, fontStyle: 'italic', lineHeight: 1.7, color: 'var(--text)', marginBottom: 12 }}>"{transcript}"</div>
-                    <button className="btn btn-ghost" style={{ width: '100%', position: 'relative' }} onClick={getFeedback} disabled={spkLoading || recognizing}>
-                      {spkLoading ? '⏳ AI đang chấm điểm...' : '🤖 AI chấm điểm & nhận xét'}
-                    </button>
-                  </div>
-                )}
-                {spkFeedback && (
-                  <div className="card" style={{ borderLeft: '4px solid var(--green)', background: 'var(--surface2)' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, marginBottom: 16 }}>
-                      <div style={{ flex: 1 }}>
-                        <div className="section-title" style={{ color: 'var(--green)', display: 'flex', alignItems: 'center', gap: 8, margin: 0, fontSize: 16, fontWeight: 800 }}>
-                          <span>📋</span> Kết quả chấm điểm
-                        </div>
-                        {spkRecordId && (history.find(h => h.id === spkRecordId)?.learnCount ?? 0) > 0 && (
-                          <div style={{ marginTop: 6, display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 8px', borderRadius: 8, background: '#3fb95022', color: '#3fb950', fontSize: 10, fontWeight: 700, border: '1px solid #3fb95044' }}>
-                            ✓ Đã học {history.find(h => h.id === spkRecordId)!.learnCount} lần
-                          </div>
-                        )}
-                      </div>
-                      {spkRecordId && (
-                        <button onClick={() => markLessonLearned(spkRecordId)} style={{ padding: '6px 12px', borderRadius: 8, background: '#3fb950', color: '#000', border: 'none', fontSize: 11, fontWeight: 700, cursor: 'pointer', boxShadow: '0 2px 8px rgba(63,185,80,0.2)' }}>
-                          ✓ Đánh dấu đã học
-                        </button>
-                      )}
-                    </div>
-                    <div style={{ fontSize: 13, lineHeight: 1.7, color: 'var(--text-main)', opacity: 0.95 }}
-                      dangerouslySetInnerHTML={{ __html: parseMarkdown(spkFeedback) }}></div>
-                  </div>
-                )}
-              </div>
-            </div>
+            <SpeakTab
+              spkTopicLoading={spkTopicLoading} spkTopic={spkTopic} spkLoading={spkLoading} spkRecordId={spkRecordId}
+              spkLevel={spkLevel} setSpkLevel={setSpkLevel}
+              spkCustomTopic={spkCustomTopic} setSpkCustomTopic={setSpkCustomTopic}
+              spkSampleDirection={spkSampleDirection} setSpkSampleDirection={setSpkSampleDirection}
+              spkSample={spkSample} setSpkSample={setSpkSample} spkSampleLoading={spkSampleLoading}
+              spkTopicError={spkTopicError} spkFeedback={spkFeedback}
+              transcript={transcript} recognizing={recognizing} sttStatus={sttStatus}
+              genSpkTopic={genSpkTopic} genSpkSample={genSpkSample} getFeedback={getFeedback}
+              startRec={startRec} stopRec={stopRec}
+              markLessonLearned={markLessonLearned} stopTask={stopTask}
+              getGenMessage={getGenMessage} genElapsed={genElapsed}
+              speak={speak} globalSpeed={globalSpeed} globalVoice={globalVoice} globalTtsProvider={globalTtsProvider}
+              parseMarkdown={parseMarkdown} history={history}
+            />
           )}
-
           {/* ── WRITE ── */}
           {tab === 'write' && (
-            <div className="desktop-2col">
-              <div>
-                <div className="card" style={{ marginBottom: 12, borderLeft: '4px solid var(--orange)', position: 'relative' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
-                    <div style={{ flex: 1 }}>
-                      <div className="section-title" style={{ marginBottom: 4 }}>Đề tài viết</div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                        <div style={{ fontSize: 14, color: 'var(--orange)', fontWeight: 700, lineHeight: 1.4 }}>
-                          {writeTopicLoading ? getGenMessage(genElapsed, 'soạn bài') : writePrompt}
-                          {writeTopicLoading && <button onClick={() => stopTask('writing')} style={{ color: 'var(--red)', background: 'none', border: 'none', fontSize: 10, cursor: 'pointer', fontWeight: 800, marginLeft: 6 }}>[Dừng]</button>}
-                        </div>
-                        {(() => {
-                          const item = history.find(h => h.id === writeRecordId);
-                          if (item && item.learnCount > 0) {
-                            return (
-                              <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 4, background: '#3fb95022', color: '#3fb950', fontWeight: 700, border: '1px solid #3fb95044' }}>
-                                ✓ {item.learnCount} lần
-                              </span>
-                            );
-                          }
-                          return null;
-                        })()}
-                      </div>
-                      {(() => {
-                        const activeId = writeRecordId || history.find(h => h.type === 'writing' && h.content === writeText)?.id;
-                        if (activeId) {
-                          return (
-                            <button
-                              onClick={() => markLessonLearned(activeId)}
-                              style={{ marginTop: 10, padding: '8px 16px', borderRadius: 8, background: '#3fb950', color: '#000', border: 'none', fontSize: 11, fontWeight: 700, cursor: 'pointer', boxShadow: '0 2px 8px rgba(63,185,80,0.3)' }}
-                            >
-                              ✓ Đã viết xong
-                            </button>
-                          );
-                        }
-                        return null;
-                      })()}
-                    </div>
-                    <button onClick={genWriteTopic} disabled={writeTopicLoading || writeLoading} style={{ padding: '6px 12px', borderRadius: 8, border: 'none', background: 'var(--accent)', color: '#000', fontSize: 11, fontWeight: 800, cursor: 'pointer', flexShrink: 0, display: 'flex', alignItems: 'center', gap: 4, boxShadow: '0 2px 8px rgba(0,0,0,0.2)' }}>
-                      {writeTopicLoading ? '⏳...' : '🤖 Tạo đoạn viết mới'}
-                    </button>
-                  </div>
-                  <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
-                    <button onClick={genWriteSample} disabled={writeSampleLoading} style={{ fontSize: 12, color: 'var(--green)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600 }}>
-                      {writeSampleLoading ? '⏳ Đang soạn bài mẫu...' : '💡 Gợi ý bài viết mẫu'}
-                    </button>
-                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                      {READ_LEVELS.map(l => (
-                        <button key={l.id} onClick={() => setWriteLevel(l.id)} style={{ padding: '4px 10px', borderRadius: 8, border: '1px solid', fontSize: 11, fontWeight: 600, cursor: 'pointer', borderColor: writeLevel === l.id ? 'var(--accent)' : 'var(--border)', background: writeLevel === l.id ? '#58a6ff22' : 'transparent', color: writeLevel === l.id ? 'var(--accent)' : 'var(--muted)' }}>{l.label}</button>
-                      ))}
-                    </div>
-                  </div>
-                  <div style={{ marginTop: 12 }}>
-                    <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 6 }}>✏️ Hoặc tự nhập đề tài (tiếng Việt):</div>
-                    <div style={{ display: 'flex', gap: 8 }}>
-                      <input
-                        className="input"
-                        value={writeCustomPrompt}
-                        onChange={e => setWriteCustomPrompt(e.target.value)}
-                        placeholder="Ví dụ: Viết về công việc mơ ước của bạn..."
-                        style={{ flex: 1, fontSize: 16 }}
-                      />
-                      <button
-                        onClick={genWriteTopic}
-                        disabled={!writeCustomPrompt.trim() || writeTopicLoading || writeLoading}
-                        style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: writeCustomPrompt.trim() && !writeTopicLoading && !writeLoading ? 'var(--green)' : 'var(--surface2)', color: writeCustomPrompt.trim() && !writeTopicLoading && !writeLoading ? '#000' : 'var(--muted)', fontSize: 12, fontWeight: 700, cursor: writeCustomPrompt.trim() && !writeTopicLoading && !writeLoading ? 'pointer' : 'not-allowed', whiteSpace: 'nowrap' }}
-                      >
-                        {writeTopicLoading ? '⏳...' : '🤖 Tạo'}
-                      </button>
-                    </div>
-                  </div>
-                  <div style={{ marginTop: 12 }}>
-                    <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 6 }}>💡 Định hướng bài mẫu (tùy chọn):</div>
-                    <input
-                      className="input"
-                      value={writeSampleDirection}
-                      onChange={e => setWriteSampleDirection(e.target.value)}
-                      placeholder="Ví dụ: Sử dụng cấu trúc 3 đoạn, đưa ra ví dụ thực tế..."
-                      style={{ fontSize: 13 }}
-                    />
-                  </div>
-                  {writeTopicError && <div style={{ fontSize: 11, color: '#f85149', marginTop: 8 }}>{writeTopicError}</div>}
-                </div>
-                {writeSample && (
-                  <div className="card" style={{ marginBottom: 12, borderLeft: '4px solid var(--green)', background: 'var(--surface2)' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, gap: 12, flexWrap: 'nowrap' }}>
-                      <div className="section-title" style={{ color: 'var(--green)', margin: 0, whiteSpace: 'nowrap', flexShrink: 0 }}>💡 Bài viết mẫu AI</div>
-                      <div style={{ display: 'flex', gap: 10, flexShrink: 1, flexWrap: 'nowrap' }}>
-                        <button
-                          onClick={(e) => {
-                            const btn = e.currentTarget;
-                            let text = writeSample;
-                            const enStartMatch = text.match(/English:?\s*/i);
-                            const enStartIdx = enStartMatch ? enStartMatch.index! + enStartMatch[0].length : 0;
-                            const viMarkers = [/Tiếng Việt/i, /Bản dịch/i, /Dịch/i, /Từ hay/i, /Từ vựng/i];
-                            let firstViIdx = text.length;
-                            viMarkers.forEach(regex => {
-                              const m = text.match(regex);
-                              if (m && m.index! > enStartIdx && m.index! < firstViIdx) firstViIdx = m.index!;
-                            });
-                            text = text.slice(enStartIdx, firstViIdx).replace(/(\*\*|##|#|>\s|[:])/g, '').trim();
-                            // Loại bỏ phiên âm IPA (trong ngoặc vuông hoặc dấu gạch chéo)
-                            text = text.replace(/\[.*?\]/g, '').replace(/\/.*?\//g, '').trim();
-                            const old = btn.innerText;
-                            btn.innerText = '🔊 Đang phát...';
-                            btn.style.pointerEvents = 'none';
-                            speak(text, globalSpeed, globalVoice, globalTtsProvider).finally(() => {
-                              btn.innerText = old;
-                              btn.style.pointerEvents = 'auto';
-                            });
-                          }}
-                          title="Nghe mẫu"
-                          style={{ fontSize: 14, color: 'var(--accent)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700, padding: '4px 8px' }}
-                        >
-                          🔊
-                        </button>
-                        <button
-                          onClick={(e) => {
-                            const btn = e.currentTarget;
-                            let text = writeSample;
-
-                            const enStartMatch = text.match(/English:?\s*/i);
-                            const enStartIdx = enStartMatch ? enStartMatch.index! + enStartMatch[0].length : 0;
-
-                            const viMarkers = [/Tiếng Việt/i, /Bản dịch/i, /Dịch/i, /Từ hay/i, /Từ vựng/i];
-                            let firstViIdx = text.length;
-                            viMarkers.forEach(regex => {
-                              const m = text.match(regex);
-                              if (m && m.index! > enStartIdx && m.index! < firstViIdx) firstViIdx = m.index!;
-                            });
-
-                            text = text.slice(enStartIdx, firstViIdx);
-
-                            text = text.replace(/(\*\*|##|#|>\s|[:])/g, '').trim();
-                            navigator.clipboard.writeText(text);
-
-                            const old = btn.innerText;
-                            btn.innerText = '✓ Đã copy';
-                            setTimeout(() => btn.innerText = old, 2000);
-                          }}
-                          title="Copy"
-                          style={{ fontSize: 14, color: 'var(--accent)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700, padding: '4px 8px' }}
-                        >
-                          📋
-                        </button>
-                        <button onClick={() => setWriteSample('')} title="Đóng" style={{ fontSize: 14, color: 'var(--muted)', background: 'none', border: 'none', cursor: 'pointer', padding: '4px 8px' }}>✕</button>
-                      </div>
-                    </div>
-                    <div style={{ fontSize: 13, lineHeight: 1.7, color: 'var(--text)' }} dangerouslySetInnerHTML={{ __html: parseMarkdown(writeSample) }} />
-                  </div>
-                )}
-                <div className="card">
-                  <textarea className="input" value={writeText} onChange={e => setWriteText(e.target.value)} rows={9}
-                    placeholder="Viết tiếng Anh ở đây... (mục tiêu 200 từ)" style={{ marginBottom: 10 }} />
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
-                    <span style={{ fontSize: 12, color: wordCount >= 200 ? 'var(--green)' : 'var(--muted)' }}>{wordCount} / 200 từ</span>
-                    <button onClick={() => { setWriteText(''); setWriteFeedback(''); }} style={{ fontSize: 12, color: 'var(--muted)', background: 'none', border: 'none', cursor: 'pointer' }}>Xóa</button>
-                  </div>
-                  <button className="btn btn-primary" style={{ width: '100%' }} onClick={checkWriting} disabled={writeLoading || !writeText.trim()}>
-                    {writeLoading ? '⏳ AI đang chấm bài...' : '🤖 AI chấm bài viết'}
-                  </button>
-                </div>
-              </div>
-
-              <div>
-                {writeFeedback && (
-                  <div className="card" style={{ borderLeft: '4px solid var(--accent)', background: 'var(--surface2)' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, marginBottom: 16 }}>
-                      <div style={{ flex: 1 }}>
-                        <div className="section-title" style={{ color: 'var(--accent)', display: 'flex', alignItems: 'center', gap: 8, margin: 0, fontSize: 16, fontWeight: 800 }}>
-                          <span>🔍</span> Chi tiết sửa bài
-                        </div>
-                        {(() => {
-                          const item = history.find(h => h.id === writeRecordId);
-                          if (item && item.learnCount > 0) {
-                            return (
-                              <div style={{ marginTop: 6, display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 8px', borderRadius: 8, background: '#3fb95022', color: '#3fb950', fontSize: 10, fontWeight: 700, border: '1px solid #3fb95044' }}>
-                                ✓ Đã học {item.learnCount} lần
-                              </div>
-                            );
-                          }
-                          return null;
-                        })()}
-                      </div>
-                      {writeRecordId && (
-                        <button onClick={() => markLessonLearned(writeRecordId)} style={{ padding: '6px 12px', borderRadius: 8, background: '#3fb950', color: '#000', border: 'none', fontSize: 11, fontWeight: 700, cursor: 'pointer', boxShadow: '0 2px 8px rgba(63,185,80,0.2)' }}>
-                          ✓ Đánh dấu đã học
-                        </button>
-                      )}
-                    </div>
-                    <div style={{ fontSize: 13, lineHeight: 1.7, color: 'var(--text-main)', opacity: 0.95 }}
-                      dangerouslySetInnerHTML={{ __html: parseMarkdown(writeFeedback) }}></div>
-                  </div>
-                )}
-              </div>
-            </div>
+            <WriteTab
+              writeTopicLoading={writeTopicLoading} writePrompt={writePrompt} writeRecordId={writeRecordId}
+              writeLoading={writeLoading} writeTopicError={writeTopicError}
+              writeLevel={writeLevel} setWriteLevel={setWriteLevel}
+              writeCustomPrompt={writeCustomPrompt} setWriteCustomPrompt={setWriteCustomPrompt}
+              writeSampleDirection={writeSampleDirection} setWriteSampleDirection={setWriteSampleDirection}
+              writeSample={writeSample} setWriteSample={setWriteSample} writeSampleLoading={writeSampleLoading}
+              writeText={writeText} setWriteText={setWriteText} wordCount={wordCount}
+              writeFeedback={writeFeedback} setWriteFeedback={setWriteFeedback}
+              genWriteTopic={genWriteTopic} genWriteSample={genWriteSample} checkWriting={checkWriting}
+              markLessonLearned={markLessonLearned} stopTask={stopTask}
+              getGenMessage={getGenMessage} genElapsed={genElapsed}
+              speak={speak} globalSpeed={globalSpeed} globalVoice={globalVoice} globalTtsProvider={globalTtsProvider}
+              parseMarkdown={parseMarkdown} history={history}
+            />
           )}
-
           {/* ── VOCAB ── */}
           {tab === 'vocab' && (
-            <div className="desktop-2col">
-              <div>
-                <button className="btn btn-green" style={{ width: '100%', marginBottom: 16, height: 46 }} onClick={loadVocab} disabled={vocabLoading}>
-                  {vocabLoading ? '⏳ AI đang tạo từ...' : '🤖 AI tạo 10 từ mới — lưu vào DB'}
-                </button>
-
-                {cards.length > 0 && card && (
-                  <>
-                    <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 8, textAlign: 'center' }}>
-                      {cardIdx + 1}/{cards.length} • <span style={{ color: 'var(--green)' }}>{known.length} đã biết</span>
-                    </div>
-                    <div className="flashcard-container" style={{ marginBottom: 12 }}>
-                      <div className={`flashcard${flipped ? ' flipped' : ''}`} onClick={() => setFlipped(f => !f)}>
-                        <div className="flashcard-front">
-                          <div style={{ fontSize: 32, fontWeight: 900, color: 'var(--accent)', marginBottom: 10 }}>{card.word}</div>
-                          <button onClick={e => { e.stopPropagation(); speak(card.word, globalSpeed, globalVoice, globalTtsProvider); }} style={{ fontSize: 12, color: 'var(--muted)', background: 'none', border: 'none', cursor: 'pointer' }}>🔊 Phát âm</button>
-                          <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 8 }}>Bấm để xem nghĩa</div>
-                        </div>
-                        <div className="flashcard-back">
-                          <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 6, textAlign: 'center' }}>{card.def}</div>
-                          <div style={{ fontSize: 12, color: 'var(--orange)', fontStyle: 'italic', marginBottom: 8, textAlign: 'center' }}>"{card.ex}"</div>
-                          <div style={{ fontSize: 16, color: 'var(--green)', fontWeight: 700 }}>🇻🇳 {card.vi}</div>
-                        </div>
-                      </div>
-                    </div>
-                    <div style={{ display: 'flex', justifyContent: 'center', gap: 10, flexWrap: 'wrap', marginTop: 16 }}>
-                      <button className="btn btn-ghost" style={{ flex: 1 }} onClick={() => {
-                        setFlipped(false);
-                        // Tìm từ trước đó trong lịch sử
-                        const vocabHistory = history.filter(h => h.type === 'vocab' && (() => {
-                          try {
-                            const itemMode = JSON.parse(h.metadata || '{}').mode || 'coder';
-                            return itemMode === mode;
-                          } catch {
-                            return false;
-                          }
-                        })());
-                        const currentIdx = vocabHistory.findIndex(h => h.content === card.word);
-                        if (currentIdx > 0) {
-                          const prevItem = vocabHistory[currentIdx - 1];
-                          try {
-                            const m = JSON.parse(prevItem.metadata || '{}');
-                            setCards([{
-                              word: prevItem.content,
-                              def: m.def,
-                              ex: m.ex,
-                              vi: m.vi
-                            }]);
-                            setCardIdx(0);
-                            setFlipped(false);
-                          } catch { /**/ }
-                        }
-                      }}>← Trước</button>
-
-                      {cardIdx === cards.length - 1 && (
-                        <button onClick={() => {
-                          // Đánh dấu đã học cho tất cả các từ trong bộ này
-                          cards.forEach(async (c) => {
-                             const item = history.find(h => h.type === 'vocab' && h.content === c.word);
-                             if (item) markLessonLearned(item.id);
-                          });
-                        }} style={{ flex: 2, borderRadius: 8, background: '#3fb950', color: '#000', border: 'none', fontWeight: 700, fontSize: 13, cursor: 'pointer', boxShadow: '0 2px 8px rgba(63,185,80,0.3)' }}>
-                          ✓ Đã học xong!
-                        </button>
-                      )}
-
-                      <button className="btn btn-ghost" style={{ flex: 1 }} onClick={() => {
-                        setFlipped(false);
-                        // Tìm từ tiếp theo trong lịch sử
-                        const vocabHistory = history.filter(h => h.type === 'vocab' && (() => {
-                          try {
-                            const itemMode = JSON.parse(h.metadata || '{}').mode || 'coder';
-                            return itemMode === mode;
-                          } catch {
-                            return false;
-                          }
-                        })());
-                        const currentIdx = vocabHistory.findIndex(h => h.content === card.word);
-                        if (currentIdx < vocabHistory.length - 1) {
-                          const nextItem = vocabHistory[currentIdx + 1];
-                          try {
-                            const m = JSON.parse(nextItem.metadata || '{}');
-                            setCards([{
-                              word: nextItem.content,
-                              def: m.def,
-                              ex: m.ex,
-                              vi: m.vi
-                            }]);
-                            setCardIdx(0);
-                            setFlipped(false);
-                          } catch { /**/ }
-                        }
-                      }}>Tiếp →</button>
-                    </div>
-                  </>
-                )}
-              </div>
-              <div /> {/* Bỏ khung danh sách từ lặp lại */}
-            </div>
+            <VocabTab
+              cards={cards} setCards={setCards}
+              cardIdx={cardIdx} setCardIdx={setCardIdx}
+              flipped={flipped} setFlipped={setFlipped}
+              known={known}
+              vocabLoading={vocabLoading} loadVocab={loadVocab}
+              history={history} mode={mode}
+              speak={speak} globalSpeed={globalSpeed} globalVoice={globalVoice} globalTtsProvider={globalTtsProvider}
+              markLessonLearned={markLessonLearned}
+            />
           )}
-
           {/* ── READING ── */}
           {tab === 'read' && (
-            <div className="desktop-2col">
-              <div>
-                <div className="card" style={{ marginBottom: 12 }}>
-                  <div style={{ display: 'flex', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
-                    {READ_LEVELS.map(l => (
-                      <button key={l.id} onClick={() => setReadLevel(l.id)} style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid', fontSize: 12, fontWeight: 600, cursor: 'pointer', borderColor: readLevel === l.id ? 'var(--accent)' : 'var(--border)', background: readLevel === l.id ? '#58a6ff22' : 'transparent', color: readLevel === l.id ? 'var(--accent)' : 'var(--muted)' }}>{l.label}</button>
-                    ))}
-                  </div>
-                  <div style={{ marginBottom: 12 }}>
-                    <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 6 }}>✏️ Hoặc tự nhập chủ đề (tiếng Việt hoặc tiếng Anh):</div>
-                    <div style={{ display: 'flex', gap: 8 }}>
-                      <input
-                        className="input"
-                        value={readCustomTopic}
-                        onChange={e => setReadCustomTopic(e.target.value)}
-                        placeholder="Ví dụ: Trí tuệ nhân tạo..."
-                        style={{ flex: 1, fontSize: 13 }}
-                      />
-                      <button
-                        onClick={generateReading}
-                        disabled={!readCustomTopic.trim() || readLoading}
-                        style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: readCustomTopic.trim() && !readLoading ? 'var(--green)' : 'var(--surface2)', color: readCustomTopic.trim() && !readLoading ? '#000' : 'var(--muted)', fontSize: 12, fontWeight: 700, cursor: readCustomTopic.trim() && !readLoading ? 'pointer' : 'not-allowed', whiteSpace: 'nowrap' }}
-                      >
-                        {readLoading ? '⏳...' : '🤖 Tạo'}
-                      </button>
-                    </div>
-                  </div>
-                  <button className="btn btn-primary" style={{ width: '100%', height: 44 }} onClick={generateReading} disabled={readLoading}>
-                    {readLoading ? '⏳ AI đang tạo bài...' : '🤖 Tạo bài đọc mới'}
-                  </button>
-                  {readError && <div style={{ fontSize: 11, color: '#f85149', marginTop: 8, textAlign: 'center' }}>{readError}</div>}
-                </div>
-
-                {readArticle && (
-                  <div className="card">
-                    <div style={{ marginBottom: 16 }}>
-                      <div style={{ fontSize: 22, fontWeight: 900, lineHeight: 1.3, color: 'var(--accent)', marginBottom: 12 }}>{readArticle.title}</div>
-
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10, padding: '10px 0', borderTop: '1px solid var(--border)', borderBottom: '1px solid var(--border)' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <span style={{ fontSize: 11, background: 'var(--surface2)', padding: '3px 8px', borderRadius: 4, color: 'var(--muted)', fontWeight: 600 }}>{readArticle.wordCount} words</span>
-                          <span style={{ fontSize: 11, background: 'var(--surface2)', padding: '3px 8px', borderRadius: 4, color: 'var(--muted)', fontWeight: 600 }}>Level {readLevel}</span>
-                          {(() => {
-                            const itemId = readRecordId || history.find(h => h.type === 'reading' && h.content === readArticle.body)?.id;
-                            const item = history.find(h => h.id === itemId);
-                            if (item && item.learnCount > 0) {
-                              return (
-                                <span style={{ fontSize: 10, padding: '3px 8px', borderRadius: 4, background: '#3fb95022', color: '#3fb950', fontWeight: 700, border: '1px solid #3fb95044' }}>
-                                  ✓ Đã học {item.learnCount} lần
-                                </span>
-                              );
-                            }
-                            return null;
-                          })()}
-                        </div>
-
-                        <div style={{ display: 'flex', gap: 6 }}>
-                          <button
-                            onClick={async () => {
-                              setReadSpeaking(true);
-                              try {
-                                await speak(`${readArticle.title}. ${readArticle.body}`, globalSpeed, globalVoice, globalTtsProvider);
-                              } finally {
-                                setReadSpeaking(false);
-                              }
-                            }}
-                            disabled={readSpeaking}
-                            style={{
-                              padding: '6px 12px',
-                              borderRadius: 8,
-                              background: readSpeaking ? 'var(--accent)' : 'var(--surface2)',
-                              border: '1px solid var(--border)',
-                              color: readSpeaking ? '#000' : 'var(--accent)',
-                              cursor: readSpeaking ? 'not-allowed' : 'pointer',
-                              fontSize: 12,
-                              fontWeight: 700,
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: 4,
-                              animation: readSpeaking ? 'pulse 1.5s ease-in-out infinite' : 'none'
-                            }}
-                          >
-                            {readSpeaking ? '🔊 Đang phát...' : '🔊 Nghe bài'}
-                          </button>
-                          {(() => {
-                            const itemId = readRecordId || history.find(h => h.type === 'reading' && h.content === readArticle.body)?.id;
-                            if (itemId) {
-                              return (
-                                <button
-                                  onClick={() => markLessonLearned(itemId)}
-                                  style={{ padding: '6px 12px', borderRadius: 8, background: '#3fb950', color: '#000', border: 'none', fontSize: 12, fontWeight: 700, cursor: 'pointer', boxShadow: '0 2px 8px rgba(63,185,80,0.3)', display: 'flex', alignItems: 'center', gap: 4 }}
-                                >
-                                  📚 Đã học xong
-                                </button>
-                              );
-                            }
-                            return null;
-                          })()}
-                        </div>
-                      </div>
-                    </div>
-
-                    <div style={{ fontSize: 15, lineHeight: 1.9, color: 'var(--text-main)', userSelect: 'text', letterSpacing: '0.01em' }}
-                      onMouseUp={() => {
-                        try {
-                          const s = window.getSelection()?.toString().trim();
-                          if (s && s.length > 0 && s.length < 300) {
-                            setReadSelected(s);
-                            console.log('Selected text:', s);
-                          }
-                        } catch (e) {
-                          console.error('Selection error:', e);
-                        }
-                      }}>
-                      {readArticle.body.split('\n\n').map((p, i) => <p key={i} style={{ marginBottom: 16, marginTop: 0 }}>{p}</p>)}
-                    </div>
-                    <div style={{ fontSize: 11, color: 'var(--muted)', fontStyle: 'italic' }}>💡 Bôi đen từ hoặc câu để tra nghĩa</div>
-                  </div>
-                )}
-              </div>
-
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                {readArticle && (
-                  <div className="card" style={{ borderLeft: '3px solid var(--purple)' }}>
-                    <div className="section-title" style={{ color: 'var(--purple)' }}>🔍 Tra từ / câu</div>
-                    <textarea className="input" rows={4} value={readSelected} onChange={e => setReadSelected(e.target.value)} placeholder="Bôi đen trong bài hoặc gõ từ cần tra..." style={{ marginBottom: 8, fontSize: 14, lineHeight: 1.6 }} />
-                    <button className="btn btn-ghost" style={{ width: '100%' }} onClick={readLookupFn} disabled={readLookupLoading || !readSelected.trim()}>
-                      {readLookupLoading ? '⏳ Đang tra...' : '🤖 AI giải thích'}
-                    </button>
-                    {readLookup && <div style={{ marginTop: 10, fontSize: 13, lineHeight: 1.8, background: 'var(--surface2)', borderRadius: 8, padding: '10px 12px' }}
-                      dangerouslySetInnerHTML={{ __html: parseMarkdown(readLookup) }}></div>}
-                  </div>
-                )}
-
-                {readQuestions.length > 0 && (
-                  <div className="card">
-                    <div className="section-title">🧠 Comprehension</div>
-                    {readQuestions.map((q, i) => (
-                      <div key={i} style={{ marginBottom: 16 }}>
-                        <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8, lineHeight: 1.5 }}>{i + 1}. {q.q}</div>
-                        {q.options.map((opt, oi) => {
-                          const isSel = readAnswers[i] === oi, isCorrect = q.answer === oi;
-                          let bg = 'var(--surface2)', border = 'var(--border)', color = 'var(--text)';
-                          if (readSubmitted) { if (isCorrect) { bg = '#0d1a0e'; border = '#3fb950'; color = '#3fb950'; } else if (isSel) { bg = '#1a0a0a'; border = '#f85149'; color = '#f85149'; } } else if (isSel) { bg = '#58a6ff22'; border = '#58a6ff'; }
-                          return <button key={oi} onClick={() => { if (!readSubmitted) setReadAnswers(a => { const n = [...a]; n[i] = oi; return n; }); }} style={{ display: 'block', width: '100%', textAlign: 'left', background: bg, border: `1px solid ${border}`, borderRadius: 8, padding: '9px 12px', color, fontSize: 13, cursor: readSubmitted ? 'default' : 'pointer', marginBottom: 5, lineHeight: 1.4 }}>{String.fromCharCode(65 + oi)}) {opt}</button>;
-                        })}
-                      </div>
-                    ))}
-                    {!readSubmitted
-                      ? <button className="btn btn-green" style={{ width: '100%', height: 42 }} onClick={() => setReadSubmitted(true)} disabled={readAnswers.some(a => a === -1)}>Submit</button>
-                      : <div style={{ textAlign: 'center', padding: 14, background: readScore === readQuestions.length ? '#0d1a0e' : '#1a0a0a', borderRadius: 10, border: `1px solid ${readScore === readQuestions.length ? '#3fb950' : '#f85149'}` }}>
-                        <div style={{ fontSize: 22, fontWeight: 900, color: readScore === readQuestions.length ? '#3fb950' : '#f85149' }}>{readScore}/{readQuestions.length} {readScore === readQuestions.length ? '🎉' : '💪'}</div>
-                      </div>
-                    }
-                  </div>
-                )}
-
-                {readArticle && (
-                  <div className="card" style={{ borderLeft: '3px solid var(--green)' }}>
-                    <div className="section-title" style={{ color: 'var(--green)' }}>💬 Hỏi AI về bài đọc</div>
-                    <div style={{ maxHeight: 220, overflowY: 'auto', marginBottom: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
-                      {readChat.length === 0 && <div style={{ fontSize: 12, color: 'var(--muted)', fontStyle: 'italic' }}>Hỏi AI về từ khó, ngữ pháp, nội dung bài...</div>}
-                      {readChat.map((m, i) => (
-                        <div key={i} style={{ display: 'flex', justifyContent: m.role === 'user' ? 'flex-end' : 'flex-start' }}>
-                          <div style={{ maxWidth: '85%', padding: '8px 12px', borderRadius: 10, fontSize: 13, lineHeight: 1.6, background: m.role === 'user' ? '#58a6ff22' : 'var(--surface2)', border: `1px solid ${m.role === 'user' ? '#58a6ff44' : 'var(--border)'}` }}
-                            dangerouslySetInnerHTML={{ __html: parseMarkdown(m.text) }}></div>
-                        </div>
-                      ))}
-                      {readChatLoading && <div style={{ display: 'flex', justifyContent: 'flex-start' }}><div style={{ padding: '8px 12px', borderRadius: 10, fontSize: 13, background: 'var(--surface2)', color: 'var(--muted)' }}>⏳ AI đang trả lời...</div></div>}
-                    </div>
-                    <div style={{ display: 'flex', gap: 8 }}>
-                      <input className="input" value={readChatInput} onChange={e => setReadChatInput(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendReadChat(); } }} placeholder="Hỏi về bài đọc..." style={{ flex: 1, marginBottom: 0 }} />
-                      <button className="btn btn-green" onClick={sendReadChat} disabled={readChatLoading || !readChatInput.trim()} style={{ flexShrink: 0 }}>Gửi</button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
+            <ReadTab
+              readLevel={readLevel} setReadLevel={setReadLevel}
+              readCustomTopic={readCustomTopic} setReadCustomTopic={setReadCustomTopic}
+              readLoading={readLoading} readError={readError}
+              readArticle={readArticle} readRecordId={readRecordId}
+              readSelected={readSelected} setReadSelected={setReadSelected}
+              readLookup={readLookup} readLookupLoading={readLookupLoading}
+              readQuestions={readQuestions}
+              readAnswers={readAnswers} setReadAnswers={setReadAnswers}
+              readSubmitted={readSubmitted} setReadSubmitted={setReadSubmitted}
+              readScore={readScore}
+              readChat={readChat} readChatInput={readChatInput} setReadChatInput={setReadChatInput}
+              readChatLoading={readChatLoading}
+              readSpeaking={readSpeaking} setReadSpeaking={setReadSpeaking}
+              generateReading={generateReading} readLookupFn={readLookupFn} sendReadChat={sendReadChat}
+              markLessonLearned={markLessonLearned}
+              speak={speak} globalSpeed={globalSpeed} globalVoice={globalVoice} globalTtsProvider={globalTtsProvider}
+              parseMarkdown={parseMarkdown} history={history}
+            />
           )}
           {tab === 'grammar' && (
-            <div className="fade-in">
-              <div className="card" style={{ marginBottom: 16 }}>
-                <div className="section-title">📐 Luyện Ngữ Pháp AI</div>
-                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12 }}>
-                  {GRAMMAR_TOPICS.map(t => (
-                    <button key={t} onClick={() => { setGrammarTopic(t); setGrammarCustomTopic(''); }} style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid', fontSize: 11, fontWeight: 600, cursor: 'pointer', borderColor: grammarTopic === t && !grammarCustomTopic ? 'var(--accent)' : 'var(--border)', background: grammarTopic === t && !grammarCustomTopic ? 'var(--accent)22' : 'transparent', color: grammarTopic === t && !grammarCustomTopic ? 'var(--accent)' : 'var(--muted)' }}>{t}</button>
-                  ))}
-                </div>
-                
-                <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
-                  <input 
-                    className="input" 
-                    placeholder="Hoặc tự nhập chủ đề (VD: Câu chẻ, Đảo ngữ loại 3...)" 
-                    value={grammarCustomTopic}
-                    onChange={(e) => {
-                      setGrammarCustomTopic(e.target.value);
-                      if (e.target.value) setGrammarTopic(e.target.value);
-                    }}
-                    style={{ flex: 1, marginBottom: 0, fontSize: 13 }}
-                  />
-                </div>
-
-                <button className="btn btn-primary" style={{ width: '100%' }} onClick={genGrammarLesson} disabled={grammarLoading || (grammarCustomTopic === '' && !grammarTopic)}>
-                  {grammarLoading ? '⏳ AI đang soạn bài...' : `📖 Học về ${grammarCustomTopic || grammarTopic}`}
-                </button>
-              </div>
-
-              {grammarLesson && (
-                <div className="card fade-in">
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                    <div style={{ fontSize: 16, fontWeight: 800, color: 'var(--accent)' }}>{grammarTopic}</div>
-                    {grammarRecordId && (
-                      <button onClick={() => markLessonLearned(grammarRecordId)} style={{ fontSize: 11, color: 'var(--green)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700 }}>✓ Hoàn thành</button>
-                    )}
-                  </div>
-                  <div style={{ fontSize: 14, lineHeight: 1.7, color: 'var(--text)' }} dangerouslySetInnerHTML={{ __html: parseMarkdown(grammarLesson.split(/Q1:|1\.\s*\[Question\]/)[0]) }} />
-                  
-                  {grammarQuizAnswers.length > 0 && (
-                    <div style={{ marginTop: 20, borderTop: '1px solid var(--border)', paddingTop: 16 }}>
-                      <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 12, color: 'var(--orange)' }}>🧠 Bài tập củng cố</div>
-                      {grammarQuizAnswers.map((_, i) => {
-                        const qNum = i + 1;
-                        const quizPart = grammarLesson.split(/Q\d+:/)[qNum];
-                        if (!quizPart) return null;
-                        const question = quizPart.split('A)')[0].trim();
-                        const optA = quizPart.match(/A\)\s*([^B\n]+)/)?.[1]?.trim() || '';
-                        const optB = quizPart.match(/B\)\s*([^C\n]+)/)?.[1]?.trim() || '';
-                        const optC = quizPart.match(/C\)\s*([^\n]+)/)?.[1]?.trim() || '';
-                        const opts = [optA, optB, optC];
-
-                        return (
-                          <div key={i} style={{ marginBottom: 16 }}>
-                            <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>{qNum}. {question}</div>
-                            <div style={{ display: 'grid', gap: 6 }}>
-                              {['A', 'B', 'C'].map((opt, oi) => {
-                                const isSelected = grammarUserAnswers[i] === opt;
-                                const isCorrect = grammarQuizAnswers[i] === opt;
-                                let bg = 'var(--surface2)', border = 'var(--border)', color = 'var(--text)';
-                                if (grammarSubmitted) {
-                                  if (isCorrect) { bg = '#0d1a0e'; border = '#3fb950'; color = '#3fb950'; }
-                                  else if (isSelected) { bg = '#1a0a0a'; border = '#f85149'; color = '#f85149'; }
-                                } else if (isSelected) { bg = 'var(--accent)22', border = 'var(--accent)'; }
-
-                                return (
-                                  <button key={opt} onClick={() => !grammarSubmitted && setGrammarUserAnswers(prev => { const n = [...prev]; n[i] = opt; return n; })}
-                                    style={{ textAlign: 'left', padding: '10px 14px', borderRadius: 8, border: `1px solid ${border}`, background: bg, color, fontSize: 13, cursor: 'pointer' }}>
-                                    {opt}) {opts[oi]}
-                                  </button>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        );
-                      })}
-                      {!grammarSubmitted ? (
-                        <button className="btn btn-green" style={{ width: '100%', marginTop: 10 }} onClick={() => setGrammarSubmitted(true)} disabled={grammarUserAnswers.some(a => !a)}>Nộp bài</button>
-                      ) : (
-                        <div style={{ textAlign: 'center', padding: 12, background: 'var(--surface2)', borderRadius: 8, marginTop: 10 }}>
-                          <div style={{ fontSize: 16, fontWeight: 800, color: 'var(--green)' }}>
-                            Kết quả: {grammarUserAnswers.filter((a, i) => a === grammarQuizAnswers[i]).length} / {grammarQuizAnswers.length}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
+            <GrammarTab
+              grammarTopics={GRAMMAR_TOPICS}
+              grammarTopic={grammarTopic} setGrammarTopic={setGrammarTopic}
+              grammarCustomTopic={grammarCustomTopic} setGrammarCustomTopic={setGrammarCustomTopic}
+              grammarLoading={grammarLoading}
+              grammarLesson={grammarLesson}
+              grammarRecordId={grammarRecordId}
+              grammarQuizAnswers={grammarQuizAnswers}
+              grammarUserAnswers={grammarUserAnswers} setGrammarUserAnswers={setGrammarUserAnswers}
+              grammarSubmitted={grammarSubmitted} setGrammarSubmitted={setGrammarSubmitted}
+              genGrammarLesson={genGrammarLesson}
+              markLessonLearned={markLessonLearned}
+              parseMarkdown={parseMarkdown}
+            />
           )}
-
           {/* ── GUIDE ── */}
-          {tab === 'guide' && (
-            <div className="fade-in">
-              <div className="card" style={{ borderLeft: '4px solid var(--accent)', background: 'var(--surface2)', padding: '24px' }}>
-                <h2 className="section-title" style={{ color: 'var(--accent)', fontSize: 20, marginBottom: '20px' }}>📘 Hướng dẫn học Tiếng Anh với NewHat AI</h2>
-                
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-                  <section>
-                    <h3 style={{ color: 'var(--green)', fontSize: 16, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <span>🎧</span> Luyện Nghe (Listening)
-                    </h3>
-                    <p style={{ fontSize: 13.5, color: 'var(--text)', lineHeight: 1.7 }}>
-                      • Nhấn <strong>"🤖 Tạo đoạn nghe mới"</strong> để AI soạn nội dung theo trình độ (A2-B2).<br/>
-                      • Bạn có thể tự nhập văn bản tiếng Anh vào ô trống để AI đọc cho bạn nghe.<br/>
-                      • Sử dụng thanh trượt để điều chỉnh tốc độ đọc (0.5x cho người mới bắt đầu).
-                    </p>
-                  </section>
-
-                  <section>
-                    <h3 style={{ color: 'var(--purple)', fontSize: 16, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <span>🎤</span> Luyện Nói (Speaking)
-                    </h3>
-                    <p style={{ fontSize: 13.5, color: 'var(--text)', lineHeight: 1.7 }}>
-                      • Nhấn giữ biểu tượng Micro để ghi âm câu trả lời của bạn.<br/>
-                      • Sau khi nói xong, nhấn <strong>"🤖 AI chấm điểm"</strong>. AI sẽ phân tích phát âm, chỉ ra lỗi ngữ pháp và gợi ý cách diễn đạt tự nhiên hơn như người bản xứ.
-                    </p>
-                  </section>
-
-                  <section>
-                    <h3 style={{ color: 'var(--orange)', fontSize: 16, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <span>📖</span> Luyện Đọc & Tra Từ (Reading & Lookup)
-                    </h3>
-                    <p style={{ fontSize: 13.5, color: 'var(--text)', lineHeight: 1.7 }}>
-                      • <strong>Tra từ nhanh:</strong> Trong khi đọc bài, hãy <strong>bôi đen</strong> bất kỳ từ hoặc cụm từ nào. AI sẽ ngay lập tức giải thích nghĩa, phiên âm và cách dùng ngay bên cạnh.<br/>
-                      • <strong>Hỏi đáp:</strong> Bạn có thể nhắn tin hỏi AI bất kỳ điều gì về nội dung bài đọc ở khung chat phía dưới.
-                    </p>
-                  </section>
-
-                  <section>
-                    <h3 style={{ color: 'var(--blue)', fontSize: 16, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <span>📚</span> Từ Vựng (Vocabulary)
-                    </h3>
-                    <p style={{ fontSize: 13.5, color: 'var(--text)', lineHeight: 1.7 }}>
-                      • Hệ thống cung cấp thẻ ghi nhớ (Flashcards) thông minh.<br/>
-                      • Mỗi từ vựng đều đi kèm phiên âm, ví dụ đặt câu và nghĩa tiếng Việt.<br/>
-                      • Bạn nên luyện tập hàng ngày để AI giúp ghi nhớ từ vựng vào bộ nhớ dài hạn.
-                    </p>
-                  </section>
-
-                  <section>
-                    <h3 style={{ color: 'var(--red)', fontSize: 16, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <span>📐</span> Ngữ Pháp (Grammar)
-                    </h3>
-                    <p style={{ fontSize: 13.5, color: 'var(--text)', lineHeight: 1.7 }}>
-                      • Chọn một chủ đề ngữ pháp bạn muốn học hoặc tự nhập chủ đề riêng.<br/>
-                      • AI sẽ giảng giải lý thuyết một cách dễ hiểu và đưa ra <strong>bài tập trắc nghiệm</strong> ngay phía dưới để bạn thực hành và chấm điểm trực tiếp.
-                    </p>
-                  </section>
-
-                  <div style={{ marginTop: 10, padding: '12px 16px', background: 'rgba(88,166,255,0.08)', borderRadius: 12, border: '1px dashed var(--accent)', fontSize: 13, color: 'var(--muted)', lineHeight: 1.6 }}>
-                    💡 <strong>Mẹo nhỏ:</strong> Hệ thống NewHat được thiết kế để học tập chủ động. Đừng ngần ngại yêu cầu AI tạo thêm ví dụ hoặc giải thích lại những phần bạn chưa rõ nhé!
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
+          {tab === 'guide' && <GuideTab />}
 
           {/* ── DICT ── */}
           {tab === 'dict' && (
-            <div className="desktop-2col">
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                <div className="card">
-                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 10 }}>
-                    <div className="section-title" style={{ margin: 0, flexShrink: 0 }}>🔎 Tra từ</div>
-                    <input
-                      className="input"
-                      value={dictInput}
-                      onChange={e => setDictInput(e.target.value)}
-                      onKeyDown={e => { if (e.key === 'Enter') lookupWord(); }}
-                      placeholder="Nhập từ hoặc cụm từ tiếng Anh..."
-                      style={{ flex: 1, marginBottom: 0, fontSize: 16 }}
-                    />
-                    <button className="btn btn-primary" onClick={lookupWord} disabled={dictLoading || !dictInput.trim()} style={{ flexShrink: 0, padding: '8px 16px', fontSize: 13 }}>
-                      {dictLoading ? '⏳' : '🔎'}
-                    </button>
-                  </div>
-                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                    {['run', 'make', 'break', 'handle', 'deploy', 'callback', 'async', 'refactor', 'leverage', 'on behalf of'].map(w => (
-                      <button key={w} onClick={() => { setDictInput(w); setDictResult(''); }} style={{ padding: '3px 10px', borderRadius: 6, border: '1px solid var(--border)', fontSize: 11, cursor: 'pointer', color: 'var(--muted)', background: 'transparent' }}>{w}</button>
-                    ))}
-                  </div>
-                </div>
-
-                {dictResult && (
-                  <div className="card" style={{ borderLeft: '4px solid var(--accent)' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                      <div style={{ fontWeight: 800, fontSize: 15, color: 'var(--accent)' }}>{dictInput}</div>
-                      <div style={{ display: 'flex', gap: 8 }}>
-                        <button onClick={() => speak(dictInput, globalSpeed, globalVoice, globalTtsProvider)} style={{ fontSize: 12, color: 'var(--muted)', background: 'none', border: 'none', cursor: 'pointer' }}>🔊 Nghe</button>
-                      </div>
-                    </div>
-                    <div style={{ fontSize: 13, lineHeight: 1.9 }} dangerouslySetInnerHTML={{ __html: parseMarkdown(dictResult) }} />
-                  </div>
-                )}
-              </div>
-
-              <div>
-                {(() => {
-                  const dictItems = history.filter(h => {
-                    if (h.type !== 'dict') return false;
-                    if (mode === 'all') return true;
-                    try {
-                      const itemMode = JSON.parse(h.metadata || '{}').mode || 'coder';
-                      return itemMode === mode;
-                    } catch {
-                      return false;
-                    }
-                  });
-                  if (!dictItems.length) return null;
-                  return (
-                    <div className="card">
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                        <div className="section-title" style={{ margin: 0 }}>🕐 Đã tra gần đây ({dictItems.length})</div>
-                      </div>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 500, overflowY: 'auto' }}>
-                        {dictItems.map((item) => {
-                          let word = '';
-                          try { word = JSON.parse(item.metadata || '{}').word || item.content.slice(0, 30); } catch { word = item.content.slice(0, 30); }
-                          return (
-                            <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderRadius: 8, border: '1px solid var(--border)', cursor: 'pointer', transition: 'background 0.15s' }}
-                              onClick={() => { setDictInput(word); setDictResult(item.content); }}
-                              onMouseEnter={e => e.currentTarget.style.background = 'var(--surface2)'}
-                              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-                              <div style={{ flex: 1 }}>
-                                <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)' }}>{word}</div>
-                                <div style={{ fontSize: 10, color: 'var(--muted)' }}>{new Date(item.createdAt).toLocaleString('vi')}</div>
-                              </div>
-                              <button onClick={e => { e.stopPropagation(); speak(word, globalSpeed, globalVoice, globalTtsProvider); }} style={{ fontSize: 12, color: 'var(--muted)', background: 'none', border: 'none', cursor: 'pointer' }}>🔊</button>
-                              <button onClick={async e => { e.stopPropagation(); await fetch('/api/english', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: item.id }) }); loadHistory(); }} style={{ fontSize: 11, color: '#f85149', background: '#f8514915', border: 'none', cursor: 'pointer', padding: '3px 7px', borderRadius: 5 }}>🗑</button>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  );
-                })()}
-              </div>
-            </div>
+            <DictTab
+              dictInput={dictInput} setDictInput={setDictInput}
+              dictResult={dictResult} setDictResult={setDictResult}
+              dictLoading={dictLoading} lookupWord={lookupWord}
+              history={history} mode={mode} loadHistory={loadHistory}
+              speak={speak} globalSpeed={globalSpeed} globalVoice={globalVoice} globalTtsProvider={globalTtsProvider}
+              parseMarkdown={parseMarkdown}
+            />
           )}
 
         </div>
@@ -2323,6 +1523,17 @@ Return JSON ONLY (no markdown code blocks, just raw json):
               </div>
               <button className="btn btn-ghost" style={{ fontSize: 12, padding: '4px 10px' }} onClick={loadHistory}>↻ Tải lại</button>
             </div>
+            {(() => {
+              const mapType = tab === 'write' ? 'writing' : tab === 'read' ? 'reading' : tab;
+              const now = Date.now();
+              const due = history.filter(h => h.type === mapType && h.nextReviewAt && new Date(h.nextReviewAt).getTime() <= now);
+              if (!due.length) return null;
+              return (
+                <div style={{ marginBottom: 12, padding: '6px 10px', background: '#d2992222', border: '1px solid #d29922', borderRadius: 8, fontSize: 12, color: '#d29922', fontWeight: 700 }}>
+                  🔔 Cần ôn: {due.length} bài
+                </div>
+              );
+            })()}
             {historyLoading && <div style={{ color: 'var(--muted)', padding: 20 }}>Đang tải dữ liệu...</div>}
 
             <div style={{ maxHeight: 600, overflowY: 'auto', paddingRight: 4 }}>

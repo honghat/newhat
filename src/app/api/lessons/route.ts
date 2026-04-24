@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma';
 import { getSession } from '@/lib/auth';
+import { computeNextReview, qualityFromScore } from '@/lib/srs';
 
 export async function GET() {
   try {
@@ -8,7 +9,7 @@ export async function GET() {
     const lessons = await prisma.lesson.findMany({
       where: { userId: user.id },
       orderBy: { order: 'asc' },
-      select: { id: true, track: true, topic: true, content: true, order: true, completed: true, learnCount: true, createdAt: true },
+      select: { id: true, track: true, topic: true, content: true, order: true, completed: true, learnCount: true, createdAt: true, nextReviewAt: true, lastReviewedAt: true, intervalDays: true, easeFactor: true, reviewCount: true },
     });
     return Response.json(lessons);
   } catch (e: unknown) {
@@ -51,15 +52,31 @@ export async function PATCH(req: Request) {
   try {
     const user = await getSession();
     if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
-    const { id, completed, incrementLearnCount } = await req.json();
+    const { id, completed, incrementLearnCount, quizScore, quizTotal } = await req.json();
     const data: any = {};
     if (completed !== undefined) data.completed = completed;
     if (incrementLearnCount) data.learnCount = { increment: 1 };
 
+    if (typeof quizScore === 'number' && typeof quizTotal === 'number' && quizTotal > 0) {
+      const prev = await prisma.lesson.findUnique({
+        where: { id, userId: user.id },
+        select: { intervalDays: true, easeFactor: true, reviewCount: true },
+      });
+      if (prev) {
+        const q = qualityFromScore(quizScore, quizTotal);
+        const next = computeNextReview(prev, q);
+        data.intervalDays = next.intervalDays;
+        data.easeFactor = next.easeFactor;
+        data.reviewCount = next.reviewCount;
+        data.nextReviewAt = next.nextReviewAt;
+        data.lastReviewedAt = next.lastReviewedAt;
+      }
+    }
+
     const lesson = await prisma.lesson.update({
       where: { id, userId: user.id },
       data,
-      select: { id: true, completed: true, learnCount: true, order: true },
+      select: { id: true, completed: true, learnCount: true, order: true, nextReviewAt: true, intervalDays: true, easeFactor: true, reviewCount: true },
     });
     return Response.json(lesson);
   } catch (e: unknown) {

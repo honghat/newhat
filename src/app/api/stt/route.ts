@@ -33,27 +33,41 @@ export async function POST(req: Request) {
     if (type.includes('mp4')) ext = 'mp4';
     else if (type.includes('ogg')) ext = 'ogg';
 
+    let language = formData.get('language') as string;
+    if (!language || language === 'undefined' || language === 'null') {
+      language = 'en';
+    }
+
+    let prompt = (formData.get('prompt') as string) || '';
+    if (language === 'en' && !prompt) {
+      prompt = 'This is an English speaking practice session. Please transcribe the audio accurately in English.';
+    }
+
     // --- 1. ƯU TIÊN DÙNG GROQ CLOUD TRỰC TIẾP (Nếu có Key) ---
     if (GROQ_API_KEY) {
       try {
         console.log('[STT] Đang dùng Groq Cloud trực tiếp...');
         const groqForm = new FormData();
         groqForm.append('file', audio, `audio.${ext}`);
-        groqForm.append('model', 'whisper-large-v3-turbo');
-        groqForm.append('language', 'vi');
+        
+        // Use full large-v3 for maximum accuracy
+        groqForm.append('model', 'whisper-large-v3');
+        groqForm.append('language', language);
+        if (prompt) groqForm.append('prompt', prompt);
 
         const groqRes = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
           method: 'POST',
           headers: { 'Authorization': `Bearer ${GROQ_API_KEY}` },
           body: groqForm,
-          signal: AbortSignal.timeout(15000),
+          signal: AbortSignal.timeout(30000),
         });
 
         if (groqRes.ok) {
           const data = await groqRes.json();
           return Response.json({ text: data.text || '' });
         }
-        console.error('[STT] Groq Cloud lỗi, chuyển sang Local nếu có...');
+        const groqErr = await groqRes.text();
+        console.error(`[STT] Groq Cloud lỗi: ${groqRes.status} - ${groqErr}`);
       } catch (e) {
         console.error('[STT] Groq Cloud Connection Error:', e);
       }

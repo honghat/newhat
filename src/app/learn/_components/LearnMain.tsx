@@ -1,7 +1,7 @@
 'use client';
 import { useState, useEffect, useCallback, useRef } from 'react';
 
-interface Lesson { id: number; track: string; topic: string; content: string; order: number; completed: boolean; learnCount: number; createdAt: string; }
+interface Lesson { id: number; track: string; topic: string; content: string; order: number; completed: boolean; learnCount: number; createdAt: string; nextReviewAt?: string | null; lastReviewedAt?: string | null; intervalDays?: number; easeFactor?: number; reviewCount?: number; }
 
 const TRACKS = [
   { id: 'html-css', label: '🎨 HTML/CSS', color: '#f78166' },
@@ -165,10 +165,15 @@ export default function LearnMain() {
   }, [track, lessons, mode]);
 
   async function markComplete(lessonId: number) {
+    const body: any = { id: lessonId, completed: true, incrementLearnCount: true };
+    if (quizSubmitted && quizAnswers.length > 0) {
+      body.quizScore = userAnswers.filter((a, i) => a === quizAnswers[i]).length;
+      body.quizTotal = quizAnswers.length;
+    }
     await fetch('/api/lessons', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: lessonId, completed: true, incrementLearnCount: true })
+      body: JSON.stringify(body)
     });
     const updatedLessons = await fetch('/api/lessons').then(res => res.json());
     setLessons(updatedLessons);
@@ -215,17 +220,18 @@ export default function LearnMain() {
   async function genLesson() {
     setLoading(true); setCurrent(null); setQuizMode(false); setQuizAnswers([]); setUserAnswers([]); setQuizSubmitted(false);
 
-    // Lấy TẤT CẢ bài trong track này để AI không lặp lại
+    // Lấy TẤT CẢ bài trong track này theo đúng thứ tự học để AI biết người học đang ở đâu
     const existingTopics = lessons
       .filter(l => l.track === track)
+      .sort((a, b) => a.order - b.order || a.id - b.id)
       .map(l => l.topic);
 
-    const avoidStr = existingTopics.length > 0
-      ? `\n\nTUYỆT ĐỐI KHÔNG được dạy lại các chủ đề sau (tìm chủ đề mới khác hoàn toàn):\n${existingTopics.join('\n')}`
-      : '';
+    const curriculumStr = existingTopics.length > 0
+      ? `\n\nNgười học đã học các bài sau theo thứ tự (từ cũ → mới nhất):\n${existingTopics.map((t, i) => `${i + 1}. ${t}`).join('\n')}\n\nHãy chọn CHỦ ĐỀ TIẾP THEO hợp lý theo lộ trình từ cơ bản → nâng cao, nối tiếp kiến thức từ các bài trên. Chủ đề mới phải:\n- Không trùng với bất kỳ bài nào ở trên.\n- Là bước kế tiếp tự nhiên về độ khó (không nhảy cóc sang khái niệm quá nâng cao nếu chưa có nền tảng).\n- Nếu các bài trên đã bao quát cơ bản, hãy tiến sang khái niệm trung cấp/nâng cao.`
+      : `\n\nĐây là bài ĐẦU TIÊN của người học. Hãy bắt đầu từ khái niệm cốt lõi, nền tảng nhất của ${TRACKS.find(t=>t.id===track)?.label || track}.`;
 
     const prompt = `Bạn là một giáo viên lập trình tận tâm, có khả năng biến những khái niệm phức tạp thành đơn giản.
-    Hãy tạo một bài học về ${TRACKS.find(t=>t.id===track)?.label || track} dành cho người mới bắt đầu.${avoidStr}
+    Hãy tạo một bài học về ${TRACKS.find(t=>t.id===track)?.label || track} theo lộ trình học có hệ thống.${curriculumStr}
     Hãy dẫn dắt người học bằng cách bổ sung các khái niệm căn bản trước khi vào ví dụ code.
 
     Format bài học như sau:
@@ -603,7 +609,30 @@ ${codeInput}` }] }),
   }
 
   const trackObj = TRACKS.find(t => t.id === track);
-  const trackLessons = lessons.filter(l => l.topic.toLowerCase().includes(track) || l.content.includes(trackObj?.label || ''));
+  const trackLessons = lessons.filter(l => l.track === track);
+  const now = Date.now();
+  const isDue = (l: Lesson) => l.nextReviewAt ? new Date(l.nextReviewAt).getTime() <= now : false;
+  const dueLessons = lessons.filter(isDue);
+  const dueInTrack = trackLessons.filter(isDue);
+
+  function loadLesson(l: Lesson) {
+    setCurrent(l);
+    setQuizMode(false); setQuizSubmitted(false); setUserAnswers([]);
+    const answers: string[] = [];
+    const ms = l.content.matchAll(/ĐÁPÁN:([ABC])/g);
+    for (const m of ms) answers.push(m[1]);
+    setQuizAnswers(answers);
+    setUserAnswers(answers.map(() => ''));
+    contentRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  function startReview() {
+    const pool = dueInTrack.length > 0 ? dueInTrack : dueLessons;
+    if (!pool.length) return;
+    const oldest = [...pool].sort((a, b) => new Date(a.nextReviewAt!).getTime() - new Date(b.nextReviewAt!).getTime())[0];
+    if (oldest.track !== track) setTrack(oldest.track);
+    loadLesson(oldest);
+  }
 
   return (
     <div className="fade-in">
@@ -621,6 +650,15 @@ ${codeInput}` }] }),
           </div>
         </div>
         <div style={{ fontSize: 12, color: 'var(--muted)' }}>{mode==='lesson'?`AI tạo bài mới, không lặp lại — ${lessons.length} bài đã học`:'Paste code và hỏi AI giải thích'}</div>
+        {mode === 'lesson' && dueLessons.length > 0 && (
+          <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', background: '#d2992222', border: '1px solid #d29922', borderRadius: 8 }}>
+            <span style={{ fontSize: 13, color: '#d29922', fontWeight: 700 }}>🔔 Cần ôn: {dueLessons.length}</span>
+            <span style={{ fontSize: 11, color: 'var(--muted)' }}>• {dueInTrack.length} trong track này</span>
+            <button onClick={startReview} style={{ marginLeft: 'auto', padding: '4px 10px', borderRadius: 6, border: '1px solid #d29922', background: '#d29922', color: '#000', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+              Ôn ngay
+            </button>
+          </div>
+        )}
       </div>
 
       {mode === 'lesson' && (
@@ -1022,8 +1060,8 @@ ${codeInput}` }] }),
                         </div>
                         <div style={{ flex:1, minWidth:0 }}>
                           <div style={{ color: current?.id===l.id ? 'var(--accent)' : 'var(--text)', fontSize: 13, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis', fontWeight: 600 }}>{l.topic}</div>
-                          <div style={{ fontSize:11, color:'var(--muted)' }}>
-                            {l.completed ? `✅ Đã học lần ${l.learnCount || 1}` : '⏳ Chưa học'}
+                          <div style={{ fontSize:11, color: isDue(l) ? '#d29922' : 'var(--muted)', fontWeight: isDue(l) ? 700 : 400 }}>
+                            {isDue(l) ? '🔔 Đến hạn ôn' : l.nextReviewAt ? `⏱ Ôn sau ${Math.max(0, Math.ceil((new Date(l.nextReviewAt).getTime() - now) / 86400000))}d` : (l.completed ? `✅ Đã học lần ${l.learnCount || 1}` : '⏳ Chưa học')}
                           </div>
                         </div>
                       </div>

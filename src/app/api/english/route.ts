@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma';
 import { getSession } from '@/lib/auth';
+import { computeNextReview, qualityFromScore } from '@/lib/srs';
 
 export async function GET(req: Request) {
   const user = await getSession();
@@ -34,13 +35,29 @@ export async function PATCH(req: Request) {
   try {
     const user = await getSession();
     if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
-    const { id, completed, content, metadata, incrementLearnCount } = await req.json();
+    const { id, completed, content, metadata, incrementLearnCount, quizScore, quizTotal } = await req.json();
     const data: any = {};
     if (completed !== undefined) data.completed = completed;
     if (content !== undefined) data.content = content;
     if (metadata !== undefined) data.metadata = JSON.stringify(metadata);
     if (incrementLearnCount) data.learnCount = { increment: 1 };
-    
+
+    if (typeof quizScore === 'number' && typeof quizTotal === 'number' && quizTotal > 0) {
+      const prev = await prisma.englishLesson.findUnique({
+        where: { id, userId: user.id },
+        select: { intervalDays: true, easeFactor: true, reviewCount: true },
+      });
+      if (prev) {
+        const q = qualityFromScore(quizScore, quizTotal);
+        const next = computeNextReview(prev, q);
+        data.intervalDays = next.intervalDays;
+        data.easeFactor = next.easeFactor;
+        data.reviewCount = next.reviewCount;
+        data.nextReviewAt = next.nextReviewAt;
+        data.lastReviewedAt = next.lastReviewedAt;
+      }
+    }
+
     const lesson = await prisma.englishLesson.update({
       where: { id, userId: user.id },
       data,
