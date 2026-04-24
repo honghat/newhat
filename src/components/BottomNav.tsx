@@ -10,6 +10,7 @@ const tabs = [
   { href: '/learn', label: 'Học Code', icon: '🧑‍💻' },
   { href: '/english', label: 'Tiếng Anh', icon: '🇬🇧' },
   // { href: '/entertainment', label: 'Giải Trí', icon: '🎧' },
+  { href: '/mindmap', label: 'Mindmap', icon: '🧠' },
   { href: '/roadmap', label: 'Lộ Trình', icon: '🗺' },
   { href: '/timer', label: 'Pomodoro', icon: '⏱' },
 ];
@@ -26,7 +27,7 @@ export default function BottomNav({ session }: { session: AuthUser | null }) {
   if (path === '/login') return null;
 
   async function logout() {
-    await fetch('/api/auth', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ action:'logout' }) });
+    await fetch('/api/auth', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'logout' }) });
     router.push('/login');
     router.refresh();
   }
@@ -34,7 +35,7 @@ export default function BottomNav({ session }: { session: AuthUser | null }) {
   const ss = String(secs % 60).padStart(2, '0');
   const total = isWork ? 50 * 60 : 10 * 60;
   const pct = ((total - secs) / total) * 100;
-  
+
   // Define constant values for SVG logic
   const r = 22;
   const c = Math.round(2 * Math.PI * r * 100) / 100; // Round to 2 decimal places
@@ -116,39 +117,39 @@ export default function BottomNav({ session }: { session: AuthUser | null }) {
         <div style={{ padding: '14px', borderTop: '1px solid var(--border)' }}>
           {session ? (
             <div>
-              <Link href="/profile" style={{ display:'flex', alignItems:'center', gap:8, marginBottom:10, textDecoration:'none', borderRadius:8, padding:'4px', margin:'0 -4px 10px' }}>
-                <div style={{ width:32, height:32, borderRadius:99, background: session.role==='admin'?'#58a6ff22':'var(--surface2)', display:'flex', alignItems:'center', justifyContent:'center', fontWeight:900, fontSize:14, color: session.role==='admin'?'var(--accent)':'var(--text)', border:`1px solid ${session.role==='admin'?'var(--accent)':'var(--border)'}`, flexShrink:0 }}>
+              <Link href="/profile" style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, textDecoration: 'none', borderRadius: 8, padding: '4px', margin: '0 -4px 10px' }}>
+                <div style={{ width: 32, height: 32, borderRadius: 99, background: session.role === 'admin' ? '#58a6ff22' : 'var(--surface2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 900, fontSize: 14, color: session.role === 'admin' ? 'var(--accent)' : 'var(--text)', border: `1px solid ${session.role === 'admin' ? 'var(--accent)' : 'var(--border)'}`, flexShrink: 0 }}>
                   {session.name[0]?.toUpperCase()}
                 </div>
-                <div style={{ minWidth:0, flex:1 }}>
-                  <div style={{ fontSize:12, fontWeight:600, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis', color:'var(--text)' }}>{session.name}</div>
-                  <div style={{ fontSize:10, color:'var(--muted)' }}>{session.role==='admin'?'👑 Admin':'Học viên · Đổi mật khẩu'}</div>
+                <div style={{ minWidth: 0, flex: 1 }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: 'var(--text)' }}>{session.name}</div>
+                  <div style={{ fontSize: 10, color: 'var(--muted)' }}>{session.role === 'admin' ? '👑 Admin' : 'Học viên · Đổi mật khẩu'}</div>
                 </div>
               </Link>
-              <div style={{ display:'flex', gap:6 }}>
-                {session.role==='admin' && (
-                  <Link href="/admin" style={{ flex:1, textAlign:'center', padding:'6px', borderRadius:6, border:'1px solid var(--border)', fontSize:11, color:'var(--accent)', textDecoration:'none', fontWeight:600 }}>👥 Quản lý</Link>
+              <div style={{ display: 'flex', gap: 6 }}>
+                {session.role === 'admin' && (
+                  <Link href="/admin" style={{ flex: 1, textAlign: 'center', padding: '6px', borderRadius: 6, border: '1px solid var(--border)', fontSize: 11, color: 'var(--accent)', textDecoration: 'none', fontWeight: 600 }}>👥 Quản lý</Link>
                 )}
-                <button onClick={logout} style={{ flex:1, padding:'6px', borderRadius:6, border:'1px solid var(--border)', background:'transparent', fontSize:11, color:'var(--muted)', cursor:'pointer', fontWeight:600 }}>Đăng xuất</button>
+                <button onClick={logout} style={{ flex: 1, padding: '6px', borderRadius: 6, border: '1px solid var(--border)', background: 'transparent', fontSize: 11, color: 'var(--muted)', cursor: 'pointer', fontWeight: 600 }}>Đăng xuất</button>
               </div>
             </div>
           ) : (
-            <Link href="/login" style={{ display:'block', textAlign:'center', padding:'8px', borderRadius:6, border:'1px solid var(--accent)', fontSize:12, color:'var(--accent)', textDecoration:'none', fontWeight:700 }}>
+            <Link href="/login" style={{ display: 'block', textAlign: 'center', padding: '8px', borderRadius: 6, border: '1px solid var(--accent)', fontSize: 12, color: 'var(--accent)', textDecoration: 'none', fontWeight: 700 }}>
               🔐 Đăng nhập
             </Link>
           )}
-          <div style={{ fontSize:10, color:'var(--muted)', marginTop:10, lineHeight:1.5 }}>
+          <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 10, lineHeight: 1.5 }}>
             AI <span style={{ color: '#3fb950' }}>● {mounted ? (secs > 0 && running ? 'Đang tập trung...' : (isWork ? 'Sẵn sàng' : 'Nghỉ ngơi')) : 'Đang kết nối...'}</span>
           </div>
         </div>
       </aside>
 
       {/* Mobile Bottom Nav */}
-      <nav className="bottom-nav" style={{ 
-        position: 'fixed', bottom: 0, left: 0, right: 0, 
-        background: 'var(--surface)', borderTop: '1px solid var(--border)', 
+      <nav className="bottom-nav" style={{
+        position: 'fixed', bottom: 0, left: 0, right: 0,
+        background: 'var(--surface)', borderTop: '1px solid var(--border)',
         zIndex: 1000, // Đảm bảo luôn ở trên cùng
-        paddingBottom: 'max(12px, env(safe-area-inset-bottom))', 
+        paddingBottom: 'max(12px, env(safe-area-inset-bottom))',
         flexDirection: 'column',
         boxShadow: '0 -4px 20px rgba(0,0,0,0.3)',
         touchAction: 'manipulation' // Khử delay 300ms trên iOS
@@ -156,24 +157,24 @@ export default function BottomNav({ session }: { session: AuthUser | null }) {
         {/* Timer strip */}
         <div suppressHydrationWarning style={{ display: 'flex', alignItems: 'center', padding: '8px 12px', gap: 10, borderBottom: '1px solid var(--border)', background: !mounted ? 'rgba(0,0,0,0.2)' : (isWork ? '#1a0808' : '#081a0a') }}>
           <div suppressHydrationWarning style={{ fontSize: 13, fontWeight: 900, color: !mounted ? '#f85149' : (isWork ? '#f85149' : '#3fb950'), fontVariantNumeric: 'tabular-nums', minWidth: 52 }}>{mounted ? `${mm}:${ss}` : '--:--'}</div>
-          
+
           <div className="progress-bar" style={{ flex: 1, height: 6, background: 'rgba(255,255,255,0.05)' }}>
             <div suppressHydrationWarning className="progress-fill" style={{ width: mounted ? `${Math.round(pct * 10) / 10}%` : '0%', background: !mounted ? '#f85149' : (isWork ? '#f85149' : '#3fb950') }} />
           </div>
 
           <div style={{ display: 'flex', gap: 8 }}>
-            <button onClick={toggle} suppressHydrationWarning style={{ 
+            <button onClick={toggle} suppressHydrationWarning style={{
               width: 34, height: 34, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center',
-              cursor: 'pointer', fontWeight: 700, fontSize: 12, 
-              background: !mounted ? 'var(--surface2)' : (running ? 'transparent' : (isWork ? '#f85149' : '#3fb950')), 
-              color: !mounted ? 'var(--muted)' : (running ? (isWork ? '#f85149' : '#3fb950') : '#000'), 
-              border: !mounted ? '1px solid var(--border)' : (running ? `2px solid ${isWork ? '#f85149' : '#3fb950'}` : 'none') 
+              cursor: 'pointer', fontWeight: 700, fontSize: 12,
+              background: !mounted ? 'var(--surface2)' : (running ? 'transparent' : (isWork ? '#f85149' : '#3fb950')),
+              color: !mounted ? 'var(--muted)' : (running ? (isWork ? '#f85149' : '#3fb950') : '#000'),
+              border: !mounted ? '1px solid var(--border)' : (running ? `2px solid ${isWork ? '#f85149' : '#3fb950'}` : 'none')
             }}>
               {!mounted ? '...' : (running ? '⏸' : '▶')}
             </button>
-            
+
             <button onClick={reset} suppressHydrationWarning style={{ width: 34, height: 34, borderRadius: 10, border: '1px solid var(--border)', background: 'var(--surface2)', color: 'var(--muted)', cursor: 'pointer', fontSize: 12, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>↺</button>
-            
+
             {mounted && (
               <button onClick={() => {
                 const btn = document.getElementById('refresh-icon');
@@ -196,10 +197,10 @@ export default function BottomNav({ session }: { session: AuthUser | null }) {
           {tabs.map(t => {
             const active = path === t.href;
             return (
-              <Link key={t.href} href={t.href} style={{ 
-                flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', 
-                padding: '10px 0 6px', gap: 4, textDecoration: 'none', 
-                color: active ? 'var(--accent)' : 'var(--muted)', 
+              <Link key={t.href} href={t.href} style={{
+                flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                padding: '10px 0 6px', gap: 4, textDecoration: 'none',
+                color: active ? 'var(--accent)' : 'var(--muted)',
                 fontSize: 10, fontWeight: active ? 800 : 500,
                 transition: 'background 0.2s, transform 0.1s',
                 WebkitTapHighlightColor: 'transparent',
