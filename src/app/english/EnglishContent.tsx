@@ -300,6 +300,11 @@ type LearnMode = typeof MODES[number]['id'];
 export default function EnglishContent() {
   const [me, setMe] = useState<{ id: number; name: string; role: string } | null>(null);
   const isAdmin = me?.role === 'admin';
+
+  // Global Voice Settings (Synced across all tabs)
+  const [globalVoice, setGlobalVoice] = useState('en-US-AvaNeural');
+  const [globalTtsProvider, setGlobalTtsProvider] = useState<'edge' | 'luxtts'>('edge');
+  const [globalSpeed, setGlobalSpeed] = useState(1.0);
   const [tab, setTab] = useState<'listen' | 'speak' | 'write' | 'vocab' | 'read' | 'dict' | 'grammar' | 'guide'>('listen');
   const [mode, setMode] = useState<LearnMode>('coder');
   const [aiModel, setAiModel] = useState('default');
@@ -311,6 +316,13 @@ export default function EnglishContent() {
     if (savedMode) setMode(savedMode);
     const savedModel = localStorage.getItem('eng_model');
     if (savedModel) setAiModel(savedModel);
+    
+    const savedVoice = localStorage.getItem('eng_voice');
+    if (savedVoice) setGlobalVoice(savedVoice);
+    const savedProvider = localStorage.getItem('eng_provider');
+    if (savedProvider) setGlobalTtsProvider(savedProvider as any);
+    const savedSpeed = localStorage.getItem('eng_speed');
+    if (savedSpeed) setGlobalSpeed(parseFloat(savedSpeed));
 
     // Check auth
     fetch('/api/auth').then(r => r.json()).then(d => {
@@ -323,14 +335,12 @@ export default function EnglishContent() {
     if (isMounted) {
       localStorage.setItem('eng_mode', mode);
       localStorage.setItem('eng_model', aiModel);
+      localStorage.setItem('eng_voice', globalVoice);
+      localStorage.setItem('eng_provider', globalTtsProvider);
+      localStorage.setItem('eng_speed', globalSpeed.toString());
     }
-  }, [mode, aiModel, isMounted]);
+  }, [mode, aiModel, globalVoice, globalTtsProvider, globalSpeed, isMounted]);
   const modeDesc = MODES.find(m => m.id === mode)?.desc || 'developer';
-
-  // Global Voice Settings (Synced across all tabs)
-  const [globalVoice, setGlobalVoice] = useState('en-US-AvaNeural');
-  const [globalTtsProvider, setGlobalTtsProvider] = useState<'edge' | 'luxtts'>('luxtts');
-  const [globalSpeed, setGlobalSpeed] = useState(1.0);
 
   // Listening
   const [listenLevel, setListenLevel] = useState('A2');

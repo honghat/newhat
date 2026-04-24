@@ -52,11 +52,8 @@ fi
 
 # 2. LuxTTS (Manual Start from Admin)
 printf "  ${BLUE}[2/6]${NC} LuxTTS (8880) [Off]... "
-if curl -s --max-time 1 http://localhost:8880/health > /dev/null 2>&1; then
-  echo -e "${GREEN}✓ đang chạy (port 8880)${NC}"
-else
-  echo -e "${YELLOW}– Đang tắt (Bật thủ công từ trang Admin nếu cần)${NC}"
-fi
+lsof -ti:8880 | xargs kill -9 2>/dev/null || true
+echo -e "${YELLOW}– Đang tắt (Bật thủ công từ trang Admin nếu cần)${NC}"
 
 # 3. Vietnamese TTS (Hybrid)
 printf "  ${BLUE}[3/6]${NC} VN TTS (5001) [Edge+Piper]... "
