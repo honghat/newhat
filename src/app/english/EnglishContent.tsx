@@ -130,9 +130,9 @@ function parseMarkdown(text: string) {
       const rowHtml = '<tr>' + cells.map(c => {
         const cellText = c.replace(/\*\*(.*?)\*\*/g, '<strong style="color:var(--accent)">$1</strong>');
         if (isHeader) {
-          return `<th style="padding: 10px 12px; border-bottom: 1px solid var(--border); font-size: 13px; font-weight: 800; color: var(--text-main); text-align: left; background: rgba(0,0,0,0.25)">${cellText}</th>`;
+          return `<th style="padding: 10px 12px; border-bottom: 1px solid var(--border); font-size: 15px; font-weight: 800; color: var(--text-main); text-align: left; background: rgba(0,0,0,0.25)">${cellText}</th>`;
         }
-        return `<td style="padding: 8px 12px; border-bottom: 1px solid var(--border); font-size: 13px; color: var(--text);">${cellText}</td>`;
+        return `<td style="padding: 8px 12px; border-bottom: 1px solid var(--border); font-size: 15px; color: var(--text);">${cellText}</td>`;
       }).join('') + '</tr>';
 
       htmlLines.push(rowHtml);
@@ -143,9 +143,9 @@ function parseMarkdown(text: string) {
     }
 
     let parsed = line
-      .replace(/^# (.*$)/g, '<h1 style="font-size:16px; margin:12px 0 6px; font-weight:800; color:var(--text-main)">$1</h1>')
-      .replace(/^## (.*$)/g, '<h2 style="font-size:14px; margin:10px 0 4px; font-weight:700; color:var(--text-main)">$1</h2>')
-      .replace(/^### (.*$)/g, '<h3 style="font-size:13px; margin:8px 0 4px; font-weight:600; color:var(--text-main)">$1</h3>')
+      .replace(/^# (.*$)/g, '<h1 style="font-size:20px; margin:12px 0 6px; font-weight:800; color:var(--text-main)">$1</h1>')
+      .replace(/^## (.*$)/g, '<h2 style="font-size:18px; margin:10px 0 4px; font-weight:700; color:var(--text-main)">$1</h2>')
+      .replace(/^### (.*$)/g, '<h3 style="font-size:16.5px; margin:8px 0 4px; font-weight:600; color:var(--text-main)">$1</h3>')
       // IN ĐẬM VÀ TÔ MÀU số thứ tự đầu dòng (ví dụ: 1. Sáng kiến)
       // CHỈ áp dụng nếu sau số là chữ hoặc khoảng trắng, không phải dấu gạch chéo (điểm số)
       .replace(/^(\d+\.)(?!\d*\/)\s*(.*)/g, '<strong style="color:var(--accent)">$1</strong> $2')
@@ -154,7 +154,7 @@ function parseMarkdown(text: string) {
       .replace(/\*\s*(.*?)\s*\*/g, '$1')
       // Dọn dẹp key có dấu hai chấm
       .replace(/\s*([^:\n]+)\s*:\s*\*?/g, '$1: ')
-      .replace(/^> (.*$)/g, '<blockquote style="border-left:3px solid var(--muted); padding-left:12px; margin:10px 0; font-style:italic; color:var(--muted); font-size:12px">$1</blockquote>')
+      .replace(/^> (.*$)/g, '<blockquote style="border-left:3px solid var(--muted); padding-left:12px; margin:10px 0; font-style:italic; color:var(--muted); font-size:14.5px">$1</blockquote>')
       .replace(/^---$/g, '<hr style="border:none; border-top:1px solid var(--surface); margin:16px 0" />');
 
     htmlLines.push(parsed);

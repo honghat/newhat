@@ -37,6 +37,15 @@ body {
 }
 .main-content, .page-inner { max-width: 100%; }
 
+/* Mobile page wrapper (default) */
+.page-inner {
+  max-width: 520px;
+  margin: 0 auto;
+  padding: 16px;
+  padding-top: max(16px, env(safe-area-inset-top));
+}
+
+
 /* ─── Layout shell ─── */
 .app-shell { display: flex; min-height: 100dvh; }
 
@@ -52,6 +61,9 @@ body {
 
 /* ─── Desktop ≥ 900px ─── */
 @media (min-width: 900px) {
+  body {
+    font-size: 16px;
+  }
   .sidebar {
     display: flex;
     flex-direction: column;
@@ -71,7 +83,7 @@ body {
 
   /* Desktop page wrapper */
   .page-inner {
-    max-width: 1100px;
+    max-width: 1260px;
     margin: 0 auto;
     padding: 36px 40px;
   }
@@ -95,21 +107,17 @@ body {
   }
   .desktop-main-side {
     display: grid;
-    grid-template-columns: 1.4fr 1fr;
+    grid-template-columns: 1fr 480px;
     gap: 24px;
     align-items: start;
   }
   .card { padding: 20px; }
-  .page-title { font-size: 22px !important; }
+  .page-title { font-size: 24px !important; }
+  .btn { font-size: 15px; }
+  .input { font-size: 15px; }
 }
 
-/* Mobile page wrapper */
-.page-inner {
-  max-width: 520px;
-  margin: 0 auto;
-  padding: 16px;
-  padding-top: max(16px, env(safe-area-inset-top));
-}
+
 .desktop-2col, .desktop-3col, .desktop-4col, .desktop-main-side { display: block; }
 
 /* Mode button text hidden on mobile */
@@ -261,7 +269,7 @@ pre {
   border-radius: 10px !important;
   padding: 16px !important;
   overflow-x: auto;
-  font-size: 13px !important;
+  font-size: 14.5px !important;
   line-height: 1.7 !important;
   color: var(--text) !important;
   font-family: 'SF Mono', 'Fira Code', Monaco, Consolas, monospace !important;

@@ -82,7 +82,7 @@ function makeChip(label: string, depth: number, color: string) {
       whiteSpace: 'nowrap',
       boxShadow: depth === 0 ? `0 6px 20px ${color}44` : depth === 1 ? `0 3px 10px ${color}28` : 'none',
       flexShrink: 0,
-      maxWidth: 220,
+      maxWidth: 500,
       overflow: 'hidden',
       textOverflow: 'ellipsis',
       lineHeight: 1.35,
@@ -503,46 +503,49 @@ export default function MindmapPage() {
         ))}
       </div>
 
-      {/* ── EDITOR (collapsible) ── */}
-      {editorOpen && (
-        <div className="mm-editor-box">
-          <div className="mm-md-toolbar">
-            <button onClick={() => insertAtLine('# ')} title="Tiêu đề lớn">H1</button>
-            <button onClick={() => insertAtLine('## ')} title="Tiêu đề vừa">H2</button>
-            <button onClick={() => insertAtLine('### ')} title="Tiêu đề nhỏ">H3</button>
-            <span className="mm-md-sep" />
-            <button onClick={() => insertAtLine('- ')} title="Mục">•&nbsp;Mục</button>
-            <button onClick={() => insertAtLine('indent')} title="Lùi vào (sub)">→</button>
+      {/* ── BODY (2-col on desktop) ── */}
+      <div className="mm-main-grid">
+        {/* ── EDITOR (collapsible) ── */}
+        {editorOpen && (
+          <div className="mm-editor-box">
+            <div className="mm-md-toolbar">
+              <button onClick={() => insertAtLine('# ')} title="Tiêu đề lớn">H1</button>
+              <button onClick={() => insertAtLine('## ')} title="Tiêu đề vừa">H2</button>
+              <button onClick={() => insertAtLine('### ')} title="Tiêu đề nhỏ">H3</button>
+              <span className="mm-md-sep" />
+              <button onClick={() => insertAtLine('- ')} title="Mục">•&nbsp;Mục</button>
+              <button onClick={() => insertAtLine('indent')} title="Lùi vào (sub)">→</button>
+            </div>
+            <textarea
+              ref={taRef}
+              value={markdown}
+              onChange={e => setMarkdown(e.target.value)}
+              className="mm-textarea"
+              placeholder={'# Chủ đề chính\n## Nhánh 1\n- Mục A\n  - Chi tiết\n## Nhánh 2\n- Mục B'}
+            />
           </div>
-          <textarea
-            ref={taRef}
-            value={markdown}
-            onChange={e => setMarkdown(e.target.value)}
-            className="mm-textarea"
-            placeholder={'# Chủ đề chính\n## Nhánh 1\n- Mục A\n  - Chi tiết\n## Nhánh 2\n- Mục B'}
-          />
-        </div>
-      )}
+        )}
 
-      {/* ── MINDMAP (main) ── */}
-      <div className={`mm-canvas-wrap ${isFS ? 'is-fs' : ''}`} ref={wrapRef} style={{ background: canvasBg }}>
-        <div className="mm-zoom-ctrl">
-          <button onClick={() => setZoom(z => Math.max(0.3, z - 0.15))}>−</button>
-          <button onClick={() => setZoom(1)}>{Math.round(zoom * 100)}%</button>
-          <button onClick={() => setZoom(z => Math.min(2.5, z + 0.15))}>+</button>
-          <button onClick={toggleFS} className="mm-fs-btn" title={isFS ? 'Thoát' : 'Toàn màn hình'}>{isFS ? '✕' : '⛶'}</button>
-        </div>
-        <div
-          className="mm-canvas"
-          ref={canvasRef}
-          onMouseDown={handleMouseDown}
-          onMouseMove={handleMouseMove}
-          onMouseUp={handleMouseUp}
-          onMouseLeave={handleMouseUp}
-          style={{ cursor: isPanning ? 'grabbing' : 'grab' }}
-        >
-          <div style={{ transform: `scale(${zoom})`, transformOrigin: 'top left', display: 'inline-block', transition: 'transform 0.12s', padding: '16px 16px 16px 8px' }}>
-            <TreeBranch node={tree} />
+        {/* ── MINDMAP (main) ── */}
+        <div className={`mm-canvas-wrap ${isFS ? 'is-fs' : ''}`} ref={wrapRef} style={{ background: canvasBg }}>
+          <div className="mm-zoom-ctrl">
+            <button onClick={() => setZoom(z => Math.max(0.3, z - 0.15))}>−</button>
+            <button onClick={() => setZoom(1)}>{Math.round(zoom * 100)}%</button>
+            <button onClick={() => setZoom(z => Math.min(2.5, z + 0.15))}>+</button>
+            <button onClick={toggleFS} className="mm-fs-btn" title={isFS ? 'Thoát' : 'Toàn màn hình'}>{isFS ? '✕' : '⛶'}</button>
+          </div>
+          <div
+            className="mm-canvas"
+            ref={canvasRef}
+            onMouseDown={handleMouseDown}
+            onMouseMove={handleMouseMove}
+            onMouseUp={handleMouseUp}
+            onMouseLeave={handleMouseUp}
+            style={{ cursor: isPanning ? 'grabbing' : 'grab' }}
+          >
+            <div style={{ transform: `scale(${zoom})`, transformOrigin: 'top left', display: 'inline-block', transition: 'transform 0.12s', padding: '16px 16px 16px 8px' }}>
+              <TreeBranch node={tree} />
+            </div>
           </div>
         </div>
       </div>
@@ -551,7 +554,7 @@ export default function MindmapPage() {
         .mm-page {
           display: flex; flex-direction: column; gap: 14px;
           min-height: 0; overflow-x: hidden;
-          max-width: 980px; margin: 0 auto; width: 100%;
+          max-width: 1260px; margin: 0 auto; width: 100%;
           padding-bottom: 20px;
         }
 
@@ -657,16 +660,36 @@ export default function MindmapPage() {
         }
         :global(.mm-textarea) {
           width: 100%; display: block;
-          min-height: 240px; max-height: 600px;
-          resize: vertical;
+          min-height: 240px;
+          height: 100%;
+          resize: none;
           border: none !important;
           border-radius: 0 !important;
           background: transparent !important;
           color: var(--text) !important;
           font-family: ui-monospace, 'SF Mono', Menlo, monospace;
-          font-size: 13px; line-height: 1.75;
+          font-size: 15px; line-height: 1.75;
           padding: 14px 16px !important;
           outline: none !important;
+        }
+
+        @media (min-width: 900px) {
+          .mm-main-grid {
+            display: grid;
+            grid-template-columns: ${editorOpen ? '420px 1fr' : '1fr'};
+            gap: 16px;
+            align-items: stretch;
+            min-height: 650px;
+          }
+          .mm-editor-box {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+          }
+          .mm-canvas-wrap {
+            height: 100%;
+            min-height: 0;
+          }
         }
 
         /* ── MINDMAP CANVAS ── */
@@ -678,7 +701,7 @@ export default function MindmapPage() {
           flex: 1;
         }
         .mm-zoom-ctrl {
-          position: absolute; top: 12px; right: 12px; z-index: 10;
+          position: absolute; bottom: 12px; right: 12px; z-index: 10;
           display: flex; gap: 2px;
           background: rgba(13,17,23,0.8); backdrop-filter: blur(8px);
           border: 1px solid var(--border); border-radius: 10px;

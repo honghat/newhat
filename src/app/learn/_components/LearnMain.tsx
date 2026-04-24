@@ -143,6 +143,27 @@ export default function LearnMain() {
   useEffect(() => { load(); }, [load]);
   useEffect(() => { if (mode === 'code') { loadCodeSessions(); } }, [mode]);
 
+  // Tự động load bài mới nhất khi đổi track
+  useEffect(() => {
+    if (!lessons.length || mode !== 'lesson') return;
+    const latest = [...lessons]
+      .filter(l => l.track === track)
+      .sort((a, b) => b.id - a.id)[0];
+    
+    if (latest) {
+      setCurrent(latest);
+      // Reset & load quiz
+      setQuizMode(false); setQuizSubmitted(false);
+      const answers: string[] = [];
+      const ms = latest.content.matchAll(/ĐÁPÁN:([ABC])/g);
+      for (const m of ms) answers.push(m[1]);
+      setQuizAnswers(answers);
+      setUserAnswers(answers.map(() => ''));
+    } else {
+      setCurrent(null);
+    }
+  }, [track, lessons, mode]);
+
   async function markComplete(lessonId: number) {
     await fetch('/api/lessons', {
       method: 'PATCH',
@@ -542,10 +563,10 @@ ${codeInput}` }] }),
       });
 
       body = body
-        .replace(/^## (.+)$/gm, '<h3 style="color:#d29922;font-size:13px;font-weight:700;margin:18px 0 8px;text-transform:uppercase;letter-spacing:0.5px">$1</h3>')
-        .replace(/^### (.+)$/gm, '<h4 style="color:#e6edf3;font-size:13px;font-weight:600;margin:12px 0 6px">$1</h4>')
-        .replace(/^#### (.+)$/gm, '<h5 style="color:#e6edf3;font-size:12px;font-weight:600;margin:10px 0 4px">$1</h5>')
-        .replace(/^##### (.+)$/gm, '<h6 style="color:#e6edf3;font-size:11px;font-weight:600;margin:8px 0 2px">$1</h6>')
+        .replace(/^## (.+)$/gm, '<h3 style="color:#d29922;font-size:17px;font-weight:700;margin:18px 0 8px;text-transform:uppercase;letter-spacing:0.5px">$1</h3>')
+        .replace(/^### (.+)$/gm, '<h4 style="color:#e6edf3;font-size:15px;font-weight:600;margin:12px 0 6px">$1</h4>')
+        .replace(/^#### (.+)$/gm, '<h5 style="color:#e6edf3;font-size:14px;font-weight:600;margin:10px 0 4px">$1</h5>')
+        .replace(/^##### (.+)$/gm, '<h6 style="color:#e6edf3;font-size:12px;font-weight:600;margin:8px 0 2px">$1</h6>')
         .replace(/\*\*(.+?)\*\*/g, '<strong style="color:#e6edf3">$1</strong>')
         .replace(/^> (.*$)/gm, '<blockquote style="border-left:3px solid var(--muted);padding-left:12px;margin:10px 0;font-style:italic;color:var(--muted)">$1</blockquote>')
         .replace(/^---$/gm, '<hr style="border:none;border-top:1px solid var(--surface);margin:16px 0" />')
@@ -558,11 +579,11 @@ ${codeInput}` }] }),
         if (/^<[a-z]/i.test(block)) return block;
         // Đoạn văn bản: gộp single \n thành khoảng trắng
         const inline = block.replace(/\n/g, ' ');
-        return `<p style="margin:0 0 10px;line-height:1.7;color:var(--text)">${inline}</p>`;
+        return `<p style="margin:0 0 10px;line-height:1.7;color:var(--text);font-size:17px">${inline}</p>`;
       }).join('');
       // Trả lại inline code
       return blocks.replace(/\x00(\d+)\x00/g, (_, i) =>
-        `<code style="background:#1c2230;padding:2px 6px;border-radius:4px;font-size:12px;color:#d2a8ff;font-family:monospace">${inlineCodes[+i]}</code>`
+        `<code style="background:#1c2230;padding:2px 6px;border-radius:4px;font-size:14px;color:#d2a8ff;font-family:monospace">${inlineCodes[+i]}</code>`
       );
     });
     return processed.join('');
