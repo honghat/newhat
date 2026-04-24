@@ -1,0 +1,9 @@
+node_modules
+.next
+.git
+.vscode
+public/uploads
+*.log
+.env.local
+docker-compose.yml
+Dockerfile*

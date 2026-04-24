@@ -51,6 +51,31 @@ cp /Users/nguyenhat/NewHat/io.vn.hatai.newhat.plist ~/Library/LaunchAgents/
 launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/io.vn.hatai.newhat.plist
 ```
 
+## 🐳 Triển khai nhanh bằng Docker (Khuyên dùng cho máy khác)
+
+Đây là cách nhanh nhất để chạy toàn bộ hệ thống (App, Database, AI Services) trên bất kỳ máy tính nào mà không cần cài đặt môi trường phức tạp.
+
+### 1. Yêu cầu
+- Đã cài đặt [Docker](https://www.docker.com/products/docker-desktop/) và [Docker Compose](https://docs.docker.com/compose/install/).
+
+### 2. Khởi động
+Tại thư mục gốc của dự án, chạy lệnh:
+```bash
+docker-compose up -d --build
+```
+
+### 3. Truy cập
+- **Ứng dụng**: [http://localhost:8006](http://localhost:8006)
+- **Database**: Port 5432
+- **AI Services**: Port 5001 (VN TTS), 5002 (Edge TTS), 9000 (Whisper STT)
+
+### 4. Cấu hình AI (Tùy chọn)
+Để dùng Groq Cloud cho tốc độ STT cực nhanh, hãy tạo file `.env` cạnh file `docker-compose.yml`:
+```bash
+GROQ_API_KEY=your_key_here
+```
+Sau đó chạy lại `docker-compose up -d` để cập nhật.
+
 Hệ thống đã được cấu hình chạy ở chế độ **Siêu tối ưu RAM** (~500MB RAM khi chờ):
 - **Hybrid STT (Port 9000)**: Ưu tiên dùng Groq Cloud (0 MB RAM). Chỉ tự động bật Local Whisper.cpp (dùng Metal GPU) khi Groq lỗi.
 - **Lazy Load TTS (Port 8880 & 5001)**: Các model AI nặng (LuxTTS, Piper) chỉ được nạp vào RAM khi bạn thực sự nhấn nút nghe.

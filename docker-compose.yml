@@ -1,0 +1,46 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: newhat-db
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-newhat}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
+      POSTGRES_DB: ${POSTGRES_DB:-newhat}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    restart: always
+
+  ai-services:
+    build:
+      context: .
+      dockerfile: Dockerfile.python
+    container_name: newhat-ai
+    ports:
+      - "5001:5001"
+      - "5002:5002"
+      - "9000:9000"
+    environment:
+      - GROQ_API_KEY=${GROQ_API_KEY:-}
+    restart: always
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: newhat-app
+    ports:
+      - "8006:8006"
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-newhat}:${POSTGRES_PASSWORD:-password}@db:5432/${POSTGRES_DB:-newhat}
+      - NEXT_PUBLIC_API_URL=http://localhost:8006
+    depends_on:
+      - db
+      - ai-services
+    restart: always
+
+volumes:
+  postgres_data:

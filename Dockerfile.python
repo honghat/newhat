@@ -1,0 +1,32 @@
+FROM python:3.10-slim
+
+WORKDIR /app
+
+# Cài đặt ffmpeg cho xử lý âm thanh và curl để check health
+RUN apt-get update && apt-get install -y ffmpeg curl && rm -rf /var/lib/apt/lists/*
+
+# Cài đặt các thư viện Python cần thiết
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install flask fastapi uvicorn requests piper-tts edge-tts
+
+# Copy code server
+COPY edge_tts_server.py piper_server.py whisper_server.py ./
+COPY piper_voices ./piper_voices
+
+# Script khởi động đồng thời 3 dịch vụ
+RUN echo '#!/bin/bash\n\
+echo "🚀 Khởi động Edge TTS Server (5002)..."\n\
+python3 edge_tts_server.py & \n\
+echo "🚀 Khởi động Piper TTS Server (5001)..."\n\
+python3 piper_server.py & \n\
+echo "🚀 Khởi động Whisper STT Proxy (9000)..."\n\
+python3 whisper_server.py & \n\
+wait -n\n\
+exit $?' > /app/entrypoint.sh
+
+RUN chmod +x /app/entrypoint.sh
+
+EXPOSE 5001 5002 9000
+
+CMD ["/app/entrypoint.sh"]
