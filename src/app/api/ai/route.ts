@@ -74,7 +74,7 @@ export async function POST(req: Request) {
       method: 'POST',
       headers,
       body: JSON.stringify(payload),
-      signal: AbortSignal.timeout(300000),
+      signal: AbortSignal.timeout(600000),
     });
 
     if (!res.ok) {

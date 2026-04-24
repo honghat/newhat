@@ -39,7 +39,7 @@ async function genTopicTask(
   if (!startRes.ok) throw new Error('Không khởi động được task');
   const { taskId } = await startRes.json();
   const start = Date.now();
-  while (Date.now() - start < 300000) { // Tăng lên 5 phút cho các bài giảng cực kỳ chi tiết
+  while (Date.now() - start < 600000) { // Tăng lên 10 phút cho các bài giảng cực kỳ chi tiết
     await new Promise(r => setTimeout(r, 2000));
     onTick(Math.floor((Date.now() - start) / 1000));
     const res = await fetch(`/api/ai/task?taskId=${taskId}&type=${encodeURIComponent(type)}`);

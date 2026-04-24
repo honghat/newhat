@@ -262,6 +262,17 @@ Trả lời bằng tiếng Việt, chuyên sâu và cá nhân hóa.`;
     { label:'Hôm nay', val: todayH, unit:'/16h', color:'#3fb950', pct:(todayH/16)*100 },
   ];
 
+  // Tính toán nhiệm vụ hôm nay dựa trên nhật ký
+  const todayLog = logs.find(l => l.date === today);
+  const topics = todayLog?.topic || '';
+  const missionTasks = [
+    { id: 'code', label: 'Bài học Code mới', icon: '💻', done: topics.includes('💻'), link: '/learn' },
+    { id: 'listen', label: 'Luyện nghe Tiếng Anh', icon: '🎧', done: topics.includes('🎧'), link: '/english' },
+    { id: 'speak', label: 'Luyện nói Tiếng Anh', icon: '🗣️', done: topics.includes('🗣️'), link: '/english' },
+    { id: 'mindmap', label: 'Hệ thống Mindmap', icon: '🧠', done: topics.includes('🧠'), link: '/mindmap' },
+  ];
+  const missionsDone = missionTasks.filter(t => t.done).length;
+
   return (
     <div className="fade-in">
       {/* Header */}
@@ -286,23 +297,36 @@ Trả lời bằng tiếng Việt, chuyên sâu và cá nhân hóa.`;
       <div className="desktop-main-side" style={{ gap: 16, marginBottom: 12 }}>
         {/* LEFT COLUMN */}
         <div>
-          {/* Countdown */}
-          <div className="countdown-banner" style={{ marginBottom: 12 }}>
-            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8 }}>
-              <div style={{ fontSize:10, color:'#f85149', fontWeight:800, letterSpacing:2 }}>⚡ 60 NGÀY</div>
-              <div style={{ fontSize:10, color:'var(--muted)', fontWeight:600 }}>{elapsed}/60</div>
+          {/* Daily Missions - NEW */}
+          <div className="card" style={{ marginBottom: 12, background: 'linear-gradient(135deg, var(--surface), #1a1f2e)', border: '1px solid var(--accent)33' }}>
+            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:12 }}>
+              <div style={{ fontWeight:800, fontSize:14, color:'var(--accent)', letterSpacing:0.5 }}>🎯 NHIỆM VỤ HÔM NAY</div>
+              <div style={{ fontSize:11, fontWeight:700, color:'var(--text)', background:'var(--surface2)', padding:'2px 8px', borderRadius:99 }}>{missionsDone}/4</div>
             </div>
-            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:6, marginBottom:10 }}>
-              {[{n:cd.days,l:'NGÀY'},{n:cd.hours,l:'GIỜ'},{n:cd.mins,l:'PHÚT'}].map(({n,l})=>(
-                <div key={l} style={{ textAlign:'center' }}>
-                  <div style={{ fontSize:'clamp(24px, 8vw, 44px)', fontWeight:900, color:'#f85149', lineHeight:1, fontVariantNumeric:'tabular-nums' }}>{String(n).padStart(2,'0')}</div>
-                  <div style={{ fontSize:9, color:'var(--muted)', letterSpacing:1, marginTop:3, fontWeight:600 }}>{l}</div>
+            <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+              {missionTasks.map(t => (
+                <div key={t.id} onClick={() => router.push(t.link)} style={{ 
+                  display:'flex', alignItems:'center', gap:10, padding:'10px 12px', borderRadius:10, 
+                  background: t.done ? 'rgba(63,185,80,0.05)' : 'var(--surface2)', 
+                  border: `1px solid ${t.done ? 'var(--green)44' : 'var(--border)'}`,
+                  cursor:'pointer', transition:'all 0.2s'
+                }} className="mission-item">
+                  <div style={{ fontSize:16 }}>{t.icon}</div>
+                  <div style={{ flex:1, fontSize:13, fontWeight:600, color: t.done ? 'var(--green)' : 'var(--text)' }}>{t.label}</div>
+                  <div style={{ 
+                    width:20, height:20, borderRadius:'50%', 
+                    border: `2px solid ${t.done ? 'var(--green)' : 'var(--muted)'}`,
+                    display:'flex', alignItems:'center', justifyContent:'center',
+                    color: 'var(--green)', fontSize:12, fontWeight:900
+                  }}>
+                    {t.done ? '✓' : ''}
+                  </div>
                 </div>
               ))}
             </div>
-            <div className="progress-bar" style={{ height:4 }}>
-              <div className="progress-fill" style={{ width:`${(elapsed/60)*100}%`, background:'linear-gradient(90deg, #f85149, #ff6b6b)' }} />
-            </div>
+            {missionsDone === 4 && (
+              <div style={{ marginTop:12, textAlign:'center', fontSize:11, color:'var(--green)', fontWeight:800 }}>🔥 TUYỆT VỜI! BẠN ĐÃ HOÀN THÀNH TẤT CẢ</div>
+            )}
           </div>
 
           {/* Stats — compact horizontal pills */}
@@ -322,6 +346,18 @@ Trả lời bằng tiếng Việt, chuyên sâu và cá nhân hóa.`;
                 </div>
               </div>
             ))}
+          </div>
+
+          {/* Countdown */}
+          <div className="countdown-banner" style={{ marginBottom: 12 }}>
+            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8 }}>
+              <div style={{ fontSize:10, color:'#f85149', fontWeight:800, letterSpacing:2 }}>⚡ TIẾN ĐỘ 60 NGÀY</div>
+              <div style={{ fontSize:10, color:'var(--muted)', fontWeight:600 }}>{elapsed}/60</div>
+            </div>
+            <div className="progress-bar" style={{ height:6, marginBottom:8 }}>
+              <div className="progress-fill" style={{ width:`${(elapsed/60)*100}%`, background:'linear-gradient(90deg, #f85149, #ff6b6b)' }} />
+            </div>
+            <div style={{ fontSize:10, color:'var(--muted)', textAlign:'center' }}>Còn {cd.days} ngày, {cd.hours} giờ nữa để về đích</div>
           </div>
 
           {/* Quote — minimal */}

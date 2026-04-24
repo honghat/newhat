@@ -127,11 +127,12 @@ export async function POST(req: Request) {
   else if (voice === 'vi_female') primaryVoice = 'vi-VN-HoaiMyNeural';
   else if (voice === 'vi_male') primaryVoice = 'vi-VN-NamMinhNeural';
 
-  // Edge TTS trước, Piper là backup
+  // Cấu hình chuỗi ưu tiên (chain)
   let chain: string[];
   if (server === 'piper') chain = [PIPER];
   else if (server === 'luxtts') chain = [LUXTTS];
-  else chain = ['edge', PIPER];
+  else if (server === 'edge') chain = ['edge']; // Chỉ dùng Edge, không nhảy sang Piper
+  else chain = ['edge', PIPER]; // Mặc định nếu không chỉ định rõ
 
   let res: Response | null = null;
   for (const s of chain) {
