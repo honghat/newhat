@@ -503,6 +503,84 @@ Hãy trình bày súc tích, tập trung vào trọng tâm.`;
 
   useEffect(() => { loadHistory(); }, [loadHistory]);
 
+  // Tự động load bài mới nhất khi chuyển Tab
+  useEffect(() => {
+    if (!history.length || !tab) return;
+    
+    // Map tab name to database type
+    const dbType = tab === 'read' ? 'reading' : tab === 'write' ? 'writing' : tab;
+    
+    // Tìm bài mới nhất của tab hiện tại và khớp với mode hiện tại
+    const latest = [...history]
+      .sort((a, b) => b.id - a.id)
+      .find(h => {
+        if (h.type !== dbType) return false;
+        try {
+          const m = JSON.parse(h.metadata || '{}');
+          return m.mode === mode;
+        } catch { return false; }
+      }) || [...history].sort((a, b) => b.id - a.id).find(h => h.type === dbType); // Fallback về bài mới nhất cùng type
+      
+    if (!latest) return;
+
+    if (tab === 'listen') {
+      try {
+        const m = JSON.parse(latest.metadata || '{}');
+        setListenText(latest.content);
+        setListenVi(m.vi || '');
+        setListenVocab(m.vocab || []);
+        setListenRecordId(latest.id);
+        setListenLevel(m.level || 'A2');
+      } catch {}
+    } else if (tab === 'speak') {
+      try {
+        const m = JSON.parse(latest.metadata || '{}');
+        setSpkTopic(m.topic || latest.content);
+        setSpkSample(m.sample || '');
+        setSpkRecordId(latest.id);
+        setSpkLevel(m.level || 'A2');
+        setTranscript(''); setSpkFeedback('');
+      } catch {}
+    } else if (tab === 'write') {
+      try {
+        const m = JSON.parse(latest.metadata || '{}');
+        setWritePrompt(m.prompt || latest.content);
+        setWriteSample(m.sample || '');
+        setWriteRecordId(latest.id);
+        setWriteLevel(m.level || 'A2');
+        setWriteFeedback(''); setWriteText('');
+      } catch {}
+    } else if (tab === 'read') {
+      try {
+        const m = JSON.parse(latest.metadata || '{}');
+        setReadArticle({ title: m.title || 'Bài đọc', body: latest.content, wordCount: m.wordCount || 0 });
+        setReadRecordId(latest.id);
+        setReadLevel(m.level || 'A2');
+        setReadQuestions(m.questions || []);
+        setReadAnswers([]); setReadSubmitted(false);
+      } catch {}
+    } else if (tab === 'grammar') {
+      try {
+        const m = JSON.parse(latest.metadata || '{}');
+        setGrammarLesson(latest.content);
+        setGrammarRecordId(latest.id);
+        setGrammarTopic(m.topic || 'Ngữ pháp');
+        // Parse lại quiz answers
+        const ans: string[] = [];
+        const ms = latest.content.matchAll(/ANSWER:\s*([ABC])/g);
+        for (const m of ms) ans.push(m[1]);
+        setGrammarQuizAnswers(ans);
+        setGrammarUserAnswers(ans.map(() => ''));
+        setGrammarSubmitted(false);
+      } catch {}
+    } else if (tab === 'vocab') {
+      try {
+        setCards(JSON.parse(latest.content));
+        setCardIdx(0); setFlipped(false);
+      } catch {}
+    }
+  }, [tab, mode, history.length]); // Chạy khi tab đổi, mode đổi hoặc history có thêm bài mới
+
   const markLessonLearned = useCallback(async (lessonId: number) => {
     await fetch('/api/english', {
       method: 'PATCH',
@@ -1209,7 +1287,7 @@ Return JSON ONLY (no markdown code blocks, just raw json):
                         value={listenCustomTopic}
                         onChange={e => setListenCustomTopic(e.target.value)}
                         placeholder="Ví dụ: Cuộc trò chuyện tại quán cà phê..."
-                        style={{ flex: 1, fontSize: 13 }}
+                        style={{ flex: 1, fontSize: 16 }}
                       />
                       <button
                         onClick={genListenText}
@@ -1368,7 +1446,7 @@ Return JSON ONLY (no markdown code blocks, just raw json):
                         value={spkCustomTopic}
                         onChange={e => setSpkCustomTopic(e.target.value)}
                         placeholder="Ví dụ: Nói về sở thích của bạn..."
-                        style={{ flex: 1, fontSize: 13 }}
+                        style={{ flex: 1, fontSize: 16 }}
                       />
                       <button
                         onClick={genSpkTopic}
@@ -1571,7 +1649,7 @@ Return JSON ONLY (no markdown code blocks, just raw json):
                         value={writeCustomPrompt}
                         onChange={e => setWriteCustomPrompt(e.target.value)}
                         placeholder="Ví dụ: Viết về công việc mơ ước của bạn..."
-                        style={{ flex: 1, fontSize: 13 }}
+                        style={{ flex: 1, fontSize: 16 }}
                       />
                       <button
                         onClick={genWriteTopic}
@@ -2164,8 +2242,7 @@ Return JSON ONLY (no markdown code blocks, just raw json):
                       onChange={e => setDictInput(e.target.value)}
                       onKeyDown={e => { if (e.key === 'Enter') lookupWord(); }}
                       placeholder="Nhập từ hoặc cụm từ tiếng Anh..."
-                      style={{ flex: 1, marginBottom: 0, fontSize: 14 }}
-                      autoFocus
+                      style={{ flex: 1, marginBottom: 0, fontSize: 16 }}
                     />
                     <button className="btn btn-primary" onClick={lookupWord} disabled={dictLoading || !dictInput.trim()} style={{ flexShrink: 0, padding: '8px 16px', fontSize: 13 }}>
                       {dictLoading ? '⏳' : '🔎'}
