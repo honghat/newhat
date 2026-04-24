@@ -5,7 +5,7 @@ const PIPER  = process.env.PIPER_SERVER  || 'http://localhost:5001';
 const EDGETTS_SERVER = 'http://127.0.0.1:5002'; // Persistent Edge TTS server
 const PYTHON = '/Users/nguyenhat/miniconda3/bin/python3';
 const HELPER = '/Users/nguyenhat/NewHat/edge_tts_helper.py';
-const TTS_TIMEOUT_MS = 90_000;
+const TTS_TIMEOUT_MS = 180_000; // Tăng lên 3 phút cho máy yếu
 
 /** Gọi Edge TTS persistent server (siêu nhanh, không spawn Python) */
 async function tryEdgeServer(text: string, voice: string, speed: number): Promise<Response | null> {
@@ -142,6 +142,8 @@ export async function POST(req: Request) {
 
   if (res) {
     const audio = await res.arrayBuffer();
+    // Hint for GC: clear local reference early if possible
+    res = null; 
     return new Response(audio, { headers: { 'Content-Type': 'audio/mpeg', 'Cache-Control': 'no-cache' } });
   }
   return Response.json({ error: 'TTS offline' }, { status: 503 });

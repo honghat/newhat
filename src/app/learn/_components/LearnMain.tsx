@@ -454,47 +454,62 @@ ${codeInput}` }] }),
     if (buf.trim()) chunks.push(buf.trim());
     if (!chunks.length) { setIsReading(false); return; }
 
-    // 3. Hàm fetch audio từ persistent server
-    const fetchAudio = async (text: string): Promise<string | null> => {
-      try {
-        const controller = new AbortController();
-        abortControllerRef.current = controller;
-        const res = await fetch('/api/tts', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            text,
-            speed: 1.0,
-            voice: (ttsProvider === 'edge' || ttsProvider === 'luxtts') ? edgeVoice : 'default',
-            lang: ttsProvider === 'luxtts' ? 'en' : 'vi',
-            server: ttsProvider === 'edge' ? 'edge' : ttsProvider === 'piper' ? 'piper' : undefined
-          }),
-          signal: controller.signal
-        });
-        if (!res.ok) return null;
-        const blob = await res.blob();
-        return URL.createObjectURL(blob);
-      } catch {
-        return null;
+    // 3. Hàm fetch audio với cơ chế thử lại (Retry)
+    const fetchAudio = async (text: string, retries = 2): Promise<string | null> => {
+      for (let attempt = 0; attempt <= retries; attempt++) {
+        try {
+          const controller = new AbortController();
+          abortControllerRef.current = controller;
+          const res = await fetch('/api/tts', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              text,
+              speed: 1.0,
+              voice: (ttsProvider === 'edge' || ttsProvider === 'luxtts') ? edgeVoice : 'default',
+              lang: ttsProvider === 'luxtts' ? 'en' : 'vi',
+              server: ttsProvider === 'edge' ? 'edge' : ttsProvider === 'piper' ? 'piper' : undefined
+            }),
+            signal: controller.signal
+          });
+          
+          if (res.ok) {
+            const blob = await res.blob();
+            return URL.createObjectURL(blob);
+          }
+          
+          if (res.status === 503 || res.status === 502) {
+            console.warn(`[TTS] Lỗi ${res.status}, đang thử lại lần ${attempt + 1}...`);
+            await new Promise(r => setTimeout(r, 1000)); // Chờ 1s rồi thử lại
+            continue;
+          }
+          return null;
+        } catch (e) {
+          if (attempt === retries) return null;
+          await new Promise(r => setTimeout(r, 1000));
+        }
       }
+      return null;
     };
 
-    // 4. Pre-buffer playback: fetch đoạn tiếp theo trong lúc đoạn hiện tại đang phát
+    // 4. Playback loop
     let nextUrl: Promise<string | null> | null = null;
 
     for (let i = 0; i < chunks.length; i++) {
       if (stopReadingRef.current || sessionId !== readingIdRef.current) break;
 
-      // Lấy URL audio: từ pre-buffer (nếu có) hoặc fetch mới
+      console.log(`[TTS] Đang đọc đoạn ${i + 1}/${chunks.length}`);
       const url = (i === 0) ? await fetchAudio(chunks[0]) : await nextUrl;
-      if (!url) { console.error(`TTS chunk ${i} failed`); break; }
+      
+      if (!url) { 
+        console.error(`[TTS] Không thể tải đoạn ${i + 1}, bỏ qua.`); 
+        continue; // Bỏ qua đoạn lỗi thay vì dừng hẳn
+      }
 
-      // Pre-fetch đoạn tiếp theo ngay lập tức (trong lúc đoạn hiện tại phát)
       if (i + 1 < chunks.length) {
         nextUrl = fetchAudio(chunks[i + 1]);
       }
 
-      // Phát đoạn hiện tại
       if (stopReadingRef.current || sessionId !== readingIdRef.current) {
         URL.revokeObjectURL(url);
         break;
@@ -504,9 +519,10 @@ ${codeInput}` }] }),
         const audio = new Audio(url);
         audioRef.current = audio;
         audio.onended = () => { URL.revokeObjectURL(url); resolve(); };
-        audio.onerror = () => { URL.revokeObjectURL(url); resolve(); };
-        audio.play().catch(() => resolve());
+        audio.onerror = () => { console.error("Audio playback error"); resolve(); };
+        audio.play().catch((e) => { console.error("Play failed", e); resolve(); });
       });
+      URL.revokeObjectURL(url);
     }
 
     if (sessionId === readingIdRef.current) setIsReading(false);
