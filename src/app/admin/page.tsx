@@ -64,7 +64,11 @@ export default function AdminPage() {
   useEffect(() => {
     load();
     checkLux();
-    const timer = setInterval(checkLux, 10000);
+    checkWhisper();
+    const timer = setInterval(() => {
+      checkLux();
+      checkWhisper();
+    }, 10000);
     return () => clearInterval(timer);
   }, [load]);
 
@@ -180,6 +184,50 @@ export default function AdminPage() {
     } finally {
       setLuxLoading(false);
       setTimeout(() => setLuxMsg(''), 4000);
+    }
+  }
+
+  const [whisperRunning, setWhisperRunning] = useState(false);
+  const [whisperEngine, setWhisperEngine] = useState('');
+  const [whisperLoading, setWhisperLoading] = useState(false);
+  const [whisperMsg, setWhisperMsg] = useState('');
+
+  async function checkWhisper() {
+    try {
+      const res = await fetch('/api/admin/whisper');
+      const d = await res.json();
+      setWhisperRunning(d.running);
+      if (d.running) {
+        try {
+          const hRes = await fetch('http://localhost:9000/health');
+          if (hRes.ok) {
+            const h = await hRes.json();
+            setWhisperEngine(h.primary);
+          }
+        } catch {}
+      } else {
+        setWhisperEngine('');
+      }
+    } catch (e) {}
+  }
+
+  async function controlWhisper(action: 'start' | 'stop') {
+    setWhisperLoading(true);
+    setWhisperMsg(`⏳ Đang thực hiện ${action === 'start' ? 'Bật' : 'Tắt'}...`);
+    try {
+      const res = await fetch('/api/admin/whisper', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action }),
+      });
+      const d = await res.json();
+      setWhisperMsg(d.message || d.error);
+      setTimeout(checkWhisper, 2000);
+    } catch (e: any) {
+      setWhisperMsg('❌ Lỗi: ' + e.message);
+    } finally {
+      setWhisperLoading(false);
+      setTimeout(() => setWhisperMsg(''), 4000);
     }
   }
 
@@ -493,6 +541,36 @@ export default function AdminPage() {
               )}
             </div>
             {luxMsg && <div style={{ fontSize: 11, color: 'var(--accent)', marginTop: 10, textAlign: 'center', fontWeight: 600 }}>{luxMsg}</div>}
+          </div>
+
+          {/* Whisper Resource Control */}
+          <div style={{ marginTop: 16, padding: 16, background: 'var(--surface2)', borderRadius: 12, border: '1px solid var(--border)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <div style={{ fontWeight: 800, fontSize: 13 }}>🎙️ Quản lý Whisper (STT)</div>
+              <div style={{ display:'flex', gap:6, alignItems:'center' }}>
+                {whisperEngine && <span style={{ fontSize: 9, color: 'var(--accent)', fontWeight: 800, background: 'var(--accent)11', padding: '2px 8px', borderRadius: 4 }}>{whisperEngine}</span>}
+                <div style={{ padding: '3px 8px', borderRadius: 20, fontSize: 10, fontWeight: 700, background: whisperRunning ? '#3fb95022' : '#f8514922', color: whisperRunning ? '#3fb950' : '#f85149', border: `1px solid ${whisperRunning ? '#3fb95044' : '#f8514944'}` }}>
+                  {whisperRunning ? '● ĐANG CHẠY' : '○ ĐANG TẮT'}
+                </div>
+              </div>
+            </div>
+            <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 12, lineHeight: 1.5 }}>
+              Whisper Proxy cho phép chuyển giọng nói thành văn bản. Khi dùng local sẽ tốn khoảng 1.5GB RAM.
+              <br/>
+              <span style={{ color: 'var(--green)', fontWeight: 600 }}>💡 Groq Cloud đang được kích hoạt trực tiếp (không tốn RAM).</span>
+            </div>
+            <div style={{ display: 'flex', gap: 10 }}>
+              {!whisperRunning ? (
+                <button onClick={() => controlWhisper('start')} disabled={whisperLoading} style={{ flex: 1, padding: '10px', borderRadius: 8, border: 'none', background: 'var(--accent)', color: '#000', fontWeight: 800, fontSize: 12, cursor: 'pointer' }}>
+                  {whisperLoading ? '⏳...' : '▶ BẬT WHISPER'}
+                </button>
+              ) : (
+                <button onClick={() => controlWhisper('stop')} disabled={whisperLoading} style={{ flex: 1, padding: '10px', borderRadius: 8, border: 'none', background: 'var(--red)', color: '#fff', fontWeight: 800, fontSize: 12, cursor: 'pointer' }}>
+                  {whisperLoading ? '⏳...' : '⏹ TẮT WHISPER'}
+                </button>
+              )}
+            </div>
+            {whisperMsg && <div style={{ fontSize: 11, color: 'var(--accent)', marginTop: 10, textAlign: 'center', fontWeight: 600 }}>{whisperMsg}</div>}
           </div>
 
           {/* CARD 3: DATA SYNC */}

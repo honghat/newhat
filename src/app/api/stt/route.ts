@@ -7,6 +7,7 @@ function getWhisperBase(): string | null {
 // Model name for local Whisper server (e.g. "base", "small", "medium")
 // OpenAI-compatible servers use "whisper-1"
 const WHISPER_MODEL = process.env.WHISPER_MODEL ?? 'medium';
+const GROQ_API_KEY = process.env.GROQ_API_KEY;
 
 export async function GET() {
   const base = getWhisperBase();
@@ -21,9 +22,7 @@ export async function GET() {
 
 export async function POST(req: Request) {
   const base = getWhisperBase();
-  if (!base) {
-    return Response.json({ error: 'Whisper server chưa cấu hình. Dùng Browser STT.' }, { status: 503 });
-  }
+  
   try {
     const formData = await req.formData();
     const audio = formData.get('audio') as Blob;
@@ -33,6 +32,37 @@ export async function POST(req: Request) {
     let ext = 'webm';
     if (type.includes('mp4')) ext = 'mp4';
     else if (type.includes('ogg')) ext = 'ogg';
+
+    // --- 1. ƯU TIÊN DÙNG GROQ CLOUD TRỰC TIẾP (Nếu có Key) ---
+    if (GROQ_API_KEY) {
+      try {
+        console.log('[STT] Đang dùng Groq Cloud trực tiếp...');
+        const groqForm = new FormData();
+        groqForm.append('file', audio, `audio.${ext}`);
+        groqForm.append('model', 'whisper-large-v3-turbo');
+        groqForm.append('language', 'vi');
+
+        const groqRes = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${GROQ_API_KEY}` },
+          body: groqForm,
+          signal: AbortSignal.timeout(15000),
+        });
+
+        if (groqRes.ok) {
+          const data = await groqRes.json();
+          return Response.json({ text: data.text || '' });
+        }
+        console.error('[STT] Groq Cloud lỗi, chuyển sang Local nếu có...');
+      } catch (e) {
+        console.error('[STT] Groq Cloud Connection Error:', e);
+      }
+    }
+
+    // --- 2. DÙNG LOCAL WHISPER PROXY (Nếu không có Groq hoặc Groq lỗi) ---
+    if (!base) {
+      return Response.json({ error: 'Chưa cấu hình Whisper Server & không có Groq Key.' }, { status: 503 });
+    }
 
     const form = new FormData();
     form.append('file', audio, `audio.${ext}`);

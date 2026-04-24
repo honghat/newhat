@@ -438,13 +438,13 @@ ${codeInput}` }] }),
 
     if (!processedText) { setIsReading(false); return; }
 
-    // 2. Chia text thành chunks ~500 ký tự (đủ lớn để nghe mượt, đủ nhỏ để phản hồi nhanh)
+    // 2. Chia text thành các đoạn lớn hơn (1500 ký tự) để giảm số lượng request
     const chunks: string[] = [];
     const sentences = processedText.split(/(?<=[.!?])\s+/);
     let buf = '';
     for (const s of sentences) {
       if (!s.trim()) continue;
-      if (buf.length + s.length > 500 && buf) {
+      if (buf.length + s.length > 1500 && buf) {
         chunks.push(buf.trim());
         buf = s;
       } else {
@@ -454,8 +454,8 @@ ${codeInput}` }] }),
     if (buf.trim()) chunks.push(buf.trim());
     if (!chunks.length) { setIsReading(false); return; }
 
-    // 3. Hàm fetch audio với cơ chế thử lại (Retry)
-    const fetchAudio = async (text: string, retries = 2): Promise<string | null> => {
+    // 3. Hàm fetch audio với cơ chế thử lại mạnh mẽ (Retry 5 lần)
+    const fetchAudio = async (text: string, retries = 5): Promise<string | null> => {
       for (let attempt = 0; attempt <= retries; attempt++) {
         try {
           const controller = new AbortController();
@@ -478,15 +478,12 @@ ${codeInput}` }] }),
             return URL.createObjectURL(blob);
           }
           
-          if (res.status === 503 || res.status === 502) {
-            console.warn(`[TTS] Lỗi ${res.status}, đang thử lại lần ${attempt + 1}...`);
-            await new Promise(r => setTimeout(r, 1000)); // Chờ 1s rồi thử lại
-            continue;
-          }
-          return null;
+          console.warn(`[TTS] Lỗi ${res.status}, thử lại lần ${attempt + 1}/${retries}...`);
+          await new Promise(r => setTimeout(r, 2000 * (attempt + 1))); // Chờ lâu hơn sau mỗi lần thử
         } catch (e) {
+          console.error(`[TTS] Request failed: ${String(e)}`);
           if (attempt === retries) return null;
-          await new Promise(r => setTimeout(r, 1000));
+          await new Promise(r => setTimeout(r, 2000));
         }
       }
       return null;
@@ -502,8 +499,8 @@ ${codeInput}` }] }),
       const url = (i === 0) ? await fetchAudio(chunks[0]) : await nextUrl;
       
       if (!url) { 
-        console.error(`[TTS] Không thể tải đoạn ${i + 1}, bỏ qua.`); 
-        continue; // Bỏ qua đoạn lỗi thay vì dừng hẳn
+        console.error(`[TTS] Không thể tải đoạn ${i + 1}. Dừng đọc.`); 
+        break; // Nếu thử 5 lần vẫn lỗi thì dừng để người dùng biết, không đọc thiếu.
       }
 
       if (i + 1 < chunks.length) {

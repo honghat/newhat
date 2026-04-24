@@ -73,16 +73,11 @@ else
 fi
 
 # 4. Whisper STT (Hybrid)
-printf "  ${BLUE}[4/6]${NC} Whisper Proxy (9000) [Hybrid]... "
-if curl -s --max-time 1 http://localhost:9000/health > /dev/null 2>&1; then
-  echo -e "${GREEN}✓ đang chạy${NC}"
-elif [ -f "$DIR/whisper_server.py" ]; then
-  echo -e "${YELLOW}↻ khởi động...${NC}"
-  WHISPER_MODEL=$WHISPER_MODEL WHISPER_PORT=9000 nohup $PYTHON "$DIR/whisper_server.py" > /tmp/whisper.log 2>&1 &
-  sleep 2
-else
-  echo -e "${YELLOW}– không tìm thấy whisper_server.py${NC}"
-fi
+printf "  ${BLUE}[4/6]${NC} Whisper Proxy (9000) [Off]... "
+lsof -ti:9000 | xargs kill -9 2>/dev/null || true
+pkill -f whisper-server 2>/dev/null || true
+echo -e "${YELLOW}– Đang tắt (Bật thủ công nếu cần)${NC}"
+
 
 # 5. Edge TTS Server (Persistent — siêu nhanh)
 printf "  ${BLUE}[5/7]${NC} Edge TTS (5002) [Persistent]... "

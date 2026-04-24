@@ -38,6 +38,17 @@ Project hiện tại được đặt tại: `/Users/nguyenhat/NewHat`
 
 ### 1. Khởi động thủ công
 Dùng cho phát triển hoặc kiểm tra:
+## 🚀 Khởi động nhanh (Local)
+
+Để ứng dụng chạy mượt mà nhất, hãy thực hiện theo 2 bước sau:
+
+### 1. Build ứng dụng (Chỉ cần làm khi có thay đổi code)
+```bash
+cd /Users/nguyenhat/NewHat
+npm run build
+```
+
+### 2. Chạy toàn bộ hệ thống
 ```bash
 cd /Users/nguyenhat/NewHat
 ./start.sh
