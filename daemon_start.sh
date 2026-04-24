@@ -46,17 +46,17 @@ else
 fi
 
 # ── 2. LuxTTS (port 8880) ────────────────────────────────
-echo "[2/5] LuxTTS (port 8880)..."
-if curl -s --max-time 2 http://localhost:8880/health > /dev/null 2>&1; then
-  echo "  ✓ LuxTTS đang chạy"
-elif [ -f "$DIR/LuxTTS/server.py" ]; then
-  cd "$DIR/LuxTTS"
-  nohup "$PYTHON" server.py > "$LOG/newhat_luxtts.log" 2>&1 &
-  echo "  ↻ LuxTTS đã khởi động (PID $!) — xem $LOG/newhat_luxtts.log"
-  cd "$DIR"
-else
-  echo "  – Không tìm thấy LuxTTS/server.py"
-fi
+# echo "[2/5] LuxTTS (port 8880)..."
+# if curl -s --max-time 2 http://localhost:8880/health > /dev/null 2>&1; then
+#   echo "  ✓ LuxTTS đang chạy"
+# elif [ -f "$DIR/LuxTTS/server.py" ]; then
+#   cd "$DIR/LuxTTS"
+#   nohup "$PYTHON" server.py > "$LOG/newhat_luxtts.log" 2>&1 &
+#   echo "  ↻ LuxTTS đã khởi động (PID $!) — xem $LOG/newhat_luxtts.log"
+#   cd "$DIR"
+# else
+#   echo "  – Không tìm thấy LuxTTS/server.py"
+# fi
 
 # ── 3. Piper TTS — tiếng Việt (port 5001) ────────────────
 echo "[3/5] Piper TTS (port 5001)..."
@@ -76,16 +76,16 @@ else
 fi
 
 # ── 4. Whisper STT (port 9000) ───────────────────────────
-echo "[4/5] Whisper STT (port 9000)..."
-if curl -s --max-time 2 http://localhost:9000/health > /dev/null 2>&1; then
-  echo "  ✓ Whisper đang chạy"
-elif [ -f "$DIR/whisper_server.py" ]; then
-  WHISPER_MODEL=medium WHISPER_PORT=9000 \
-    nohup "$PYTHON" "$DIR/whisper_server.py" > "$LOG/newhat_whisper.log" 2>&1 &
-  echo "  ↻ Whisper đã khởi động (PID $!) — xem $LOG/newhat_whisper.log"
-else
-  echo "  – Không tìm thấy whisper_server.py"
-fi
+# echo "[4/5] Whisper STT (port 9000)..."
+# if curl -s --max-time 2 http://localhost:9000/health > /dev/null 2>&1; then
+#   echo "  ✓ Whisper đang chạy"
+# elif [ -f "$DIR/whisper_server.py" ]; then
+#   WHISPER_MODEL=medium WHISPER_PORT=9000 \
+#     nohup "$PYTHON" "$DIR/whisper_server.py" > "$LOG/newhat_whisper.log" 2>&1 &
+#   echo "  ↻ Whisper đã khởi động (PID $!) — xem $LOG/newhat_whisper.log"
+# else
+#   echo "  – Không tìm thấy whisper_server.py"
+# fi
 
 # ── 5. Next.js (port 8006) ───────────────────────────────
 echo "[5/5] Next.js (port 8006)..."
