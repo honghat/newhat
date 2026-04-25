@@ -688,10 +688,21 @@ export default function AdminPage() {
 
             {/* Tên user + nút gửi */}
             <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
-              <input type="text" placeholder="Tên người dùng mục tiêu..."
-                value={targetUserName} onChange={(e) => setTargetUserName(e.target.value)}
-                style={{ flex: 1, padding: '10px 12px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface2)', color: 'var(--text)', outline: 'none', fontSize: 12 }}
-              />
+              <select 
+                value={targetUserName} 
+                onChange={(e) => setTargetUserName(e.target.value)}
+                style={{ flex: 1, padding: '10px 12px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface2)', color: 'var(--text)', outline: 'none', fontSize: 12, cursor: 'pointer' }}
+              >
+                <option value="">Chọn người dùng nhận...</option>
+                {users
+                  .filter(u => u.role !== 'admin')
+                  .map(u => (
+                    <option key={u.id} value={u.name}>
+                      {u.name} ({u.status})
+                    </option>
+                  ))
+                }
+              </select>
               <button onClick={syncToUser} disabled={toUserLoading || !targetUserName}
                 style={{ padding: '0 20px', borderRadius: 8, border: 'none', background: 'var(--green)', color: '#000', fontWeight: 800, fontSize: 12, cursor: toUserLoading || !targetUserName ? 'not-allowed' : 'pointer', opacity: toUserLoading || !targetUserName ? 0.6 : 1 }}>
                 {toUserLoading ? '⏳' : '📤 GỬI'}

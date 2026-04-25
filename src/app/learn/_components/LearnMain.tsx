@@ -164,19 +164,29 @@ export default function LearnMain() {
   useEffect(() => { load(); }, [load]);
   useEffect(() => { if (mode === 'code') { loadCodeSessions(); } }, [mode]);
 
-  // Tự động load bài mới nhất khi đổi track
+  // Tự động load bài CHƯA HỌC kế tiếp khi đổi track (fallback: bài mới nhất)
   useEffect(() => {
     if (!lessons.length || mode !== 'lesson') return;
-    const latest = [...lessons]
-      .filter(l => l.track === track)
-      .sort((a, b) => b.id - a.id)[0];
-    
-    if (latest) {
-      setCurrent(latest);
+    const trackLs = lessons.filter(l => l.track === track);
+    const lessonNum = (l: Lesson) => {
+      const m = l.topic.match(/B[àa]i\s*(\d+)/i);
+      return m ? parseInt(m[1], 10) : Number.MAX_SAFE_INTEGER;
+    };
+    const nextUnlearned = [...trackLs]
+      .filter(l => !l.completed)
+      .sort((a, b) => {
+        const na = lessonNum(a), nb = lessonNum(b);
+        if (na !== nb) return na - nb;
+        return a.id - b.id;
+      })[0];
+    const target = nextUnlearned || [...trackLs].sort((a, b) => b.id - a.id)[0];
+
+    if (target) {
+      setCurrent(target);
       // Reset & load quiz
       setQuizMode(false); setQuizSubmitted(false);
       const answers: string[] = [];
-      const ms = latest.content.matchAll(/ĐÁPÁN:([ABC])/g);
+      const ms = target.content.matchAll(/ĐÁPÁN:([ABC])/g);
       for (const m of ms) answers.push(m[1]);
       setQuizAnswers(answers);
       setUserAnswers(answers.map(() => ''));
@@ -209,12 +219,19 @@ export default function LearnMain() {
         // Silent fail
       }
 
+      const lessonNum = (l: any) => {
+        const m = l.topic.match(/B[àa]i\s*(\d+)/i);
+        return m ? parseInt(m[1], 10) : Number.MAX_SAFE_INTEGER;
+      };
       const next = updatedLessons
-        .filter((l: any) => l.track === currentLesson.track && !l.completed)
-        .sort((a: any, b: any) => a.order - b.order)[0];
+        .filter((l: any) => l.track === currentLesson.track && !l.completed && l.id !== lessonId)
+        .sort((a: any, b: any) => {
+          const na = lessonNum(a), nb = lessonNum(b);
+          if (na !== nb) return na - nb;
+          return a.id - b.id;
+        })[0];
 
       const newCurrent = updatedLessons.find((l: any) => l.id === lessonId);
-      setCurrent(newCurrent);
 
       // Nhật ký trang chủ
       if (newCurrent) {
@@ -227,13 +244,16 @@ export default function LearnMain() {
       }
 
       if (next) {
-        // Reset quiz for next lesson
+        // Tự chuyển sang bài kế tiếp
+        setCurrent(next);
         setQuizMode(false); setQuizSubmitted(false); setUserAnswers([]);
         const answers: string[] = [];
         const ms = next.content.matchAll(/ĐÁPÁN:([ABC])/g);
         for (const m of ms) answers.push(m[1]);
         setQuizAnswers(answers);
         setUserAnswers(answers.map(() => ''));
+      } else {
+        setCurrent(newCurrent);
       }
     }
   }
@@ -1305,7 +1325,15 @@ ${codeInput}` }] }),
             
             <div style={{ maxHeight: 600, overflowY: 'auto', paddingRight: 4 }}>
               {(() => {
-                const group = lessons.filter(l => l.track === track).sort((a,b) => a.order - b.order);
+                const lessonNum = (l: Lesson) => {
+                  const m = l.topic.match(/B[àa]i\s*(\d+)/i);
+                  return m ? parseInt(m[1], 10) : Number.MAX_SAFE_INTEGER;
+                };
+                const group = lessons.filter(l => l.track === track).sort((a,b) => {
+                  const na = lessonNum(a), nb = lessonNum(b);
+                  if (na !== nb) return na - nb;
+                  return a.id - b.id;
+                });
                 if (group.length === 0) return <div style={{color:'var(--muted)', fontSize:13, padding:10}}>Chưa có bài lưu cho phần này.</div>;
                 const completed = group.filter(l => l.completed).length;
 
