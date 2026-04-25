@@ -1,4 +1,5 @@
 'use client';
+import React, { useState } from 'react';
 
 interface EngLesson { id: number; type: string; content: string; metadata: string; completed: boolean; learnCount: number; createdAt: string; }
 
@@ -25,6 +26,8 @@ export default function DictTab({
   speak, globalSpeed, globalVoice, globalTtsProvider,
   parseMarkdown,
 }: Props) {
+  const [deleteConfirmId, setDeleteConfirmId] = React.useState<number | null>(null);
+  
   const dictItems = history.filter(h => {
     if (h.type !== 'dict') return false;
     if (mode === 'all') return true;
@@ -94,7 +97,25 @@ export default function DictTab({
                       <div style={{ fontSize: 10, color: 'var(--muted)' }}>{new Date(item.createdAt).toLocaleString('vi')}</div>
                     </div>
                     <button onClick={e => { e.stopPropagation(); speak(word, globalSpeed, globalVoice, globalTtsProvider); }} style={{ fontSize: 12, color: 'var(--muted)', background: 'none', border: 'none', cursor: 'pointer' }}>🔊</button>
-                    <button onClick={async e => { e.stopPropagation(); await fetch('/api/english', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: item.id }) }); loadHistory(); }} style={{ fontSize: 11, color: '#f85149', background: '#f8514915', border: 'none', cursor: 'pointer', padding: '3px 7px', borderRadius: 5 }}>🗑</button>
+                    {deleteConfirmId === item.id ? (
+                      <button 
+                        onClick={async e => { 
+                          e.stopPropagation(); 
+                          await fetch('/api/english', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: item.id }) }); 
+                          setDeleteConfirmId(null);
+                          loadHistory(); 
+                        }} 
+                        style={{ fontSize: 9, color: '#fff', background: '#f85149', border: 'none', cursor: 'pointer', padding: '3px 7px', borderRadius: 5, fontWeight: 900 }}
+                      >
+                        XÓA?
+                      </button>
+                    ) : (
+                      <button onClick={e => { 
+                        e.stopPropagation(); 
+                        setDeleteConfirmId(item.id); 
+                        setTimeout(() => setDeleteConfirmId(prev => prev === item.id ? null : prev), 3000);
+                      }} style={{ fontSize: 11, color: '#f85149', background: '#f8514915', border: 'none', cursor: 'pointer', padding: '3px 7px', borderRadius: 5 }}>🗑</button>
+                    )}
                   </div>
                 );
               })}

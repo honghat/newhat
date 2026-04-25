@@ -65,6 +65,13 @@ export default function LoginPage() {
               <input className="input" placeholder="Nguyễn Văn A" required value={form.name}
                 onChange={e=>setForm(f=>({...f,name:e.target.value}))} />
             </div>
+            {mode === 'register' && (
+              <div style={{ marginBottom:12 }}>
+                <label style={{ fontSize:12, color:'var(--muted)', display:'block', marginBottom:6 }}>Email</label>
+                <input className="input" type="email" placeholder="example@gmail.com" required value={form.email}
+                  onChange={e=>setForm(f=>({...f,email:e.target.value}))} />
+              </div>
+            )}
             <div style={{ marginBottom:20 }}>
               <label style={{ fontSize:12, color:'var(--muted)', display:'block', marginBottom:6 }}>Mật khẩu</label>
               <input className="input" type="password" placeholder="••••••••" required minLength={6} value={form.password}

@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { speakText } from '@/lib/tts';
+import { speakText, stopTTS } from '@/lib/tts';
 import GuideTab from './_tabs/GuideTab';
 import DictTab from './_tabs/DictTab';
 import VocabTab from './_tabs/VocabTab';
@@ -8,6 +8,7 @@ import ReadTab from './_tabs/ReadTab';
 import GrammarTab from './_tabs/GrammarTab';
 import WriteTab from './_tabs/WriteTab';
 import SpeakTab from './_tabs/SpeakTab';
+import CurriculumTab from './_tabs/CurriculumTab';
 
 const AI_OFFLINE = '__AI_OFFLINE__';
 async function askAI(prompt: string, model = 'default', timeoutMs = 300000): Promise<string> {
@@ -153,12 +154,13 @@ function parseMarkdown(text: string) {
       .replace(/^# (.*$)/g, '<h1 style="font-size:20px; margin:12px 0 6px; font-weight:800; color:var(--text-main)">$1</h1>')
       .replace(/^## (.*$)/g, '<h2 style="font-size:18px; margin:10px 0 4px; font-weight:700; color:var(--text-main)">$1</h2>')
       .replace(/^### (.*$)/g, '<h3 style="font-size:16.5px; margin:8px 0 4px; font-weight:600; color:var(--text-main)">$1</h3>')
+      .replace(/^#### (.*$)/g, '<h4 style="font-size:15px; margin:8px 0 4px; font-weight:600; color:var(--text-main)">$1</h4>')
+      .replace(/^##### (.*$)/g, '<h5 style="font-size:14px; margin:6px 0 2px; font-weight:600; color:var(--text-main)">$1</h5>')
       // IN ĐẬM VÀ TÔ MÀU số thứ tự đầu dòng (ví dụ: 1. Sáng kiến)
-      // CHỈ áp dụng nếu sau số là chữ hoặc khoảng trắng, không phải dấu gạch chéo (điểm số)
       .replace(/^(\d+\.)(?!\d*\/)\s*(.*)/g, '<strong style="color:var(--accent)">$1</strong> $2')
-      // 2. Xóa dấu ** và * mà KHÔNG xóa khoảng trắng xung quanh
-      .replace(/\*\*\s*(.*?)\s*\*\*/g, '$1')
-      .replace(/\*\s*(.*?)\s*\*/g, '$1')
+      // Render Bold and Italic correctly
+      .replace(/\*\*(.*?)\*\*/g, '<strong style="color:var(--accent)">$1</strong>')
+      .replace(/\*(.*?)\*/g, '<em style="color:var(--purple)">$1</em>')
       // Dọn dẹp key có dấu hai chấm
       .replace(/\s*([^:\n]+)\s*:\s*\*?/g, '$1: ')
       .replace(/^> (.*$)/g, '<blockquote style="border-left:3px solid var(--muted); padding-left:12px; margin:10px 0; font-style:italic; color:var(--muted); font-size:14.5px">$1</blockquote>')
@@ -263,17 +265,162 @@ const LISTEN_SCENARIOS = {
     'a discussion about inflation and interest rates',
     'a meeting about personal budgeting and saving',
     'an analyst describing cryptocurrency fluctuations'
+  ],
+  'interview-coder': [
+    'a candidate answering "Tell me about yourself" in a software engineer interview',
+    'an interviewer asking about a challenging bug the candidate has fixed',
+    'a candidate explaining a past project using the STAR method',
+    'a system design interview discussing scalability trade-offs',
+    'an interviewer asking "Why do you want to work at our company?"',
+    'a candidate negotiating salary and benefits with a tech recruiter',
+    'a behavioral interview about handling conflict with a teammate',
+    'a candidate asking smart questions at the end of a tech interview',
+    'a coding interview where the candidate explains their thought process out loud',
+    'an interviewer asking about strengths, weaknesses, and career goals'
+  ],
+  'interview-finance': [
+    'a candidate answering "Walk me through your resume" in a banking interview',
+    'an interviewer asking about valuation methods (DCF, comparables)',
+    'a candidate explaining why they want to work in investment banking',
+    'a behavioral interview about working long hours under pressure',
+    'an interviewer asking about a recent market trend or deal',
+    'a candidate discussing a financial model they built',
+    'a fit interview about teamwork and leadership in finance',
+    'an interviewer asking "Why finance and not consulting?"',
+    'a candidate negotiating compensation with an HR manager at a bank',
+    'a technical interview about accounting and financial statements'
   ]
 };
 
 interface EngLesson { id: number; type: string; content: string; metadata: string; completed: boolean; learnCount: number; createdAt: string; nextReviewAt?: string | null; lastReviewedAt?: string | null; intervalDays?: number; easeFactor?: number; reviewCount?: number; }
 
-const READ_LEVELS = [{ id: 'A2', label: 'A2' }, { id: 'B1', label: 'B1' }, { id: 'B2', label: 'B2' }];
+const READ_LEVELS = [
+  { id: 'A1', label: 'A1' },
+  { id: 'A2', label: 'A2' },
+  { id: 'B1', label: 'B1' },
+  { id: 'B2', label: 'B2' },
+  { id: 'C1', label: 'C1' },
+];
+
+// CEFR curriculum — bám sát BẢN CHẤT của từng cấp độ (grammar + vocab + skill)
+const CEFR_CURRICULUM: Record<string, { grammar: string; vocab: string; skill: string; sentence: string }> = {
+  A1: {
+    grammar: 'to be (am/is/are), have/has, Present Simple, possessive (my/your), this/that, there is/are, can/can\'t, plural -s, basic question (what/where/who)',
+    vocab: '500-1000 từ thông dụng: gia đình, số đếm, màu sắc, ngày tháng, đồ ăn, nghề nghiệp, đồ vật quanh nhà',
+    skill: 'Câu chào hỏi, giới thiệu bản thân, mô tả người/vật đơn giản',
+    sentence: 'Câu rất ngắn (5-8 từ), 1 mệnh đề, present tense.',
+  },
+  A2: {
+    grammar: 'Past Simple (regular/irregular), Present Continuous, going to (future), comparative/superlative, adverbs of frequency, must/should, prepositions of time/place',
+    vocab: '1500-2500 từ: du lịch, mua sắm, sức khoẻ, thời tiết, sở thích, cảm xúc cơ bản',
+    skill: 'Kể chuyện đơn giản, mô tả thói quen, nói về quá khứ gần',
+    sentence: 'Câu 8-12 từ, có thể dùng and/but/because.',
+  },
+  B1: {
+    grammar: 'Present Perfect (vs Past Simple), Past Continuous, First/Second Conditional, Passive Voice (Present/Past), Reported Speech (basic), Relative Clauses (who/which/that), modal (might/could/would)',
+    vocab: '2500-3500 từ: công việc, công nghệ cơ bản, môi trường, tin tức, cảm xúc đa dạng, idiom thông dụng',
+    skill: 'Trình bày ý kiến, kể trải nghiệm, viết email không trang trọng, thảo luận pros/cons',
+    sentence: 'Câu 12-18 từ, dùng linking word (however, although, in addition).',
+  },
+  B2: {
+    grammar: 'Present Perfect Continuous, Past Perfect, Third Conditional & Mixed Conditional, Passive (all tenses), Reported Speech (advanced), Gerund vs Infinitive, Wish/If only, Causative (have something done), advanced modal (must have/might have)',
+    vocab: '4000-6000 từ: kinh doanh, học thuật, abstract noun (achievement, attitude), phrasal verb, collocation',
+    skill: 'Tranh luận, viết essay có argument, diễn đạt sắc thái, nói về chủ đề trừu tượng',
+    sentence: 'Câu 15-25 từ, mệnh đề phức, đa dạng cấu trúc.',
+  },
+  C1: {
+    grammar: 'Inversion (Hardly had..., Not only...), Cleft sentence (It was... that), Subjunctive, advanced passive, ellipsis, complex conditional, nuanced modal (would rather, had better)',
+    vocab: '8000+ từ: idiom, formal/academic vocab, register (formal vs informal), nuance, connotation',
+    skill: 'Diễn đạt ý phức tạp tự nhiên, viết bài học thuật, persuasive writing, hùng biện',
+    sentence: 'Câu phức tạp 20-35 từ, đa dạng cấu trúc nâng cao.',
+  },
+};
+
+// Giáo trình theo BÀI — mỗi Bài có 1 chủ đề chung cho cả 4 kỹ năng
+const UNIT_CURRICULUM: Record<string, { title: string; grammar: string; vocab: string; scenario: string }[]> = {
+  A1: [
+    { title: 'Hello & Introductions', grammar: 'to be (am/is/are), my/your', vocab: 'name, country, age, job', scenario: 'Meeting someone new for the first time' },
+    { title: 'My Family', grammar: 'have/has, possessive', vocab: 'family members, ages', scenario: 'Talking about your family' },
+    { title: 'Numbers & Time', grammar: 'present simple with time', vocab: 'numbers 1-100, days, months, time', scenario: 'Asking about time and dates' },
+    { title: 'Daily Routine', grammar: 'present simple, adverbs of frequency', vocab: 'wake up, brush teeth, eat, work, sleep', scenario: 'Describing your typical day' },
+    { title: 'Food & Drink', grammar: 'a/an, some/any, like/don\'t like', vocab: 'breakfast, lunch, dinner, common foods', scenario: 'Ordering at a café' },
+    { title: 'My House', grammar: 'there is / there are, prepositions of place', vocab: 'rooms, furniture', scenario: 'Describing your home' },
+    { title: 'Shopping', grammar: 'how much / how many, this/that', vocab: 'clothes, prices, sizes', scenario: 'Buying clothes at a shop' },
+    { title: 'Hobbies', grammar: 'present simple, like + verb-ing', vocab: 'sports, music, reading, games', scenario: 'Talking about free time' },
+    { title: 'Weather & Seasons', grammar: 'it is + adjective', vocab: 'hot, cold, rainy, sunny, seasons', scenario: 'Discussing the weather' },
+    { title: 'Directions', grammar: 'imperatives, prepositions of direction', vocab: 'turn left/right, straight, near, opposite', scenario: 'Asking and giving directions' },
+  ],
+  A2: [
+    { title: 'Past Holidays', grammar: 'Past Simple (regular & irregular)', vocab: 'travel, places, activities', scenario: 'Talking about a recent vacation' },
+    { title: 'Future Plans', grammar: 'going to, will', vocab: 'plans, predictions, ambitions', scenario: 'Describing weekend plans' },
+    { title: 'At the Restaurant', grammar: 'would like, can I have...', vocab: 'menu, dishes, drinks, bill', scenario: 'Ordering food at a restaurant' },
+    { title: 'Health & Body', grammar: 'should/shouldn\'t, modal advice', vocab: 'body parts, illness, doctor', scenario: 'Visiting the doctor' },
+    { title: 'Comparing Things', grammar: 'comparative & superlative', vocab: 'adjectives: big, small, fast, expensive', scenario: 'Comparing products before buying' },
+    { title: 'At Work', grammar: 'present continuous for now', vocab: 'office, meeting, colleague, deadline', scenario: 'Describing your current work' },
+    { title: 'Travel & Transport', grammar: 'prepositions of movement, modals', vocab: 'plane, train, bus, ticket, station', scenario: 'Booking a train ticket' },
+    { title: 'Personal Stories', grammar: 'past simple narrative', vocab: 'first, then, after that, finally', scenario: 'Telling a story from your childhood' },
+    { title: 'Technology Around Us', grammar: 'present simple + passive intro', vocab: 'phone, app, internet, social media', scenario: 'Describing how you use your phone' },
+    { title: 'Goals & Dreams', grammar: 'want to, hope to, plan to', vocab: 'career, study, learn, achieve', scenario: 'Talking about your goals for next year' },
+  ],
+  B1: [
+    { title: 'Life Experiences', grammar: 'Present Perfect vs Past Simple', vocab: 'experience, ever, never, since, for', scenario: 'Discussing things you have done in your life' },
+    { title: 'If I Could...', grammar: 'Second Conditional', vocab: 'imaginary situations, would, might', scenario: 'Discussing hypothetical situations' },
+    { title: 'News & Events', grammar: 'Passive Voice (Present/Past)', vocab: 'announce, report, discover, build', scenario: 'Reporting recent news' },
+    { title: 'Workplace Communication', grammar: 'Reported Speech basics', vocab: 'meeting, said, asked, mentioned', scenario: 'Reporting what colleagues said' },
+    { title: 'Describing People', grammar: 'Relative Clauses (who/which/that)', vocab: 'personality, appearance, character', scenario: 'Describing a person you admire' },
+    { title: 'Pros & Cons', grammar: 'linking words (however, although)', vocab: 'advantage, disadvantage, on the other hand', scenario: 'Discussing pros and cons of remote work' },
+    { title: 'Cultural Differences', grammar: 'modals of possibility (might/could)', vocab: 'culture, tradition, custom, etiquette', scenario: 'Comparing cultures' },
+    { title: 'Solving Problems', grammar: 'First Conditional', vocab: 'issue, solution, fix, troubleshoot', scenario: 'Describing how you solved a problem at work' },
+    { title: 'Environment', grammar: 'should + passive', vocab: 'pollution, recycle, climate, sustainable', scenario: 'Discussing environmental issues' },
+    { title: 'Personal Achievements', grammar: 'Present Perfect Continuous', vocab: 'achieve, accomplish, proud, milestone', scenario: 'Talking about an achievement you are proud of' },
+  ],
+  B2: [
+    { title: 'Career Development', grammar: 'Present Perfect Continuous', vocab: 'promotion, growth, skill, expertise', scenario: 'Discussing your career progression' },
+    { title: 'Regrets & Reflections', grammar: 'Third Conditional, wish + past perfect', vocab: 'regret, decision, hindsight, lesson', scenario: 'Reflecting on past decisions' },
+    { title: 'Technology & Society', grammar: 'Mixed Conditionals', vocab: 'innovation, disruption, AI, automation', scenario: 'Debating the impact of AI on jobs' },
+    { title: 'Persuasion & Argument', grammar: 'modal perfect (must have, might have)', vocab: 'argue, persuade, convince, evidence', scenario: 'Building a persuasive argument' },
+    { title: 'Project Management', grammar: 'Causative (have something done)', vocab: 'deadline, milestone, deliverable, stakeholder', scenario: 'Reporting project status to stakeholders' },
+    { title: 'Abstract Concepts', grammar: 'Gerund vs Infinitive', vocab: 'freedom, responsibility, ethics, justice', scenario: 'Discussing abstract values' },
+    { title: 'Interview Skills', grammar: 'advanced reported speech', vocab: 'strength, weakness, scenario, hypothetical', scenario: 'Answering tough job interview questions' },
+    { title: 'Negotiation', grammar: 'softening language, hedging', vocab: 'compromise, agree, terms, conditions', scenario: 'Negotiating salary or contract terms' },
+    { title: 'Critical Thinking', grammar: 'complex sentences with multiple clauses', vocab: 'analyze, evaluate, assumption, bias', scenario: 'Critically reviewing a proposal' },
+    { title: 'Future of Work', grammar: 'Future Perfect, Future Continuous', vocab: 'remote, hybrid, gig economy, upskill', scenario: 'Predicting how work will change in 10 years' },
+  ],
+  C1: [
+    { title: 'Sophisticated Storytelling', grammar: 'Inversion (Hardly had..., Not only...)', vocab: 'narrative devices, vivid description', scenario: 'Telling a story with dramatic effect' },
+    { title: 'Academic Discussion', grammar: 'Cleft sentences, nominalization', vocab: 'hypothesis, methodology, paradigm, framework', scenario: 'Discussing a research finding' },
+    { title: 'Diplomatic Language', grammar: 'softeners, subjunctive', vocab: 'tactful, diplomatic, nuance, register', scenario: 'Delivering difficult feedback diplomatically' },
+    { title: 'Idioms & Nuance', grammar: 'idiomatic expressions, collocations', vocab: 'common idioms, phrasal verbs at C1 level', scenario: 'Using idioms naturally in conversation' },
+    { title: 'Public Speaking', grammar: 'rhetorical devices, parallel structure', vocab: 'audience, captivate, articulate, eloquent', scenario: 'Delivering a TED-style talk' },
+    { title: 'Complex Argumentation', grammar: 'concessive clauses, advanced linking', vocab: 'notwithstanding, albeit, conversely', scenario: 'Constructing a multi-layered argument' },
+    { title: 'Cultural Subtleties', grammar: 'register shifts (formal/informal)', vocab: 'connotation, undertone, implication', scenario: 'Navigating cultural sensitivities' },
+    { title: 'Ethics & Philosophy', grammar: 'hypothetical & abstract structures', vocab: 'ethical dilemma, moral, principle, virtue', scenario: 'Discussing an ethical dilemma' },
+    { title: 'Leadership Communication', grammar: 'persuasive structures, ellipsis', vocab: 'vision, mission, inspire, mobilize', scenario: 'Inspiring a team with a vision speech' },
+    { title: 'Mastering Nuance', grammar: 'all advanced structures combined', vocab: 'precision, subtlety, mastery', scenario: 'Expressing complex emotions with precision' },
+  ],
+};
+
+function cefrHint(level: string): string {
+  const c = CEFR_CURRICULUM[level] || CEFR_CURRICULUM.A2;
+  return `\n\n📚 CHUẨN CEFR ${level} (BẮT BUỘC bám sát bản chất cấp độ này):
+- Ngữ pháp được phép dùng: ${c.grammar}
+- Từ vựng cấp độ: ${c.vocab}
+- Kỹ năng mục tiêu: ${c.skill}
+- Độ dài/độ phức tạp câu: ${c.sentence}
+TUYỆT ĐỐI không dùng grammar/vocab vượt cấp độ ${level}.`;
+}
 const READ_TOPICS = ['Web Development', 'Career & Jobs', 'Technology', 'Daily Life', 'Science', 'Business'];
 
 const VOCAB_TOPICS = ['programming', 'web development', 'databases', 'networking', 'AI & ML', 'DevOps', 'career & jobs', 'daily life', 'finance', 'investing'];
+const INTERVIEW_VOCAB_TOPICS = [
+  'job interview phrases', 'CV & resume action verbs', 'describing strengths & skills',
+  'behavioral interview (STAR method)', 'salary negotiation', 'company culture & values',
+  'technical interview (problem solving)', 'teamwork & collaboration', 'leadership & management',
+  'career goals & ambitions', 'email & professional communication', 'meeting & presentation phrases',
+];
 
 const TABS = [
+  { id: 'curriculum', l: '🗂️ Danh mục' },
   { id: 'listen', l: '🎧 Nghe' },
   { id: 'speak', l: '🎤 Nói' }, { id: 'write', l: '✍️ Viết' },
   { id: 'read', l: '📖 Đọc' },
@@ -291,6 +438,18 @@ const GRAMMAR_TOPICS = [
   'Articles (A, An, The)', 'Comparisons', 'Wish Clauses', 'Used to / Get used to',
   'Causative Form', 'Conjunctions (Although, Despite...)', 'Question Tags',
   'Inversion (Đảo ngữ)', 'Subjunctive Mood', 'Phrasal Verbs Basics'
+];
+const INTERVIEW_GRAMMAR_TOPICS = [
+  'Present Perfect (I have worked / I have achieved) — dùng trong phỏng vấn',
+  'Past Simple — kể kinh nghiệm làm việc (STAR method)',
+  'Second Conditional (If I were... I would...) — câu hỏi tình huống giả định',
+  'Modal Verbs (can/could/would/should) — thể hiện năng lực & đề xuất',
+  'Future with Will & Going To — nói về kế hoạch & mục tiêu',
+  'Passive Voice — mô tả quy trình & trách nhiệm công việc',
+  'Reported Speech — trích dẫn & kể lại tình huống',
+  'Gerund & Infinitive — "I enjoy leading...", "I plan to..."',
+  'Comparatives & Superlatives — so sánh phương án, kinh nghiệm',
+  'Relative Clauses — mô tả project/kỹ năng chi tiết',
 ];
 
 const MODES = [
@@ -312,7 +471,7 @@ export default function EnglishContent() {
   const [globalVoice, setGlobalVoice] = useState('en-US-AvaNeural');
   const [globalTtsProvider, setGlobalTtsProvider] = useState<'edge' | 'luxtts'>('edge');
   const [globalSpeed, setGlobalSpeed] = useState(1.0);
-  const [tab, setTab] = useState<'listen' | 'speak' | 'write' | 'vocab' | 'read' | 'dict' | 'grammar' | 'guide'>('listen');
+  const [tab, setTab] = useState<'curriculum' | 'listen' | 'speak' | 'write' | 'vocab' | 'read' | 'dict' | 'grammar' | 'guide'>('curriculum');
   const [mode, setMode] = useState<LearnMode>('coder');
   const [aiModel, setAiModel] = useState('default');
   const [isMounted, setIsMounted] = useState(false);
@@ -323,7 +482,7 @@ export default function EnglishContent() {
     if (savedMode) setMode(savedMode);
     const savedModel = localStorage.getItem('eng_model');
     if (savedModel) setAiModel(savedModel);
-    
+
     const savedVoice = localStorage.getItem('eng_voice');
     if (savedVoice) setGlobalVoice(savedVoice);
     const savedProvider = localStorage.getItem('eng_provider');
@@ -334,7 +493,7 @@ export default function EnglishContent() {
     // Check auth
     fetch('/api/auth').then(r => r.json()).then(d => {
       if (d.user) setMe(d.user);
-    }).catch(() => {});
+    }).catch(() => { });
   }, []);
 
   const [ttsOnline, setTtsOnline] = useState(false);
@@ -358,6 +517,8 @@ export default function EnglishContent() {
   const [showListenVi, setShowListenVi] = useState(false);
   const [listenLoading, setListenLoading] = useState(false);
   const [playing, setPlaying] = useState(false);
+  const [listenLooping, setListenLooping] = useState(false);
+  const listenLoopingRef = useRef(false);
   const [listenRecordId, setListenRecordId] = useState<number | null>(null);
   const [listenElapsed, setListenElapsed] = useState(0);
 
@@ -401,6 +562,7 @@ export default function EnglishContent() {
   const [flipped, setFlipped] = useState(false);
   const [vocabLoading, setVocabLoading] = useState(false);
   const [known, setKnown] = useState<number[]>([]);
+  const [vocabRecordId, setVocabRecordId] = useState<number | null>(null);
 
   // Reading
   const [readLevel, setReadLevel] = useState('A2');
@@ -421,6 +583,12 @@ export default function EnglishContent() {
   const [readError, setReadError] = useState('');
   const [readSpeaking, setReadSpeaking] = useState(false);
 
+  // Batch
+  const [batchRunning, setBatchRunning] = useState(false);
+  const [batchProgress, setBatchProgress] = useState('');
+  const [batchMsg, setBatchMsg] = useState('');
+  const batchStopRef = useRef(false);
+
   // Grammar
   const [grammarTopic, setGrammarTopic] = useState(GRAMMAR_TOPICS[0]);
   const [grammarCustomTopic, setGrammarCustomTopic] = useState('');
@@ -431,25 +599,173 @@ export default function EnglishContent() {
   const [grammarUserAnswers, setGrammarUserAnswers] = useState<string[]>([]);
   const [grammarSubmitted, setGrammarSubmitted] = useState(false);
 
+  const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
+
+  // Flag để skip auto-load khi loadLesson đã set dữ liệu rồi
+  const skipAutoLoadRef = useRef(false);
+
+  function loadLesson(item: EngLesson) {
+    skipAutoLoadRef.current = true; // Ngăn useEffect đè lại
+    const mapType = item.type;
+    if (mapType === 'listen') {
+      setListenText(item.content);
+      try {
+        const m = JSON.parse(item.metadata || '{}');
+        setListenVi(m.vi || '');
+        setListenVocab(m.vocab || []);
+        setListenLevel(m.level || 'A2');
+        setListenRecordId(item.id);
+      } catch { }
+      setShowListenVi(false);
+      setTab('listen');
+    } else if (mapType === 'speak') {
+      setSpkRecordId(item.id);
+      try {
+        const m = JSON.parse(item.metadata || '{}');
+        if (m.topic) setSpkTopic(m.topic);
+        setSpkFeedback(m.feedback || '');
+        setSpkLevel(m.level || 'A2');
+      } catch { }
+      setTranscript('');
+      setTab('speak');
+    } else if (mapType === 'writing') {
+      setWriteText(item.content);
+      setWriteRecordId(item.id);
+      try {
+        const m = JSON.parse(item.metadata || '{}');
+        if (m.prompt) setWritePrompt(m.prompt);
+        setWriteFeedback(m.feedback || '');
+        setWriteLevel(m.level || 'A2');
+      } catch { }
+      setTab('write');
+    } else if (mapType === 'reading') {
+      setReadRecordId(item.id);
+      try {
+        const m = JSON.parse(item.metadata || '{}');
+        setReadTopic(m.topic || '');
+        setReadLevel(m.level || 'B1');
+        setReadQuestions(m.questions || []);
+        setReadAnswers([]);
+        setReadSubmitted(false);
+        setReadArticle({ title: m.title || '', body: item.content, wordCount: item.content.split(/\s+/).length });
+      } catch { }
+      setReadSelected(''); setReadLookup(''); setReadChat([]);
+      setTab('read');
+    } else if (mapType === 'grammar') {
+      setGrammarLesson(item.content);
+      setGrammarRecordId(item.id);
+      setGrammarSubmitted(false);
+      try {
+        const m = JSON.parse(item.metadata || '{}');
+        if (m.topic) setGrammarTopic(m.topic);
+        const ans: string[] = [];
+        const ms = item.content.matchAll(/ANSWER:\s*([ABC])/g);
+        for (const m of ms) ans.push(m[1]);
+        setGrammarQuizAnswers(ans);
+        setGrammarUserAnswers(ans.map(() => ''));
+      } catch { }
+      setTab('grammar');
+    } else if (mapType === 'vocab') {
+      let unitCards: { word: string; def: string; ex: string; vi: string }[] = [];
+      try {
+        const m = JSON.parse(item.metadata || '{}');
+        if (m.unit && m.mode) {
+          // Tìm các từ cùng Unit & Mode
+          const unitWords = history.filter(h => {
+            if (h.type !== 'vocab') return false;
+            try {
+              const hm = JSON.parse(h.metadata || '{}');
+              return hm.unit === m.unit && hm.mode === m.mode;
+            } catch { return false; }
+          });
+          unitCards = unitWords.map(h => {
+            try {
+              const hm = JSON.parse(h.metadata || '{}');
+              return { word: h.content, def: hm.def || '', ex: hm.ex || '', vi: hm.vi || '' };
+            } catch { return { word: h.content, def: '', ex: '', vi: '' }; }
+          });
+          setVocabRecordId(item.id); // Dùng ID của từ đang nhấn (hoặc từ đầu tiên)
+        } else if (m.def) {
+          unitCards = [{ word: item.content, def: m.def, ex: m.ex, vi: m.vi }];
+          setVocabRecordId(item.id);
+        }
+      } catch { }
+
+      if (unitCards.length > 0) {
+        setCards(unitCards);
+        const idx = unitCards.findIndex(c => c.word === item.content);
+        setCardIdx(idx !== -1 ? idx : 0);
+        setFlipped(unitCards.length === 1);
+        setKnown([]);
+        setTab('vocab');
+      }
+    }
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  async function deleteUnit(unitNum: number, level: string) {
+    if (!confirm(`Xóa toàn bộ Bài ${unitNum} (${level})? Thao tác này không thể hoàn tác.`)) return;
+    const idsToDelete = history
+      .filter(h => {
+        try {
+          const m = JSON.parse(h.metadata || '{}');
+          return m.unit === unitNum && (m.level === level || (!m.level && level === '?') || (!m.level && !level));
+        } catch { return false; }
+      })
+      .map(h => h.id);
+
+    if (idsToDelete.length === 0) return;
+
+    try {
+      const res = await fetch('/api/english', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: idsToDelete })
+      });
+      if (res.ok) {
+        await loadHistory();
+      }
+    } catch (e) {
+      console.error('Delete unit error:', e);
+    }
+  }
+
+  // legacy (unused by CurriculumTab now, kept for other callers)
+  function jumpToLesson(skill: string, level: string, title: string) {
+    if (skill === 'listen') { setListenLevel(level); setListenCustomTopic(title); setTab('listen'); }
+    else if (skill === 'speak') { setSpkLevel(level); setSpkCustomTopic(title); setTab('speak'); }
+    else if (skill === 'read') { setReadLevel(level); setReadCustomTopic(title); setTab('read'); }
+    else if (skill === 'write') { setWriteLevel(level); setWriteCustomPrompt(title); setTab('write'); }
+    else if (skill === 'grammar') { setGrammarCustomTopic(title); setTab('grammar'); }
+    else if (skill === 'vocab') { setVocabTopic(title); setTab('vocab'); }
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
   async function genGrammarLesson() {
     setGrammarLoading(true); setGrammarLesson(null); setGrammarSubmitted(false); setGrammarUserAnswers([]);
     const p = `Bạn là một giáo viên dạy Tiếng Anh chuyên nghiệp. Hãy soạn một bài giảng NGỮ PHÁP CHI TIẾT về chủ đề: "${grammarTopic}".
+    Sử dụng Markdown để trình bày đẹp mắt.
 
-Yêu cầu bài giảng (Giải thích bằng Tiếng Việt, ngắn gọn súc tích):
-1. **Khái niệm & Cấu trúc**: Định nghĩa và công thức chính.
-2. **Cách dùng**: Các trường hợp sử dụng phổ biến nhất.
-3. **Ví dụ**: 3 câu ví dụ tiêu biểu (có bản dịch, không cần phiên âm IPA để tăng tốc độ).
-4. **Quiz**: 3 câu trắc nghiệm nhanh.
+    Cấu trúc bài giảng bắt buộc (Giải thích bằng Tiếng Việt):
+    ### 1. Khái niệm & Cấu trúc
+    (Định nghĩa và công thức chính, trình bày công thức rõ ràng)
 
-Định dạng Quiz:
-Q1: [Câu hỏi]
-A) [Lựa chọn] B) [Lựa chọn] C) [Lựa chọn]
-ANSWER: [A/B/C]
+    ### 2. Cách dùng & Ví dụ
+    (Giải thích các trường hợp sử dụng. Với mỗi trường hợp, đưa ra ít nhất 1 ví dụ thực tế)
+    - **Ví dụ**: *English sentence* -> Bản dịch tiếng Việt
 
-Hãy trình bày súc tích, tập trung vào trọng tâm.`;
-    
+    ### 3. Lưu ý (nếu có)
+    (Các lỗi thường gặp hoặc mẹo ghi nhớ)
+
+    ### 4. Quiz
+    Q1: [Câu hỏi]
+    A) [Lựa chọn] B) [Lựa chọn] C) [Lựa chọn]
+    ANSWER: [A/B/C]
+
+    Lưu ý: Bắt đầu tiêu đề phần bằng ###. Trình bày sạch sẽ, không dùng quá nhiều cấp độ tiêu đề.`;
+
     try {
-      const result = await genTopicTask('grammar', p, () => {});
+      const result = await genTopicTask('grammar', p, () => { });
       if (result) {
         const { content, id } = result;
         setGrammarLesson(content);
@@ -496,12 +812,15 @@ Hãy trình bày súc tích, tập trung vào trọng tâm.`;
 
   const loadHistory = useCallback(async () => {
     setHistoryLoading(true);
+    let historyData: EngLesson[] = [];
     try {
       const res = await fetch('/api/english');
       const data = await res.json();
-      setHistory(data.filter((h: any) => !h.type.endsWith('_pending')));
+      historyData = data.filter((h: any) => !h.type.endsWith('_pending'));
+      setHistory(historyData);
     } catch { }
     setHistoryLoading(false);
+    return historyData;
   }, []);
 
   const getGenMessage = useCallback((elapsed: number, action = 'tạo') => {
@@ -512,11 +831,15 @@ Hãy trình bày súc tích, tập trung vào trọng tâm.`;
 
   // Tự động load bài mới nhất khi chuyển Tab
   useEffect(() => {
+    if (skipAutoLoadRef.current) {
+      skipAutoLoadRef.current = false;
+      return;
+    }
     if (!history.length || !tab) return;
-    
+
     // Map tab name to database type
     const dbType = tab === 'read' ? 'reading' : tab === 'write' ? 'writing' : tab;
-    
+
     // Tìm bài mới nhất của tab hiện tại và khớp với mode hiện tại
     const latest = [...history]
       .sort((a, b) => b.id - a.id)
@@ -527,7 +850,7 @@ Hãy trình bày súc tích, tập trung vào trọng tâm.`;
           return m.mode === mode;
         } catch { return false; }
       }) || [...history].sort((a, b) => b.id - a.id).find(h => h.type === dbType); // Fallback về bài mới nhất cùng type
-      
+
     if (!latest) return;
 
     if (tab === 'listen') {
@@ -538,7 +861,7 @@ Hãy trình bày súc tích, tập trung vào trọng tâm.`;
         setListenVocab(m.vocab || []);
         setListenRecordId(latest.id);
         setListenLevel(m.level || 'A2');
-      } catch {}
+      } catch { }
     } else if (tab === 'speak') {
       try {
         const m = JSON.parse(latest.metadata || '{}');
@@ -547,7 +870,7 @@ Hãy trình bày súc tích, tập trung vào trọng tâm.`;
         setSpkRecordId(latest.id);
         setSpkLevel(m.level || 'A2');
         setTranscript(''); setSpkFeedback('');
-      } catch {}
+      } catch { }
     } else if (tab === 'write') {
       try {
         const m = JSON.parse(latest.metadata || '{}');
@@ -556,7 +879,7 @@ Hãy trình bày súc tích, tập trung vào trọng tâm.`;
         setWriteRecordId(latest.id);
         setWriteLevel(m.level || 'A2');
         setWriteFeedback(''); setWriteText('');
-      } catch {}
+      } catch { }
     } else if (tab === 'read') {
       try {
         const m = JSON.parse(latest.metadata || '{}');
@@ -565,7 +888,7 @@ Hãy trình bày súc tích, tập trung vào trọng tâm.`;
         setReadLevel(m.level || 'A2');
         setReadQuestions(m.questions || []);
         setReadAnswers([]); setReadSubmitted(false);
-      } catch {}
+      } catch { }
     } else if (tab === 'grammar') {
       try {
         const m = JSON.parse(latest.metadata || '{}');
@@ -579,12 +902,12 @@ Hãy trình bày súc tích, tập trung vào trọng tâm.`;
         setGrammarQuizAnswers(ans);
         setGrammarUserAnswers(ans.map(() => ''));
         setGrammarSubmitted(false);
-      } catch {}
+      } catch { }
     } else if (tab === 'vocab') {
       try {
         setCards(JSON.parse(latest.content));
         setCardIdx(0); setFlipped(false);
-      } catch {}
+      } catch { }
     }
   }, [tab, mode, history.length]); // Chạy khi tab đổi, mode đổi hoặc history có thêm bài mới
 
@@ -657,6 +980,309 @@ Hãy trình bày súc tích, tập trung vào trọng tâm.`;
     if (type === 'writing_sample') setWriteSampleLoading(false);
   }, []);
 
+  async function genBatch() {
+    if (batchRunning) { batchStopRef.current = true; return; }
+    if (mode === 'all') { alert('Vui lòng chọn mode cụ thể để tạo batch'); return; }
+    const batchType = tab === 'write' ? 'writing' : tab === 'read' ? 'reading' : tab;
+    if (!['listen', 'speak', 'writing', 'reading', 'vocab', 'grammar'].includes(batchType)) {
+      alert('Batch chỉ hỗ trợ tab Nghe, Nói, Viết, Đọc, Từ vựng, Ngữ pháp'); return;
+    }
+    setBatchRunning(true); batchStopRef.current = false; setBatchMsg('');
+    const MAX = 10; let made = 0; const failures: string[] = [];
+    let snapshot = [...history];
+
+    for (let i = 0; i < MAX * 3 && made < MAX && !batchStopRef.current; i++) {
+      setBatchProgress(`${made + 1}/${MAX}`);
+      try {
+        const existingTitles = snapshot
+          .filter(h => { try { return h.type === batchType && JSON.parse(h.metadata || '{}').mode === mode; } catch { return false; } })
+          .map(h => { try { return JSON.parse(h.metadata || '{}').title || JSON.parse(h.metadata || '{}').topic || JSON.parse(h.metadata || '{}').prompt || h.content.slice(0, 40); } catch { return h.content.slice(0, 40); } });
+        const avoidStr = existingTitles.length > 0 ? `\n\nAvoid these existing: ${existingTitles.slice(-20).join('; ')}` : '';
+        const curLevel = batchType === 'listen' ? listenLevel : batchType === 'speak' ? spkLevel : batchType === 'writing' ? writeLevel : readLevel;
+        const mDesc = MODES.find(m2 => m2.id === mode)?.desc || 'developer';
+        const cefr = cefrHint(curLevel);
+
+        let content = ''; let meta: Record<string, unknown> = { mode, level: curLevel };
+
+        if (batchType === 'listen') {
+          const scenarios = LISTEN_SCENARIOS[mode as keyof typeof LISTEN_SCENARIOS] || LISTEN_SCENARIOS.coder;
+          const scenario = scenarios[Math.floor(Math.random() * scenarios.length)];
+          const p = `Generate a unique English listening exercise (4-6 sentences) for a ${curLevel} learner.\nScenario: ${scenario}\nContext: ${mDesc}${avoidStr}${cefr}\nRequirements: natural English matching ${curLevel}, include 3-4 vocab words, realistic dialogue/monologue.\nReturn JSON ONLY:\n{"title":"...","en":"English text...","vi":"Bản dịch tiếng Việt...","vocab":[{"w":"word","m":"nghĩa"}]}`;
+          const raw = await askAI(p, aiModel);
+          const m = raw?.match(/\{[\s\S]*\}/);
+          if (!m) { failures.push(`lần ${i + 1}: parse lỗi`); continue; }
+          const d = JSON.parse(m[0]);
+          if (!d.en) { failures.push(`lần ${i + 1}: rỗng`); continue; }
+          content = d.en; meta = { title: d.title, vi: d.vi, vocab: d.vocab, topic: scenario, level: curLevel, mode };
+        } else if (batchType === 'speak') {
+          const p = `Give ONE short English speaking question for ${curLevel} level learner: ${mDesc}.${avoidStr}${cefr}\nReply with the question ONLY.`;
+          const t = await askAI(p, aiModel);
+          if (!t?.trim()) { failures.push(`lần ${i + 1}: rỗng`); continue; }
+          content = ''; meta = { topic: t.trim(), mode, level: curLevel };
+        } else if (batchType === 'writing') {
+          const p = `Give ONE English writing prompt for ${curLevel} level learner: ${mDesc}.${avoidStr}${cefr}\nReply with the prompt ONLY.`;
+          const t = await askAI(p, aiModel);
+          if (!t?.trim()) { failures.push(`lần ${i + 1}: rỗng`); continue; }
+          content = ''; meta = { prompt: t.trim(), mode, level: curLevel };
+        } else if (batchType === 'reading') {
+          const topics = READ_TOPICS;
+          const topic = topics[Math.floor(Math.random() * topics.length)];
+          const wordRange = curLevel === 'A1' ? '50-80' : curLevel === 'A2' ? '80-120' : curLevel === 'B1' ? '150-200' : curLevel === 'B2' ? '200-280' : '280-380';
+          const p = `You are an English reading teacher. Create a reading passage for a Vietnamese learner. Context: ${mDesc}.\nLevel: ${curLevel}\nTopic: ${topic}${avoidStr}${cefr}\nReturn JSON ONLY:\n{"title":"...","body":"4-6 paragraphs \\n\\n separated, ${wordRange} words","questions":[{"q":"...","options":["A","B","C","D"],"answer":0},{"q":"...","options":["A","B","C","D"],"answer":2},{"q":"...","options":["A","B","C","D"],"answer":1},{"q":"...","options":["A","B","C","D"],"answer":3}]}`;
+          const raw = await askAI(p, aiModel);
+          const m = raw?.match(/\{[\s\S]*\}/);
+          if (!m) { failures.push(`lần ${i + 1}: parse lỗi`); continue; }
+          const d = JSON.parse(m[0]);
+          if (!d.body) { failures.push(`lần ${i + 1}: rỗng`); continue; }
+          content = d.body; meta = { title: d.title, level: curLevel, topic, questions: d.questions, mode };
+        }
+
+        if (batchType === 'vocab') {
+          // Vocab: lưu từng từ trong set 10 từ
+          const allTopics = [...VOCAB_TOPICS, ...INTERVIEW_VOCAB_TOPICS];
+          const topic = allTopics[Math.floor(Math.random() * allTopics.length)];
+          const curLevel = listenLevel;
+          const existingWords = snapshot.filter(h => h.type === 'vocab').map(h => h.content);
+          const avoidW = existingWords.length ? `\nAvoid: ${existingWords.slice(-30).join(', ')}` : '';
+          const p = `Give 10 useful English vocabulary words for a ${curLevel} learner. Topic: "${topic}". Context: ${mDesc}${avoidW}${cefrHint(curLevel)}\nReturn JSON array ONLY: [{"word":"...","ipa":"...","def":"short English definition","ex":"Example sentence","vi":"nghĩa tiếng Việt"}]`;
+          const raw = await askAI(p, aiModel);
+          const mArr = raw?.match(/\[[\s\S]*\]/);
+          if (!mArr) { failures.push(`lần ${i + 1}: parse lỗi`); continue; }
+          const words = JSON.parse(mArr[0]);
+          let wordSaved = 0;
+          for (const w of words) {
+            const wMeta = { word: w.word, ipa: w.ipa || '', def: w.def, ex: w.ex, vi: w.vi, topic, mode };
+            const s = await fetch('/api/english', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: 'vocab', content: w.word, metadata: wMeta }) }).then(r => r.json());
+            if (s?.id) { snapshot = [...snapshot, { ...s, metadata: JSON.stringify(wMeta) }]; wordSaved++; }
+          }
+          if (wordSaved > 0) made++;
+          else failures.push(`lần ${i + 1}: lưu lỗi`);
+          continue;
+        } else if (batchType === 'grammar') {
+          // Grammar: mỗi batch item = 1 bài giảng
+          const allTopics = [...GRAMMAR_TOPICS, ...INTERVIEW_GRAMMAR_TOPICS];
+          const existingGram = snapshot.filter(h => h.type === 'grammar').map(h => { try { return JSON.parse(h.metadata || '{}').topic || ''; } catch { return ''; } });
+          const remaining = allTopics.filter(t => !existingGram.includes(t));
+          const topic = remaining.length ? remaining[Math.floor(Math.random() * remaining.length)] : allTopics[Math.floor(Math.random() * allTopics.length)];
+          const curLevel = listenLevel;
+          const p = `Bạn là giáo viên tiếng Anh. Soạn bài giảng ngữ pháp CHI TIẾT về: "${topic}" (cấp ${curLevel}).\nGiải thích bằng tiếng Việt:\n1. **Khái niệm & Cấu trúc**\n2. **Cách dùng** (2-3 ví dụ thực tế)\n3. **Dùng trong phỏng vấn**: ví dụ câu dùng grammar này khi phỏng vấn\n4. **Quiz** (3 câu):\nQ1: ...\nA) ... B) ... C) ...\nANSWER: [A/B/C]\n\nQ2: ...\nA) ... B) ... C) ...\nANSWER: [A/B/C]\n\nQ3: ...\nA) ... B) ... C) ...\nANSWER: [A/B/C]`;
+          const raw = await askAI(p, aiModel);
+          if (!raw?.trim()) { failures.push(`lần ${i + 1}: rỗng`); continue; }
+          meta = { topic, level: curLevel, mode };
+          content = raw;
+          const saved = await fetch('/api/english', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: 'grammar', content, metadata: meta }) }).then(r => r.json());
+          if (saved?.id) { snapshot = [...snapshot, { ...saved, metadata: JSON.stringify(meta) }]; made++; }
+          else failures.push(`lần ${i + 1}: lưu lỗi`);
+          continue;
+        }
+
+        const saved = await fetch('/api/english', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: batchType, content, metadata: meta }) }).then(r => r.json());
+        if (saved?.id) { snapshot = [...snapshot, { ...saved, metadata: JSON.stringify(meta) }]; made++; }
+        else { failures.push(`lần ${i + 1}: lưu lỗi`); }
+      } catch (e) { failures.push(`lần ${i + 1}: ${String(e)}`); }
+    }
+
+    await loadHistory();
+    setBatchRunning(false); setBatchProgress('');
+    if (batchStopRef.current) setBatchMsg(`⏸ Đã dừng sau ${made} bài.`);
+    else if (failures.length) setBatchMsg(`✅ Tạo ${made} bài. ⚠️ Bỏ qua: ${failures.length} lần.`);
+    else setBatchMsg(`✅ Đã tạo ${made} bài tiếng Anh.`);
+  }
+
+  // Tạo 1 Bài (Unit) gồm cả 4 kỹ năng cùng chủ đề, theo giáo trình CEFR
+  async function genNextUnit() {
+    if (batchRunning) { batchStopRef.current = true; return; }
+    if (mode === 'all') { alert('Vui lòng chọn mode cụ thể trước'); return; }
+    const level = listenLevel;
+    const units = UNIT_CURRICULUM[level] || [];
+    if (units.length === 0) { alert(`Chưa có giáo trình cho ${level}`); return; }
+
+    // Đếm số unit đã học (theo metadata.unit) trong cùng level + mode
+    const doneUnits = new Set<number>();
+    for (const h of history) {
+      try {
+        const m = JSON.parse(h.metadata || '{}');
+        if (m.level === level && m.mode === mode && typeof m.unit === 'number') doneUnits.add(m.unit);
+      } catch { /**/ }
+    }
+    const nextUnitIdx = units.findIndex((_, i) => !doneUnits.has(i + 1));
+    if (nextUnitIdx === -1) { setBatchMsg(`✅ Bạn đã hoàn thành toàn bộ ${units.length} bài cấp ${level} (${mode}).`); return; }
+
+    const unitNum = nextUnitIdx + 1;
+    const unit = units[nextUnitIdx];
+    setBatchRunning(true); batchStopRef.current = false; setBatchMsg('');
+    setBatchProgress(`Bài ${unitNum}: ${unit.title}`);
+
+    const mDesc = MODES.find(m2 => m2.id === mode)?.desc || 'developer';
+    const cefr = cefrHint(level);
+    const unitCtx = `\n\nĐây là BÀI ${unitNum} của giáo trình ${level}.\nChủ đề: ${unit.title}\nGrammar focus: ${unit.grammar}\nVocab focus: ${unit.vocab}\nScenario: ${unit.scenario}`;
+    const failures: string[] = [];
+    let made = 0;
+
+    type SkillItem = { type: string; build: () => Promise<{ content: string; meta: Record<string, unknown>; multi?: { content: string; meta: Record<string, unknown> }[] } | null> };
+    const skills: SkillItem[] = [
+      {
+        type: 'listen',
+        build: async () => {
+          const p = `Generate an English listening exercise (4-6 sentences) for ${level} learner. Context: ${mDesc}.${unitCtx}${cefr}\nMUST use the grammar/vocab focus. Realistic dialogue/monologue.\nReturn JSON ONLY:\n{"title":"...","en":"...","vi":"...","vocab":[{"w":"word","m":"nghĩa"}]}`;
+          const raw = await askAI(p, aiModel);
+          const m = raw?.match(/\{[\s\S]*\}/); if (!m) return null;
+          const d = JSON.parse(m[0]); if (!d.en) return null;
+          return { content: d.en, meta: { title: `Bài ${unitNum}: ${unit.title} — Nghe`, vi: d.vi, vocab: d.vocab, topic: unit.scenario, level, mode, unit: unitNum, unitTitle: unit.title } };
+        }
+      },
+      {
+        type: 'speak',
+        build: async () => {
+          const p = `Give ONE English speaking question for ${level} learner. Context: ${mDesc}.${unitCtx}${cefr}\nQuestion phải khớp scenario & grammar focus.\nReply with the question ONLY.`;
+          const t = await askAI(p, aiModel);
+          if (!t?.trim()) return null;
+          return { content: '', meta: { topic: t.trim(), level, mode, unit: unitNum, unitTitle: unit.title, title: `Bài ${unitNum}: ${unit.title} — Nói` } };
+        }
+      },
+      {
+        type: 'writing',
+        build: async () => {
+          const p = `Give ONE English writing prompt for ${level} learner. Context: ${mDesc}.${unitCtx}${cefr}\nPrompt phải khớp scenario.\nReply with the prompt ONLY.`;
+          const t = await askAI(p, aiModel);
+          if (!t?.trim()) return null;
+          return { content: '', meta: { prompt: t.trim(), level, mode, unit: unitNum, unitTitle: unit.title, title: `Bài ${unitNum}: ${unit.title} — Viết` } };
+        }
+      },
+      {
+        type: 'reading',
+        build: async () => {
+          const wordRange = level === 'A1' ? '50-80' : level === 'A2' ? '80-120' : level === 'B1' ? '150-200' : level === 'B2' ? '200-280' : '280-380';
+          const p = `Create an English reading passage for ${level} learner. Context: ${mDesc}.${unitCtx}${cefr}\nMUST use the grammar/vocab focus.\nReturn JSON ONLY:\n{"title":"...","body":"4-6 paragraphs \\n\\n separated, ${wordRange} words","questions":[{"q":"...","options":["A","B","C","D"],"answer":0},{"q":"...","options":["A","B","C","D"],"answer":2},{"q":"...","options":["A","B","C","D"],"answer":1},{"q":"...","options":["A","B","C","D"],"answer":3}]}`;
+          const raw = await askAI(p, aiModel);
+          const m = raw?.match(/\{[\s\S]*\}/); if (!m) return null;
+          const d = JSON.parse(m[0]); if (!d.body) return null;
+          return { content: d.body, meta: { title: `Bài ${unitNum}: ${unit.title} — Đọc`, level, topic: unit.scenario, questions: d.questions, mode, unit: unitNum, unitTitle: unit.title } };
+        }
+      },
+      {
+        // Từ vựng — 10 từ theo vocab focus của bài, lưu từng từ riêng để "nhả ra từng từ" trong lịch sử
+        type: 'vocab',
+        build: async () => {
+          const p = `Give 10 useful English vocabulary words for a ${level} learner. Topic: "${unit.vocab}". Context: ${mDesc}.${unitCtx}\nFocus on words that appear in this unit's grammar/scenario.\nReturn JSON array ONLY: [{"word":"...","ipa":"...","def":"short English definition","ex":"Example sentence using the grammar focus","vi":"nghĩa tiếng Việt"}]`;
+          const raw = await askAI(p, aiModel);
+          const m = raw?.match(/\[[\s\S]*\]/); if (!m) return null;
+          const words = JSON.parse(m[0]);
+          if (!words?.length) return null;
+          return {
+            content: words[0].word,
+            meta: { word: words[0].word, ipa: words[0].ipa, def: words[0].def, ex: words[0].ex, vi: words[0].vi, topic: unit.vocab, unit: unitNum, unitTitle: unit.title, mode, level },
+            multi: words.map((w: any) => ({ content: w.word, meta: { word: w.word, ipa: w.ipa || '', def: w.def, ex: w.ex, vi: w.vi, topic: unit.vocab, unit: unitNum, unitTitle: unit.title, mode, level } }))
+          };
+        }
+      },
+      {
+        // Ngữ pháp — bài giảng về grammar focus của unit
+        type: 'grammar',
+        build: async () => {
+          const gramFocus = unit.grammar;
+          const p = `Bạn là giáo viên tiếng Anh. Soạn bài giảng ngữ pháp CHI TIẾT về: "${gramFocus}" (cấp ${level}).\nNgữ cảnh ứng dụng: ${unit.scenario}.\n\nGiải thích bằng tiếng Việt, ngắn gọn:\n1. **Khái niệm & Cấu trúc**: Công thức + ví dụ.\n2. **Cách dùng trong ${unit.title}**: 2-3 câu ví dụ thực tế với scenario.\n3. **Phỏng vấn**: Cách dùng grammar này khi phỏng vấn xin việc.\n4. **Quiz** (3 câu):\nQ1: ...\nA) ... B) ... C) ...\nANSWER: [A/B/C]\n\nQ2: ...\nA) ... B) ... C) ...\nANSWER: [A/B/C]\n\nQ3: ...\nA) ... B) ... C) ...\nANSWER: [A/B/C]`;
+          const raw = await askAI(p, aiModel);
+          if (!raw?.trim()) return null;
+          return { content: raw, meta: { topic: `Bài ${unitNum}: ${unit.title} — Ngữ pháp: ${gramFocus}`, level, mode, unit: unitNum, unitTitle: unit.title } };
+        }
+      },
+    ];
+
+    const TOTAL = 6;
+    for (const skill of skills) {
+      if (batchStopRef.current) break;
+      setBatchProgress(`Bài ${unitNum} — ${skill.type}`);
+      try {
+        const r = await skill.build();
+        if (!r) { failures.push(skill.type); continue; }
+        const items = (r as any).multi || [{ content: r.content, meta: r.meta }];
+        for (const item of items) {
+          const saved = await fetch('/api/english', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ type: skill.type, content: item.content, metadata: item.meta })
+          }).then(res => res.json());
+          if (saved?.id) made++;
+        }
+      } catch (e) { failures.push(`${skill.type}: ${String(e)}`); }
+    }
+
+    await loadHistory();
+    setBatchRunning(false); setBatchProgress('');
+    if (batchStopRef.current) setBatchMsg(`⏸ Đã dừng. Tạo ${made}/${TOTAL} mục cho Bài ${unitNum}.`);
+    else if (failures.length) setBatchMsg(`✅ Bài ${unitNum} (${unit.title}): ${made} mục (6 kỹ năng). Lỗi: ${failures.join(', ')}`);
+    else setBatchMsg(`✅ Bài ${unitNum}: ${unit.title} — đủ 6 kỹ năng (Nghe/Nói/Viết/Đọc + 10 từ vựng + Ngữ pháp).`);
+  }
+
+  // Tạo 10 bài liên tục (mỗi bài đủ 6 kỹ năng)
+  async function gen10Units() {
+    if (batchRunning) { batchStopRef.current = true; return; }
+    if (mode === 'all') { alert('Vui lòng chọn mode cụ thể trước'); return; }
+    const level = listenLevel;
+    const units = UNIT_CURRICULUM[level] || [];
+    if (units.length === 0) { alert(`Chưa có giáo trình cho ${level}`); return; }
+
+    setBatchRunning(true); batchStopRef.current = false; setBatchMsg('');
+    let totalMade = 0;
+    let unitsMade = 0;
+
+    let currentHistory = history;
+
+    for (let round = 0; round < 10 && !batchStopRef.current; round++) {
+      // Tìm unit tiếp theo chưa học
+      const doneUnits = new Set<number>();
+      for (const h of currentHistory) {
+        try {
+          const m = JSON.parse(h.metadata || '{}');
+          if (m.level === level && m.mode === mode && typeof m.unit === 'number') doneUnits.add(m.unit);
+        } catch { /**/ }
+      }
+      const nextUnitIdx = units.findIndex((_, i) => !doneUnits.has(i + 1));
+      if (nextUnitIdx === -1) { setBatchMsg(`✅ Đã hoàn thành toàn bộ ${units.length} bài cấp ${level}. Tạo ${unitsMade} bài mới.`); break; }
+
+      const unitNum = nextUnitIdx + 1;
+      const unit = units[nextUnitIdx];
+      setBatchProgress(`Bài ${unitNum}/${Math.min(unitsMade + 10, units.length)}: ${unit.title}`);
+
+      const mDesc = MODES.find(m2 => m2.id === mode)?.desc || 'developer';
+      const cefr = cefrHint(level);
+      const unitCtx = `\n\nĐây là BÀI ${unitNum} của giáo trình ${level}.\nChủ đề: ${unit.title}\nGrammar focus: ${unit.grammar}\nVocab focus: ${unit.vocab}\nScenario: ${unit.scenario}`;
+
+      const skills = [
+        { type: 'listen', build: async () => { const p = `Generate an English listening exercise (4-6 sentences) for ${level} learner. Context: ${mDesc}.${unitCtx}${cefr}\nMUST use the grammar/vocab focus. Realistic dialogue/monologue.\nReturn JSON ONLY:\n{"title":"...","en":"...","vi":"...","vocab":[{"w":"word","m":"nghĩa"}]}`; const raw = await askAI(p, aiModel); const m = raw?.match(/\{[\s\S]*\}/); if (!m) return null; const d = JSON.parse(m[0]); if (!d.en) return null; return { content: d.en, meta: { title: `Bài ${unitNum}: ${unit.title} — Nghe`, vi: d.vi, vocab: d.vocab, topic: unit.scenario, level, mode, unit: unitNum, unitTitle: unit.title } }; } },
+        { type: 'speak', build: async () => { const p = `Give ONE English speaking question for ${level} learner. Context: ${mDesc}.${unitCtx}${cefr}\nQuestion phải khớp scenario & grammar focus.\nReply with the question ONLY.`; const t = await askAI(p, aiModel); if (!t?.trim()) return null; return { content: '', meta: { topic: t.trim(), level, mode, unit: unitNum, unitTitle: unit.title, title: `Bài ${unitNum}: ${unit.title} — Nói` } }; } },
+        { type: 'writing', build: async () => { const p = `Give ONE English writing prompt for ${level} learner. Context: ${mDesc}.${unitCtx}${cefr}\nPrompt phải khớp scenario.\nReply with the prompt ONLY.`; const t = await askAI(p, aiModel); if (!t?.trim()) return null; return { content: '', meta: { prompt: t.trim(), level, mode, unit: unitNum, unitTitle: unit.title, title: `Bài ${unitNum}: ${unit.title} — Viết` } }; } },
+        { type: 'reading', build: async () => { const wordRange = level === 'A1' ? '50-80' : level === 'A2' ? '80-120' : level === 'B1' ? '150-200' : level === 'B2' ? '200-280' : '280-380'; const p = `Create an English reading passage for ${level} learner. Context: ${mDesc}.${unitCtx}${cefr}\nMUST use the grammar/vocab focus.\nReturn JSON ONLY:\n{"title":"...","body":"4-6 paragraphs \\n\\n separated, ${wordRange} words","questions":[{"q":"...","options":["A","B","C","D"],"answer":0},{"q":"...","options":["A","B","C","D"],"answer":2},{"q":"...","options":["A","B","C","D"],"answer":1},{"q":"...","options":["A","B","C","D"],"answer":3}]}`; const raw = await askAI(p, aiModel); const m = raw?.match(/\{[\s\S]*\}/); if (!m) return null; const d = JSON.parse(m[0]); if (!d.body) return null; return { content: d.body, meta: { title: `Bài ${unitNum}: ${unit.title} — Đọc`, level, topic: unit.scenario, questions: d.questions, mode, unit: unitNum, unitTitle: unit.title } }; } },
+        { type: 'vocab', build: async () => { const p = `Give 10 useful English vocabulary words for a ${level} learner. Topic: "${unit.vocab}". Context: ${mDesc}.${unitCtx}\nFocus on words that appear in this unit's grammar/scenario.\nReturn JSON array ONLY: [{"word":"...","ipa":"...","def":"short English definition","ex":"Example sentence using the grammar focus","vi":"nghĩa tiếng Việt"}]`; const raw = await askAI(p, aiModel); const m = raw?.match(/\[[\s\S]*\]/); if (!m) return null; const words = JSON.parse(m[0]); if (!words?.length) return null; return { content: words[0].word, meta: { word: words[0].word, ipa: words[0].ipa, def: words[0].def, ex: words[0].ex, vi: words[0].vi, topic: unit.vocab, unit: unitNum, unitTitle: unit.title, mode, level }, multi: words.map((w: any) => ({ content: w.word, meta: { word: w.word, ipa: w.ipa || '', def: w.def, ex: w.ex, vi: w.vi, topic: unit.vocab, unit: unitNum, unitTitle: unit.title, mode, level } })) }; } },
+        { type: 'grammar', build: async () => { const gramFocus = unit.grammar; const p = `Bạn là giáo viên tiếng Anh. Soạn bài giảng ngữ pháp CHI TIẾT về: "${gramFocus}" (cấp ${level}).\nNgữ cảnh ứng dụng: ${unit.scenario}.\n\nGiải thích bằng tiếng Việt, ngắn gọn:\n1. **Khái niệm & Cấu trúc**: Công thức + ví dụ.\n2. **Cách dùng trong ${unit.title}**: 2-3 câu ví dụ thực tế với scenario.\n3. **Phỏng vấn**: Cách dùng grammar này khi phỏng vấn xin việc.\n4. **Quiz** (3 câu):\nQ1: ...\nA) ... B) ... C) ...\nANSWER: [A/B/C]\n\nQ2: ...\nA) ... B) ... C) ...\nANSWER: [A/B/C]\n\nQ3: ...\nA) ... B) ... C) ...\nANSWER: [A/B/C]`; const raw = await askAI(p, aiModel); if (!raw?.trim()) return null; return { content: raw, meta: { topic: `Bài ${unitNum}: ${unit.title} — Ngữ pháp: ${gramFocus}`, level, mode, unit: unitNum, unitTitle: unit.title } }; } },
+      ];
+
+      for (const skill of skills) {
+        if (batchStopRef.current) break;
+        setBatchProgress(`Bài ${unitNum} — ${skill.type}`);
+        try {
+          const r = await skill.build();
+          if (!r) continue;
+          const items = (r as any).multi || [{ content: r.content, meta: r.meta }];
+          for (const item of items) {
+            const saved = await fetch('/api/english', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ type: skill.type, content: item.content, metadata: item.meta })
+            }).then(res => res.json());
+            if (saved?.id) totalMade++;
+          }
+        } catch { /**/ }
+      }
+      unitsMade++;
+      currentHistory = await loadHistory();
+    }
+
+    setBatchRunning(false); setBatchProgress('');
+    if (batchStopRef.current) setBatchMsg(`⏸ Đã dừng sau ${unitsMade} bài.`);
+    else setBatchMsg(`✅ Đã tạo ${unitsMade} bài (${totalMade} mục) đủ 6 kỹ năng.`);
+  }
 
   // LISTEN
   async function genListenText() {
@@ -701,11 +1327,11 @@ Hãy trình bày súc tích, tập trung vào trọng tâm.`;
     const p = `Generate a unique English listening exercise (4-6 sentences) for a ${listenLevel} learner.
 
 Scenario: ${scenario}
-Context: ${modeDesc}${avoidList}
+Context: ${modeDesc}${avoidList}${cefrHint(listenLevel)}
 
 Requirements:
-- Natural conversational English
-- Include 3-4 useful vocabulary words
+- Natural conversational English MATCHING ${listenLevel} grammar/vocab
+- Include 3-4 useful vocabulary words appropriate for ${listenLevel}
 - Different situation from existing exercises
 - Realistic dialogue or monologue
 
@@ -744,8 +1370,21 @@ Return JSON format ONLY:
   async function playText(text = listenText) {
     if (!text || playing) return;
     setPlaying(true);
-    await speak(text, globalSpeed, globalVoice, globalTtsProvider);
+    const loop = text === listenText;
+    do {
+      await speak(text, globalSpeed, globalVoice, globalTtsProvider);
+      if (loop && listenLoopingRef.current) {
+        await new Promise(r => setTimeout(r, 1000));
+      }
+    } while (loop && listenLoopingRef.current);
     setPlaying(false);
+  }
+
+  function stopPlayText() {
+    setPlaying(false);
+    setListenLooping(false);
+    listenLoopingRef.current = false;
+    stopTTS();
   }
 
   // SPEAK
@@ -800,8 +1439,9 @@ Reply with the English question ONLY, no explanation.`;
       ? `\n\nAvoid these existing topics:\n${existingTopics.join('\n')}`
       : '';
 
-    const p = `Give ONE short English speaking question for ${spkLevel} level learner: ${modeDesc}.${avoidList}
+    const p = `Give ONE short English speaking question for ${spkLevel} level learner: ${modeDesc}.${avoidList}${cefrHint(spkLevel)}
 
+Question phải dùng grammar/vocab chuẩn ${spkLevel}, không quá khó cũng không quá dễ.
 Reply with the question ONLY, no explanation.`;
     const t = await askAI(p, aiModel);
     if (t) {
@@ -822,9 +1462,9 @@ Reply with the question ONLY, no explanation.`;
     const directionText = spkSampleDirection.trim()
       ? `\n\nĐịnh hướng trả lời: ${spkSampleDirection.trim()}`
       : '';
-    const raw = await askAI(`Answer this English question at ${spkLevel} level in 3-4 natural sentences: "${spkTopic}"${directionText}
+    const raw = await askAI(`Answer this English question at ${spkLevel} level in 3-4 natural sentences: "${spkTopic}"${directionText}${cefrHint(spkLevel)}
 
-**English:** (3-4 sentences)
+**English:** (3-4 sentences, grammar & vocab phải đúng chuẩn ${spkLevel})
 **Tiếng Việt:** (bản dịch ngắn)
 **Từ hay:** word1 – nghĩa, word2 – nghĩa`, aiModel);
     setSpkSample(raw || '');
@@ -842,7 +1482,7 @@ Reply with the question ONLY, no explanation.`;
     const directionText = writeSampleDirection.trim()
       ? `\n\nĐịnh hướng viết: ${writeSampleDirection.trim()}`
       : '';
-    const raw = await askAI(`Write a concise sample response at ${writeLevel} level (80-120 words) for: "${writePrompt}"${directionText}
+    const raw = await askAI(`Write a concise sample response at ${writeLevel} level (80-120 words) for: "${writePrompt}"${directionText}${cefrHint(writeLevel)}
 
 **English:** (1-2 clear paragraphs)
 **Tiếng Việt:** (bản dịch ngắn)
@@ -860,14 +1500,14 @@ Reply with the question ONLY, no explanation.`;
   async function startRec() {
     setRecognizing(true); setSttStatus('');
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ 
+      const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
           echoCancellation: { ideal: true },
           noiseSuppression: { ideal: true },
           autoGainControl: { ideal: true },
           sampleRate: { ideal: 44100 },
           channelCount: { ideal: 1 }
-        } 
+        }
       });
       chunksRef.current = [];
       const mimeType = ['audio/webm', 'audio/mp4', 'audio/ogg', ''].find(m => !m || MediaRecorder.isTypeSupported(m)) || '';
@@ -885,7 +1525,7 @@ Reply with the question ONLY, no explanation.`;
 
         const form = new FormData();
         form.append('audio', blob, `audio.${ext}`);
-        form.append('language', 'en'); 
+        form.append('language', 'en');
         form.append('prompt', 'English conversation practice, focus on English grammar and vocabulary.');
         const res = await fetch('/api/stt', { method: 'POST', body: form });
         const data = await res.json();
@@ -990,8 +1630,9 @@ Reply with the English prompt ONLY, no explanation.`;
       ? `\n\nAvoid these existing prompts:\n${existingPrompts.join('\n')}`
       : '';
 
-    const p = `Give ONE English writing prompt for ${writeLevel} level learner: ${modeDesc}.${avoidList}
+    const p = `Give ONE English writing prompt for ${writeLevel} level learner: ${modeDesc}.${avoidList}${cefrHint(writeLevel)}
 
+Prompt phù hợp với grammar/vocab chuẩn ${writeLevel}.
 Reply with the prompt ONLY.`;
     const t = await askAI(p, aiModel);
     if (t) {
@@ -1127,12 +1768,13 @@ Return JSON array ONLY: [{"word":"...","ipa":"IPA pronunciation","def":"short En
       ? `\n\nAvoid these existing articles:\n${existingArticles.join('\n')}`
       : '';
 
+    const wordRange = readLevel === 'A1' ? '50-80' : readLevel === 'A2' ? '80-120' : readLevel === 'B1' ? '150-200' : readLevel === 'B2' ? '200-280' : '280-380';
     const p = `You are an English reading teacher. Create a reading passage for a Vietnamese learner. Context: ${modeDesc}.
 Level: ${readLevel}
-Topic: ${topicToUse}${avoidList}
+Topic: ${topicToUse}${avoidList}${cefrHint(readLevel)}
 
 Return JSON ONLY (no markdown code blocks, just raw json):
-{"title":"...","body":"4-6 paragraphs separated by \\n\\n, ${readLevel === 'A2' ? '80-120' : readLevel === 'B1' ? '150-200' : '200-280'} words","questions":[{"q":"...","options":["A","B","C","D"],"answer":0},{"q":"...","options":["A","B","C","D"],"answer":2},{"q":"...","options":["A","B","C","D"],"answer":1},{"q":"...","options":["A","B","C","D"],"answer":3}]}`;
+{"title":"...","body":"4-6 paragraphs separated by \\n\\n, ${wordRange} words, grammar/vocab đúng chuẩn ${readLevel}","questions":[{"q":"...","options":["A","B","C","D"],"answer":0},{"q":"...","options":["A","B","C","D"],"answer":2},{"q":"...","options":["A","B","C","D"],"answer":1},{"q":"...","options":["A","B","C","D"],"answer":3}]}`;
 
     const raw = await askAI(p, aiModel);
     if (raw) {
@@ -1209,20 +1851,20 @@ Return JSON ONLY (no markdown code blocks, just raw json):
       {/* Tabs */}
       <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '16px' }}>
         {TABS.map(t => (
-          <button 
-            key={t.id} 
-            onClick={() => { setTab(t.id); window.scrollTo({ top: 0, behavior: 'smooth' }); }} 
-            style={{ 
-              padding: '8px 14px', 
-              borderRadius: 99, 
-              border: '1px solid', 
-              whiteSpace: 'nowrap', 
-              fontSize: '12.5px', 
-              fontWeight: 600, 
-              cursor: 'pointer', 
-              transition: 'all 0.15s', 
-              borderColor: tab === t.id ? 'var(--accent)' : 'var(--border)', 
-              background: tab === t.id ? 'var(--accent)' : 'var(--surface2)', 
+          <button
+            key={t.id}
+            onClick={() => { setTab(t.id); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+            style={{
+              padding: '8px 14px',
+              borderRadius: 99,
+              border: '1px solid',
+              whiteSpace: 'nowrap',
+              fontSize: '12.5px',
+              fontWeight: 600,
+              cursor: 'pointer',
+              transition: 'all 0.15s',
+              borderColor: tab === t.id ? 'var(--accent)' : 'var(--border)',
+              background: tab === t.id ? 'var(--accent)' : 'var(--surface2)',
               color: tab === t.id ? '#000' : 'var(--muted)',
               boxShadow: tab === t.id ? '0 4px 12px rgba(88,166,255,0.2)' : 'none'
             }}
@@ -1242,14 +1884,14 @@ Return JSON ONLY (no markdown code blocks, just raw json):
             const count = m.id === 'all'
               ? history.filter(h => h.type === mapType).length
               : history.filter(h => {
-                  if (h.type !== mapType) return false;
-                  try {
-                    const itemMode = JSON.parse(h.metadata || '{}').mode || 'coder';
-                    return itemMode === m.id;
-                  } catch {
-                    return false;
-                  }
-                }).length;
+                if (h.type !== mapType) return false;
+                try {
+                  const itemMode = JSON.parse(h.metadata || '{}').mode || 'coder';
+                  return itemMode === m.id;
+                } catch {
+                  return false;
+                }
+              }).length;
 
             return (
               <button key={m.id} onClick={() => setMode(m.id)} style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid', whiteSpace: 'nowrap', fontSize: 12, fontWeight: 600, cursor: 'pointer', borderColor: mode === m.id ? 'var(--green)' : 'var(--border)', background: mode === m.id ? 'var(--green)11' : 'var(--surface2)', color: mode === m.id ? 'var(--green)' : 'var(--muted)', display: 'flex', alignItems: 'center', gap: 6, transition: 'all 0.15s' }}>
@@ -1261,8 +1903,55 @@ Return JSON ONLY (no markdown code blocks, just raw json):
         </div>
       </div>
 
+      {/* Batch + Admin */}
+      {['curriculum', 'listen', 'speak', 'write', 'read', 'vocab', 'grammar'].includes(tab) && (
+        <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
+          <button
+            className={`btn ${batchRunning ? 'btn-danger-soft' : 'btn-premium'}`}
+            style={{ flex: '1 1 0', minWidth: 140, minHeight: 48, fontSize: 14, lineHeight: 1.25, whiteSpace: 'normal', wordBreak: 'break-word' }}
+            onClick={genNextUnit}
+            title="Tạo Bài tiếp theo theo giáo trình CEFR — Nghe/Nói/Viết/Đọc + 10 từ vựng + Ngữ pháp"
+          >
+            {batchRunning ? `⏸ ${batchProgress || 'Dừng'}` : '📚 Tạo Bài tiếp theo'}
+          </button>
+          <button
+            className={`btn ${batchRunning ? 'btn-danger-soft' : 'btn-secondary'}`}
+            style={{ flex: '1 1 0', minWidth: 140, minHeight: 48, fontSize: 14, lineHeight: 1.25, whiteSpace: 'normal', wordBreak: 'break-word' }}
+            onClick={gen10Units}
+            title="Tạo 10 bài liên tiếp theo giáo trình, mỗi bài đủ 6 kỹ năng"
+          >
+            {batchRunning ? `⏸ Dừng ${batchProgress}` : '🚀 Tạo 10 bài'}
+          </button>
+          {/* <button
+            className={`btn ${batchRunning ? 'btn-danger-soft' : 'btn-secondary'}`}
+            style={{ flex: '1 1 180px', minWidth: 0, minHeight: 48, fontSize: 13, lineHeight: 1.25, whiteSpace: 'normal', wordBreak: 'break-word' }}
+            onClick={genBatch}
+            title="Tạo 10 bài cho tab hiện tại (không theo giáo trình)"
+          >
+            {batchRunning ? `⏸ Dừng ${batchProgress}` : `🚀 10 ${tab === 'listen' ? 'bài Nghe' : tab === 'speak' ? 'bài Nói' : tab === 'write' ? 'bài Viết' : tab === 'read' ? 'bài Đọc' : tab === 'vocab' ? 'bộ Từ vựng' : 'bài Ngữ pháp'}`}
+          </button> */}
+        </div>
+      )}
+      {batchMsg && (() => {
+        const isSuccess = batchMsg.startsWith('✅');
+        const isPaused = batchMsg.startsWith('⏸');
+        const color = isSuccess ? '#3fb950' : isPaused ? '#d29922' : '#f85149';
+        const bg = isSuccess ? '#0a1a0d' : isPaused ? '#1a1408' : '#1a0a0a';
+        return <div style={{ background: bg, border: `1px solid ${color}`, borderRadius: 8, padding: 10, marginBottom: 16, color, fontSize: 13 }}>{batchMsg}</div>;
+      })()}
+
       <div className="desktop-main-side">
         <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', flex: 1, minWidth: 0 }}>
+          {/* ── CURRICULUM ── */}
+          {tab === 'curriculum' && (
+            <CurriculumTab
+              history={history}
+              loadLesson={loadLesson}
+              deleteUnit={deleteUnit}
+              historyLoading={historyLoading}
+            />
+          )}
+
           {/* ── LISTEN ── */}
           {tab === 'listen' && (
             <div className="desktop-2col">
@@ -1321,7 +2010,7 @@ Return JSON ONLY (no markdown code blocks, just raw json):
                   </div>
                   <textarea className="input" value={listenText} onChange={e => setListenText(e.target.value)} rows={6}
                     placeholder="Bấm 'AI tạo đoạn nghe' hoặc tự nhập tiếng Anh..." style={{ marginBottom: 12 }} />
-                  
+
                   {/* Voice selector (Back to Listen Tab) */}
                   <div style={{ display: 'flex', gap: 6, marginBottom: 12, flexWrap: 'wrap' }}>
                     {[
@@ -1334,12 +2023,12 @@ Return JSON ONLY (no markdown code blocks, just raw json):
                         { id: 'paul', l: '💎 Nam (Paul)', s: 'luxtts' }
                       ] : [])
                     ].map(v => (
-                      <button 
-                        key={v.id} 
+                      <button
+                        key={v.id}
                         onClick={() => {
                           setGlobalVoice(v.id);
                           setGlobalTtsProvider(v.s as any);
-                        }} 
+                        }}
                         style={{ flex: '1 1 30%', padding: '7px', borderRadius: 8, border: '1px solid', fontSize: 11, fontWeight: 600, cursor: 'pointer', borderColor: globalVoice === v.id ? 'var(--accent)' : 'var(--border)', background: globalVoice === v.id ? '#58a6ff22' : 'var(--surface2)', color: globalVoice === v.id ? 'var(--accent)' : 'var(--muted)', whiteSpace: 'nowrap' }}
                       >
                         {v.l}
@@ -1355,13 +2044,22 @@ Return JSON ONLY (no markdown code blocks, just raw json):
                     <input type="range" min={0.5} max={1.5} step={0.05} value={globalSpeed}
                       onChange={e => setGlobalSpeed(parseFloat(e.target.value))} style={{ width: '100%', accentColor: 'var(--accent)' }} />
                   </div>
-                  <div style={{ display: 'flex', gap: 8 }}>
-                    <button className="btn btn-ghost" style={{ flex: 1 }} onClick={genListenText} disabled={listenLoading}>
-                      {listenLoading ? '⏳ Đang tạo...' : '🤖 Tạo đoạn nghe mới'}
+                  <div style={{ display: 'flex', gap: 10 }}>
+                    <button className="btn btn-secondary" style={{ flex: 1, height: 42 }} onClick={genListenText} disabled={listenLoading}>
+                      {listenLoading ? '⏳ Tạo...' : '🤖 Tạo mới'}
                     </button>
-                    <button className="btn btn-primary" style={{ flex: 1 }} onClick={() => playText()} disabled={!listenText || playing}>
-                      {playing ? '🔊 Đang phát...' : '▶ Phát'}
+                    <button onClick={() => { const next = !listenLooping; setListenLooping(next); listenLoopingRef.current = next; }} className="btn btn-secondary" style={{ flex: 1, height: 42, background: listenLooping ? 'var(--accent)22' : undefined, color: listenLooping ? 'var(--accent)' : undefined, borderColor: listenLooping ? 'var(--accent)' : undefined }} title="Lặp lại">
+                      {listenLooping ? '🔂 Lặp' : '🔁 Lặp'}
                     </button>
+                    {playing ? (
+                      <button className="btn btn-danger-soft" style={{ flex: 1, height: 42 }} onClick={stopPlayText}>
+                        ⏸ Dừng
+                      </button>
+                    ) : (
+                      <button className="btn btn-premium" style={{ flex: 1, height: 42 }} onClick={() => playText()} disabled={!listenText}>
+                        ▶ Phát
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
@@ -1453,6 +2151,7 @@ Return JSON ONLY (no markdown code blocks, just raw json):
               cardIdx={cardIdx} setCardIdx={setCardIdx}
               flipped={flipped} setFlipped={setFlipped}
               known={known}
+              vocabRecordId={vocabRecordId}
               vocabLoading={vocabLoading} loadVocab={loadVocab}
               history={history} mode={mode}
               speak={speak} globalSpeed={globalSpeed} globalVoice={globalVoice} globalTtsProvider={globalTtsProvider}
@@ -1541,7 +2240,7 @@ Return JSON ONLY (no markdown code blocks, just raw json):
                 const mapType = tab === 'write' ? 'writing' : tab === 'read' ? 'reading' : tab;
                 const items = history.filter(h => {
                   if (h.type !== mapType) return false;
-                  if (mode === 'all') return true; // Show all when "All" is selected
+                  if (mode === 'all') return true;
                   const itemMode = (() => { try { return JSON.parse(h.metadata || '{}').mode || 'coder'; } catch { return 'coder'; } })();
                   return itemMode === mode;
                 });
@@ -1549,90 +2248,16 @@ Return JSON ONLY (no markdown code blocks, just raw json):
 
                 return items.map(item => (
                   <div key={item.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '10px 8px', borderBottom: '1px solid var(--surface2)', cursor: 'pointer', borderRadius: 8, transition: 'background 0.15s' }}
-                    onClick={() => {
-                      if (mapType === 'listen') {
-                        setListenText(item.content);
-                        try {
-                          const m = JSON.parse(item.metadata || '{}');
-                          setListenVi(m.vi || '');
-                          setListenVocab(m.vocab || []);
-                        } catch {
-                          setListenVi(''); setListenVocab([]);
-                        }
-                        setShowListenVi(false);
-                      } else if (mapType === 'speak') {
-                        setTranscript(item.content);
-                        setSpkRecordId(item.id);
-                        try {
-                          const m = JSON.parse(item.metadata || '{}');
-                          if (m.topic) setSpkTopic(m.topic);
-                          setSpkFeedback(m.feedback || '');
-                        } catch { /**/ }
-                      } else if (mapType === 'writing') {
-                        setWriteText(item.content);
-                        setWriteRecordId(item.id);
-                        try {
-                          const m = JSON.parse(item.metadata || '{}');
-                          if (m.prompt) setWritePrompt(m.prompt);
-                          setWriteFeedback(m.feedback || '');
-                        } catch { /**/ }
-                      } else if (mapType === 'vocab') {
-                        try {
-                          const m = JSON.parse(item.metadata || '{}');
-                          setTab('vocab'); // Chuyển/Giữ ở tab Từ vựng
-                          if (m.def) {
-                            // Nếu là từ lưu riêng lẻ, biến nó thành 1 bộ thẻ chỉ có 1 từ
-                            setCards([{
-                              word: item.content,
-                              def: m.def,
-                              ex: m.ex,
-                              vi: m.vi
-                            }]);
-                            setCardIdx(0);
-                            setFlipped(true); // Hiển thị mặt sau (thông tin) luôn
-                            setKnown([]);
-                          } else {
-                            // Nếu là nhóm từ (kiểu cũ)
-                            const parsed = JSON.parse(item.content);
-                            setCards(parsed); setCardIdx(0); setFlipped(false); setKnown([]);
-                          }
-                        } catch { /**/ }
-                      } else if (mapType === 'reading') {
-                        setReadRecordId(item.id);
-                        try { const m = JSON.parse(item.metadata || '{}'); setReadTopic(m.topic || ''); setReadLevel(m.level || 'B1'); setReadQuestions(m.questions || []); setReadAnswers([]); setReadSubmitted(false); setReadArticle({ title: m.title || '', body: item.content, wordCount: item.content.split(/\s+/).length }); } catch { /**/ }
-                        setReadSelected(''); setReadLookup(''); setReadChat([]);
-                      } else if (mapType === 'grammar') {
-                        setGrammarLesson(item.content);
-                        setGrammarRecordId(item.id);
-                        setGrammarSubmitted(false);
-                        try {
-                          const m = JSON.parse(item.metadata || '{}');
-                          if (m.topic) setGrammarTopic(m.topic);
-                          const ans: string[] = [];
-                          const ms = item.content.matchAll(/ANSWER:\s*([ABC])/g);
-                          for (const m of ms) ans.push(m[1]);
-                          setGrammarQuizAnswers(ans);
-                          setGrammarUserAnswers(ans.map(() => ''));
-                        } catch { /**/ }
-                      }
-                      window.scrollTo({ top: 0, behavior: 'smooth' });
-                    }}
+                    onClick={() => loadLesson(item)}
                     onMouseEnter={e => (e.currentTarget.style.background = 'var(--surface2)')}
                     onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
 
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontSize: 13, color: 'var(--text)', lineHeight: 1.5, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontWeight: 600 }}>
-                        {mapType === 'vocab' ? (() => {
-                          try {
-                            const m = JSON.parse(item.metadata || '{}');
-                            return item.content; // Hiển thị từ
-                          } catch {
-                            return item.content.slice(0, 60);
-                          }
-                        })()
-                          : (mapType === 'speak' || mapType === 'writing' || mapType === 'grammar') ? (() => { try { const m = JSON.parse(item.metadata || '{}'); return m.topic || m.prompt || item.content.slice(0, 50) || 'Dự án mới'; } catch { return item.content.slice(0, 50) || 'Dự án mới'; } })()
+                        {mapType === 'vocab' ? item.content : (
+                          (mapType === 'speak' || mapType === 'writing' || mapType === 'grammar') ? (() => { try { const m = JSON.parse(item.metadata || '{}'); return m.topic || m.prompt || item.content.slice(0, 50) || 'Bài học'; } catch { return item.content.slice(0, 50); } })()
                             : (mapType === 'reading') ? (() => { try { return JSON.parse(item.metadata || '{}').title; } catch { return item.content.slice(0, 50); } })()
-                              : item.content.slice(0, 60)}
+                              : item.content.slice(0, 60))}
                       </div>
                       <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 4, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                         <span>{new Date(item.createdAt).toLocaleString('vi')}</span>
@@ -1645,17 +2270,13 @@ Return JSON ONLY (no markdown code blocks, just raw json):
                                 {m.vi && <span style={{ fontSize: 10, color: 'var(--green)', fontStyle: 'italic' }}>• {m.vi}</span>}
                               </>
                             );
-                          } catch {
-                            return null;
-                          }
+                          } catch { return null; }
                         })()}
                         <span style={{
-                          padding: '1px 6px',
-                          borderRadius: 4,
+                          padding: '1px 6px', borderRadius: 4,
                           background: item.learnCount > 0 ? '#3fb95022' : 'var(--surface2)',
                           color: item.learnCount > 0 ? '#3fb950' : 'var(--muted)',
-                          fontWeight: 700,
-                          fontSize: 9
+                          fontWeight: 700, fontSize: 9
                         }}>
                           {item.learnCount > 0 ? `✓ Lần ${item.learnCount}` : '⏳ Chưa học'}
                         </span>
@@ -1663,7 +2284,7 @@ Return JSON ONLY (no markdown code blocks, just raw json):
                     </div>
 
                     <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
-                      {(mapType === 'speak' || mapType === 'writing' || mapType === 'reading' || mapType === 'grammar') && (
+                      {(mapType === 'speak' || mapType === 'writing' || mapType === 'reading' || mapType === 'grammar' || mapType === 'vocab') && (
                         <button onClick={(e) => { e.stopPropagation(); markLessonLearned(item.id); }} style={{ fontSize: 12, background: item.learnCount > 0 ? '#3fb95033' : 'var(--surface2)', border: '1px solid var(--border)', cursor: 'pointer', padding: '4px 8px', borderRadius: 6, color: item.learnCount > 0 ? '#3fb950' : 'var(--muted)', fontWeight: 700 }}>
                           ✓
                         </button>
@@ -1673,15 +2294,29 @@ Return JSON ONLY (no markdown code blocks, just raw json):
                           🔊
                         </button>
                       )}
-                      <button onClick={async (e) => {
-                        e.stopPropagation();
-                        await fetch('/api/english', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: item.id }) });
-                        loadHistory();
-                      }} style={{ fontSize: 12, color: '#f85149', background: '#f8514915', border: 'none', cursor: 'pointer', padding: '4px 8px', borderRadius: 6, transition: 'all 0.15s' }} onMouseEnter={e => { e.currentTarget.style.background = '#f8514930' }} onMouseLeave={e => { e.currentTarget.style.background = '#f8514915' }}>
-                        🗑
-                      </button>
+                      
+                      {deleteConfirmId === item.id ? (
+                        <button 
+                          onClick={async (e) => {
+                            e.stopPropagation();
+                            await fetch('/api/english', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: item.id }) });
+                            setDeleteConfirmId(null);
+                            loadHistory();
+                          }} 
+                          style={{ fontSize: 10, color: '#fff', background: '#f85149', border: 'none', cursor: 'pointer', padding: '4px 10px', borderRadius: 6, fontWeight: 900 }}
+                        >
+                          XÓA?
+                        </button>
+                      ) : (
+                        <button onClick={(e) => {
+                          e.stopPropagation();
+                          setDeleteConfirmId(item.id);
+                          setTimeout(() => setDeleteConfirmId(prev => prev === item.id ? null : prev), 3000);
+                        }} style={{ fontSize: 12, color: '#f85149', background: '#f8514915', border: 'none', cursor: 'pointer', padding: '4px 8px', borderRadius: 6, transition: 'all 0.15s' }} onMouseEnter={e => { e.currentTarget.style.background = '#f8514930' }} onMouseLeave={e => { e.currentTarget.style.background = '#f8514915' }}>
+                          🗑
+                        </button>
+                      )}
                     </div>
-
                   </div>
                 ));
               })()}

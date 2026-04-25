@@ -143,7 +143,7 @@ export function TimerProvider({ children }: { children: ReactNode }) {
   // Sync định kỳ và khi tab active
   useEffect(() => {
     sync();
-    const id = setInterval(sync, 5000); // Tăng tốc lên 5s một lần
+    const id = setInterval(sync, 5000);
     const handleVisible = () => { if (document.visibilityState === 'visible') sync(); };
     window.addEventListener('visibilitychange', handleVisible);
     return () => {
@@ -170,6 +170,21 @@ export function TimerProvider({ children }: { children: ReactNode }) {
         }),
       });
     } catch { /**/ }
+  }, []);
+
+  // Tự động chạy khi vào web lần đầu (nếu server không có phiên active)
+  useEffect(() => {
+    fetchLatest().then(data => {
+      const now = Date.now();
+      const serverEndTime = Number(data?.currentEndTime || 0);
+      if (serverEndTime <= now) {
+        setIsWork(true);
+        setSecs(WORK_MIN * 60);
+        setRunning(true);
+        saveState(true, true, undefined, WORK_MIN * 60);
+      }
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Countdown logic ổn định hơn

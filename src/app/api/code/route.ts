@@ -8,7 +8,7 @@ export async function GET() {
     const sessions = await prisma.codeSession.findMany({
       where: { userId: user.id },
       orderBy: { createdAt: 'desc' },
-      take: 100,
+      take: 5000,
     });
     return Response.json(sessions);
   } catch {

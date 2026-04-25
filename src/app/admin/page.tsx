@@ -37,6 +37,11 @@ export default function AdminPage() {
   const [targetUserName, setTargetUserName] = useState('');
   const [toUserLoading, setToUserLoading] = useState(false);
   const [toUserStatus, setToUserStatus] = useState('');
+  // Sync filter options
+  const [syncIncludeCode, setSyncIncludeCode] = useState(true);
+  const [syncIncludeEnglish, setSyncIncludeEnglish] = useState(true);
+  const [syncTracks, setSyncTracks] = useState<string[]>([]);   // empty = all tracks
+  const [syncEngTypes, setSyncEngTypes] = useState<string[]>([]); // empty = all types
 
   const load = useCallback(async () => {
     // ... load logic unchanged ...
@@ -136,14 +141,27 @@ export default function AdminPage() {
 
   async function syncToUser() {
     if (!targetUserName) return;
-    if (!confirm(`Bạn có muốn đồng bộ toàn bộ bài học Tiếng Anh của Admin sang cho người dùng "${targetUserName}" không?`)) return;
+    if (!syncIncludeCode && !syncIncludeEnglish) {
+      setToUserStatus('❌ Chọn ít nhất 1 loại nội dung để truyền');
+      return;
+    }
+    const types = [];
+    if (syncIncludeCode) types.push('code');
+    if (syncIncludeEnglish) types.push('english');
+    if (!confirm(`Truyền dữ liệu cho "${targetUserName}"?\n${syncIncludeCode ? `• Lập trình${syncTracks.length ? ': ' + syncTracks.join(', ') : ': tất cả ngôn ngữ'}` : ''}\n${syncIncludeEnglish ? `• Tiếng Anh${syncEngTypes.length ? ': ' + syncEngTypes.join(', ') : ': tất cả kỹ năng'}` : ''}`)) return;
     setToUserLoading(true);
     setToUserStatus('⏳ Đang xử lý...');
     try {
-      const res = await fetch('/api/admin/sync-english', {
+      const res = await fetch('/api/admin/sync-to-user', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ targetName: targetUserName })
+        body: JSON.stringify({
+          targetName: targetUserName,
+          includeCode: syncIncludeCode,
+          includeEnglish: syncIncludeEnglish,
+          tracks: syncTracks,
+          engTypes: syncEngTypes,
+        })
       });
       const data = await res.json();
       if (res.ok) {
@@ -156,7 +174,7 @@ export default function AdminPage() {
       setToUserStatus('❌ Lỗi kết nối server');
     }
     setToUserLoading(false);
-    setTimeout(() => setToUserStatus(''), 5000);
+    setTimeout(() => setToUserStatus(''), 6000);
   }
 
   async function checkLux() {
@@ -604,26 +622,79 @@ export default function AdminPage() {
 
           {/* CARD 4: SYNC ADMIN TO USER */}
           <div className="card" style={{ padding: '16px', marginTop: 24, border: '1px solid var(--green)33', background: 'rgba(63,185,80,0.05)' }}>
-            <div style={{ fontWeight: 800, fontSize: 13, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
-              📤 Gửi dữ liệu cho User
+            <div style={{ fontWeight: 800, fontSize: 13, marginBottom: 12 }}>📤 Gửi dữ liệu cho User</div>
+
+            {/* Loại nội dung */}
+            <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 8, fontWeight: 700 }}>Loại nội dung:</div>
+            <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
+              {[{ key: 'code', label: '💻 Lập trình', val: syncIncludeCode, set: setSyncIncludeCode },
+                { key: 'english', label: '🇬🇧 Tiếng Anh', val: syncIncludeEnglish, set: setSyncIncludeEnglish }
+              ].map(item => (
+                <button key={item.key} onClick={() => item.set(!item.val)}
+                  style={{ padding: '6px 14px', borderRadius: 8, border: '1px solid', fontSize: 12, fontWeight: 700, cursor: 'pointer',
+                    borderColor: item.val ? 'var(--green)' : 'var(--border)',
+                    background: item.val ? 'rgba(63,185,80,0.15)' : 'var(--surface2)',
+                    color: item.val ? 'var(--green)' : 'var(--muted)' }}>
+                  {item.val ? '✓ ' : ''}{item.label}
+                </button>
+              ))}
             </div>
-            <p style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 12 }}>
-              Sao chép toàn bộ bài học Tiếng Anh của <strong>Admin</strong> sang cho một người dùng cụ thể.
-            </p>
-            <div style={{ display: 'flex', gap: 10 }}>
-              <input 
-                type="text" 
-                placeholder="Tên người dùng mục tiêu..." 
-                value={targetUserName}
-                onChange={(e) => setTargetUserName(e.target.value)}
+
+            {/* Chọn ngôn ngữ lập trình */}
+            {syncIncludeCode && (
+              <div style={{ marginBottom: 12 }}>
+                <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 6, fontWeight: 700 }}>Ngôn ngữ (bỏ trống = tất cả):</div>
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  {['javascript','typescript','python','react','nextjs','nodejs','java','csharp','go','rust','cpp','php','dart','postgresql','git','docker','linux','dsa','system-design','oop','design-patterns','leetcode'].map(t => {
+                    const on = syncTracks.includes(t);
+                    return (
+                      <button key={t} onClick={() => setSyncTracks(on ? syncTracks.filter(x => x !== t) : [...syncTracks, t])}
+                        style={{ padding: '4px 10px', borderRadius: 6, border: '1px solid', fontSize: 11, fontWeight: 600, cursor: 'pointer',
+                          borderColor: on ? 'var(--accent)' : 'var(--border)',
+                          background: on ? '#58a6ff22' : 'transparent',
+                          color: on ? 'var(--accent)' : 'var(--muted)' }}>
+                        {t}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Chọn kỹ năng tiếng Anh */}
+            {syncIncludeEnglish && (
+              <div style={{ marginBottom: 12 }}>
+                <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 6, fontWeight: 700 }}>Kỹ năng (bỏ trống = tất cả):</div>
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  {[
+                    { id: 'listen', label: '🎧 Nghe' }, { id: 'speak', label: '🎤 Nói' },
+                    { id: 'writing', label: '✍️ Viết' }, { id: 'reading', label: '📖 Đọc' },
+                    { id: 'grammar', label: '📐 Ngữ pháp' }, { id: 'dict', label: '🔎 Từ điển' },
+                  ].map(item => {
+                    const on = syncEngTypes.includes(item.id);
+                    return (
+                      <button key={item.id} onClick={() => setSyncEngTypes(on ? syncEngTypes.filter(x => x !== item.id) : [...syncEngTypes, item.id])}
+                        style={{ padding: '4px 10px', borderRadius: 6, border: '1px solid', fontSize: 11, fontWeight: 600, cursor: 'pointer',
+                          borderColor: on ? '#d29922' : 'var(--border)',
+                          background: on ? '#d2992222' : 'transparent',
+                          color: on ? '#d29922' : 'var(--muted)' }}>
+                        {item.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Tên user + nút gửi */}
+            <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
+              <input type="text" placeholder="Tên người dùng mục tiêu..."
+                value={targetUserName} onChange={(e) => setTargetUserName(e.target.value)}
                 style={{ flex: 1, padding: '10px 12px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface2)', color: 'var(--text)', outline: 'none', fontSize: 12 }}
               />
-              <button 
-                onClick={syncToUser} 
-                disabled={toUserLoading || !targetUserName}
-                style={{ padding: '0 20px', borderRadius: 8, border: 'none', background: 'var(--green)', color: '#000', fontWeight: 800, fontSize: 12, cursor: 'pointer' }}
-              >
-                {toUserLoading ? '⏳' : 'GỬI NGAY'}
+              <button onClick={syncToUser} disabled={toUserLoading || !targetUserName}
+                style={{ padding: '0 20px', borderRadius: 8, border: 'none', background: 'var(--green)', color: '#000', fontWeight: 800, fontSize: 12, cursor: toUserLoading || !targetUserName ? 'not-allowed' : 'pointer', opacity: toUserLoading || !targetUserName ? 0.6 : 1 }}>
+                {toUserLoading ? '⏳' : '📤 GỬI'}
               </button>
             </div>
             {toUserStatus && <div style={{ fontSize: 11, color: toUserStatus.includes('✅') ? '#3fb950' : '#f85149', marginTop: 10, fontWeight: 600 }}>{toUserStatus}</div>}

@@ -32,6 +32,14 @@ const TRACKS = [
   { id: 'powerbi', label: '📈 Power BI', color: '#F2CC0C' },
   {id: 'ai-ml', label: '🧠 AI/ML', color: '#7f52ff' },
   {id: 'langchain', label: '🦜 LangChain', color: '#00add8' },
+  {id: 'fullstack', label: '🌐 Fullstack Web', color: '#22c55e' },
+  {id: 'dsa', label: '🧩 Giải thuật & CTDL', color: '#facc15' },
+  {id: 'system-design', label: '🏛️ System Design', color: '#a78bfa' },
+  {id: 'oop', label: '🎯 OOP & SOLID', color: '#f472b6' },
+  {id: 'design-patterns', label: '🧱 Design Patterns', color: '#60a5fa' },
+  {id: 'sql-interview', label: '📝 SQL Phỏng vấn', color: '#34d399' },
+  {id: 'leetcode', label: '💼 LeetCode Top', color: '#fb923c' },
+  {id: 'behavioral', label: '🗣️ Phỏng vấn HR', color: '#94a3b8' },
 ];
 
 const TRACK_INFO: Record<string, { desc: string, core: string, use: string }> = {
@@ -62,7 +70,15 @@ const TRACK_INFO: Record<string, { desc: string, core: string, use: string }> = 
   'excel-vba': { desc: "Tự động hóa trên Microsoft Excel", core: "Macros, Scripts, Office Automation", use: "Xử lý dữ liệu văn phòng, báo cáo tự động" },
   'powerbi': { desc: "Công cụ phân tích dữ liệu kinh doanh", core: "DAX, Data Modeling, Visualization", use: "Tạo báo cáo, Dashboard phân tích dữ liệu" },
   'ai-ml': { desc: "Trí tuệ nhân tạo và Máy học", core: "Models, Training, Neural Networks, Inference", use: "Nhận diện hình ảnh, chatbot, dự đoán dữ liệu" },
-  'langchain': { desc: "Công cụ xây dựng ứng dụng với LLM", core: "Chains, Agents, Vector DBs, Prompt Engineering", use: "Xây dựng ứng dụng tích hợp AI chuyên sâu" }
+  'langchain': { desc: "Công cụ xây dựng ứng dụng với LLM", core: "Chains, Agents, Vector DBs, Prompt Engineering", use: "Xây dựng ứng dụng tích hợp AI chuyên sâu" },
+  'fullstack': { desc: "Lộ trình xây ứng dụng web hoàn chỉnh", core: "HTML/CSS → JS/TS → React → Next.js → Node/API → PostgreSQL → Auth → Deploy", use: "Tự build app fullstack từ A-Z, đi xin việc Web Developer" },
+  'dsa': { desc: "Giải thuật & Cấu trúc dữ liệu — bắt buộc khi phỏng vấn", core: "Array, String, HashMap, Stack/Queue, Tree, Graph, DP, Big-O", use: "Pass vòng coding interview ở mọi công ty" },
+  'system-design': { desc: "Thiết kế hệ thống quy mô lớn", core: "Scalability, Load Balancer, Cache, DB sharding, Queue, CAP", use: "Phỏng vấn vị trí Mid/Senior, kiến trúc backend" },
+  'oop': { desc: "Lập trình hướng đối tượng & nguyên lý SOLID", core: "Encapsulation, Inheritance, Polymorphism, Abstraction, SOLID", use: "Câu hỏi nền tảng phỏng vấn mọi vị trí dev" },
+  'design-patterns': { desc: "Mẫu thiết kế kinh điển trong lập trình", core: "Singleton, Factory, Observer, Strategy, Decorator, MVC", use: "Viết code chuyên nghiệp, trả lời câu hỏi senior" },
+  'sql-interview': { desc: "SQL chuyên sâu cho phỏng vấn", core: "JOIN, GROUP BY, Window Functions, Subquery, Index, N+1", use: "Phỏng vấn Backend, Data Engineer, Analyst" },
+  'leetcode': { desc: "Bài tập LeetCode thường gặp", core: "Two Pointers, Sliding Window, BFS/DFS, Binary Search, DP", use: "Luyện coding interview FAANG/Big Tech" },
+  'behavioral': { desc: "Câu hỏi hành vi & soft-skill khi phỏng vấn", core: "STAR method, Conflict, Teamwork, Leadership, Tell me about yourself", use: "Pass vòng HR / Manager, deal lương" }
 };
 
 export default function LearnMain() {
@@ -87,12 +103,17 @@ export default function LearnMain() {
   const [codeSessions, setCodeSessions] = useState<any[]>([]);
   const contentRef = useRef<HTMLDivElement>(null);
   const [aiModel, setAiModel] = useState('default');
+  const [batchRunning, setBatchRunning] = useState(false);
+  const [batchProgress, setBatchProgress] = useState('');
+  const batchStopRef = useRef(false);
   const [isMounted, setIsMounted] = useState(false);
   const [isReading, setIsReading] = useState(false);
+  const [isLooping, setIsLooping] = useState(false);
   const [ttsProvider, setTtsProvider] = useState<'google' | 'edge' | 'piper' | 'luxtts' | 'browser'>('edge');
   const [edgeVoice, setEdgeVoice] = useState<string>('vi-VN-HoaiMyNeural');
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const stopReadingRef = useRef(false);
+  const isLoopingRef = useRef(false);
   const readingIdRef = useRef(0);
   const abortControllerRef = useRef<AbortController | null>(null);
 
@@ -217,39 +238,42 @@ export default function LearnMain() {
     }
   }
 
-  async function genLesson() {
-    setLoading(true); setCurrent(null); setQuizMode(false); setQuizAnswers([]); setUserAnswers([]); setQuizSubmitted(false);
+  function buildLessonPrompt(targetTrack: string, curriculumStr: string) {
+    return `Bạn là cô giáo Hoài My — giảng lập trình bằng giọng nhẹ nhàng, thủ thỉ. Ưu tiên NGẮN GỌN, DỄ HIỂU. Không lan man.
+    Hãy tạo bài học về ${TRACKS.find(t=>t.id===targetTrack)?.label || targetTrack}.${curriculumStr}
 
-    // Lấy TẤT CẢ bài trong track này theo đúng thứ tự học để AI biết người học đang ở đâu
-    const existingTopics = lessons
-      .filter(l => l.track === track)
-      .sort((a, b) => a.order - b.order || a.id - b.id)
-      .map(l => l.topic);
+    Quy tắc:
+    - MỌI từ tiếng Anh (tên hàm, biến, thuật ngữ) PHẢI bọc backtick \`...\` để hệ thống đọc bằng giọng Anh. Ví dụ: \`match()\`, \`userName\`, \`Array\`.
+    - KHÔNG viết phiên âm tiếng Việt cho từ Anh.
+    - Khi gặp thuật ngữ mới, kèm 1 ví dụ đời thường ngắn trong ngoặc. Ví dụ: "\`array\` (giống dãy hộp xếp cạnh nhau)".
+    - Câu ngắn, dễ hiểu, không sáo rỗng. Dùng "nhé", "mình cùng...", "bạn thấy không" vừa đủ, không lạm dụng.
 
-    const curriculumStr = existingTopics.length > 0
-      ? `\n\nNgười học đã học các bài sau theo thứ tự (từ cũ → mới nhất):\n${existingTopics.map((t, i) => `${i + 1}. ${t}`).join('\n')}\n\nHãy chọn CHỦ ĐỀ TIẾP THEO hợp lý theo lộ trình từ cơ bản → nâng cao, nối tiếp kiến thức từ các bài trên. Chủ đề mới phải:\n- Không trùng với bất kỳ bài nào ở trên.\n- Là bước kế tiếp tự nhiên về độ khó (không nhảy cóc sang khái niệm quá nâng cao nếu chưa có nền tảng).\n- Nếu các bài trên đã bao quát cơ bản, hãy tiến sang khái niệm trung cấp/nâng cao.`
-      : `\n\nĐây là bài ĐẦU TIÊN của người học. Hãy bắt đầu từ khái niệm cốt lõi, nền tảng nhất của ${TRACKS.find(t=>t.id===track)?.label || track}.`;
+    Format bài học (NGẮN, GỌN):
 
-    const prompt = `Bạn là một giáo viên lập trình tận tâm, có khả năng biến những khái niệm phức tạp thành đơn giản.
-    Hãy tạo một bài học về ${TRACKS.find(t=>t.id===track)?.label || track} theo lộ trình học có hệ thống.${curriculumStr}
-    Hãy dẫn dắt người học bằng cách bổ sung các khái niệm căn bản trước khi vào ví dụ code.
-
-    Format bài học như sau:
-
-    # [Tên chủ đề/khái niệm]
+    # [Tên chủ đề]
 
     ## 🎯 Mục tiêu
-    [Mô tả ngắn gọn giá trị của bài học này đối với người học]
+    [1-2 câu nói bài này giúp gì.]
 
     ## 💡 Khái niệm cốt lõi
-    [Giải thích các thuật ngữ/nguyên lý căn bản liên quan bằng ngôn ngữ dễ hiểu, dùng ví dụ thực tế nếu có thể. Khoảng 4-6 câu]
+    [3-5 câu ngắn, giải thích thuật ngữ chính + 1 ví dụ đời thường.]
 
-    ## 📖 Giải thích chi tiết
-    [Giải thích cách vận hành và các quy tắc cần nhớ. Ngắn gọn, súc tích]
+    ## 📖 Cách dùng
+    [Dẫn dắt ngắn gọn. Nếu có nhiều bước thì mỗi bước là heading cấp 3:
 
-    ## 💻 Ví dụ code minh họa
+    ### Bước 1: [tên bước]
+
+    [1-2 câu.]
+
+    ### Bước 2: [tên bước]
+
+    [1-2 câu.]
+
+    Không gộp nhiều bước vào 1 đoạn, không dùng **bold** thay heading.]
+
+    ## 💻 Ví dụ code
     \`\`\`
-    [Code ví dụ rõ ràng, sạch sẽ, có comment tiếng Việt giải thích từng bước quan trọng]
+    [Code NGẮN (5-10 dòng), rõ ràng, có comment tiếng Việt cuối dòng giải thích ngắn.]
     \`\`\`
 
     ## 🧠 Quiz (3 câu)
@@ -268,51 +292,133 @@ export default function LearnMain() {
 
     ## 🚀 Thực hành
     [1 bài tập nhỏ để người học tự tay gõ code và kiểm tra kiến thức]`;
+  }
 
+  // Lõi: tạo + lưu 1 bài cho track chỉ định. Trả về lesson đã lưu hoặc thông báo lỗi.
+  async function buildAndSaveLesson(targetTrack: string, snapshot: Lesson[]): Promise<{ saved?: Lesson; error?: string; duplicate?: boolean }> {
+    const existingTopics = snapshot
+      .filter(l => l.track === targetTrack)
+      .sort((a, b) => a.order - b.order || a.id - b.id)
+      .map(l => l.topic);
+    const ROADMAPS: Record<string, string> = {
+      'fullstack': '1) HTML cơ bản → 2) CSS (Flexbox, Grid) → 3) JavaScript nền tảng (biến, hàm, DOM, event, async/await, fetch) → 4) TypeScript cơ bản → 5) React (components, props, state, hooks, useEffect) → 6) React nâng cao (context, custom hook, form) → 7) Next.js (App Router, layout, Server/Client Component) → 8) Next.js API routes, Server Actions → 9) Node.js (runtime, npm, module) → 10) REST API thiết kế → 11) PostgreSQL cơ bản → 12) Prisma ORM → 13) Auth (JWT, session) → 14) Deploy (Vercel, Docker) → 15) Best practice (env, error handling, testing)',
+      'html-css': '1) Cấu trúc HTML, thẻ ngữ nghĩa → 2) Form, input, validate → 3) CSS selector, specificity → 4) Box model, position → 5) Flexbox → 6) Grid → 7) Responsive, media query → 8) Animation, transition → 9) Pseudo-class/element → 10) CSS variable, dark mode → 11) Accessibility (a11y) → 12) Tailwind/utility-first',
+      'javascript': '1) Biến, kiểu dữ liệu → 2) Toán tử, điều kiện → 3) Vòng lặp → 4) Hàm, scope, closure → 5) Array & method (map/filter/reduce) → 6) Object, destructuring → 7) ES6 (let/const, arrow, spread) → 8) DOM, event → 9) Async/await, Promise → 10) Fetch API → 11) Module (import/export) → 12) Error handling → 13) Class & OOP → 14) Iterator/Generator',
+      'typescript': '1) Type cơ bản → 2) Interface vs Type → 3) Union, Intersection → 4) Generic → 5) Utility Type (Partial, Pick, Omit) → 6) Type guard, narrowing → 7) Enum, Literal → 8) Module/namespace → 9) tsconfig → 10) Generic constraint → 11) Mapped/Conditional Type → 12) Decorator',
+      'react': '1) JSX, component → 2) Props → 3) State (useState) → 4) Event → 5) List & key → 6) useEffect → 7) Form & controlled input → 8) Conditional render → 9) Lifting state → 10) Context API → 11) useReducer → 12) useMemo, useCallback → 13) Custom hook → 14) React Router → 15) Performance',
+      'nextjs': '1) Cài đặt, App Router → 2) Page & layout → 3) Routing động → 4) Server vs Client Component → 5) Data fetching (fetch, cache) → 6) Server Action → 7) API route → 8) Middleware → 9) Image, Font optimization → 10) Metadata, SEO → 11) Auth (next-auth) → 12) Deploy Vercel',
+      'nodejs': '1) Runtime, REPL, module → 2) NPM, package.json → 3) FS, path → 4) HTTP server → 5) Express setup → 6) Routing, middleware → 7) REST API → 8) Body parser, validation → 9) Database (Prisma/Sequelize) → 10) Auth (JWT) → 11) Error handling → 12) Test (Jest) → 13) Deploy',
+      'python': '1) Biến, kiểu → 2) Điều kiện, vòng lặp → 3) Hàm, *args/**kwargs → 4) List, Tuple, Dict, Set → 5) String method → 6) File I/O → 7) Module, package → 8) Class, OOP → 9) Exception → 10) Decorator → 11) Generator, comprehension → 12) Async/await → 13) Type hint → 14) Virtualenv, pip',
+      'fastapi': '1) Cài đặt, hello world → 2) Path & query param → 3) Pydantic model → 4) Request body → 5) Response model → 6) Dependency injection → 7) Auth (OAuth2, JWT) → 8) DB (SQLAlchemy) → 9) Async endpoint → 10) Background task → 11) Middleware, CORS → 12) Test → 13) Deploy',
+      'java': '1) Biến, kiểu → 2) Điều kiện, vòng lặp → 3) Mảng → 4) Method → 5) Class, object → 6) Kế thừa, đa hình → 7) Interface, abstract → 8) Collection (List, Map, Set) → 9) Generic → 10) Exception → 11) File I/O → 12) Stream API → 13) Multithreading → 14) Maven/Gradle',
+      'kotlin': '1) Biến (val/var) → 2) Null safety → 3) Hàm, lambda → 4) Class, data class → 5) Inheritance, sealed → 6) Collection → 7) Extension function → 8) Coroutines → 9) Flow → 10) Scope function → 11) DSL → 12) Android cơ bản',
+      'csharp': '1) Biến, kiểu → 2) Điều kiện, vòng lặp → 3) Method → 4) Class, OOP → 5) Property, indexer → 6) Inheritance, interface → 7) Generic → 8) Collection (List, Dictionary) → 9) LINQ → 10) Async/await → 11) Exception → 12) File I/O → 13) Delegate, event → 14) .NET Core',
+      'cpp': '1) Biến, kiểu, I/O → 2) Điều kiện, vòng lặp → 3) Hàm → 4) Mảng, string → 5) Pointer → 6) Reference → 7) Class, OOP → 8) Constructor, destructor → 9) Operator overload → 10) Template → 11) STL (vector, map, set) → 12) Smart pointer → 13) Memory → 14) Modern C++ (11/17/20)',
+      'go': '1) Biến, kiểu → 2) Điều kiện, vòng lặp → 3) Function → 4) Struct, method → 5) Interface → 6) Slice, map → 7) Pointer → 8) Goroutine → 9) Channel → 10) Error handling → 11) Module → 12) HTTP server (net/http) → 13) Test → 14) Concurrency pattern',
+      'rust': '1) Biến, kiểu → 2) Ownership → 3) Borrow, lifetime → 4) Struct, enum → 5) Pattern matching → 6) Trait → 7) Generic → 8) Collection (Vec, HashMap) → 9) Error (Result, Option) → 10) Iterator → 11) Module → 12) Cargo → 13) Async → 14) Concurrency (thread, channel)',
+      'postgresql': '1) Cài đặt, psql → 2) CREATE TABLE, kiểu dữ liệu → 3) INSERT/UPDATE/DELETE → 4) SELECT, WHERE → 5) JOIN (INNER, LEFT, RIGHT) → 6) GROUP BY, HAVING → 7) Subquery → 8) Index → 9) Constraint, FK → 10) Transaction → 11) View, CTE → 12) Window function → 13) JSON, Array → 14) Performance',
+      'mssql': '1) SSMS, T-SQL → 2) CREATE TABLE → 3) CRUD → 4) JOIN → 5) GROUP BY → 6) Subquery, CTE → 7) Stored procedure → 8) Function → 9) Trigger → 10) Index → 11) Transaction → 12) Window function → 13) Performance tuning',
+      'git': '1) init, status → 2) add, commit → 3) log, diff → 4) branch, checkout → 5) merge → 6) rebase → 7) remote, push, pull → 8) clone, fork → 9) Conflict → 10) Stash → 11) Tag, release → 12) Reset, revert → 13) Cherry-pick → 14) Workflow (GitFlow, trunk)',
+      'api': '1) HTTP cơ bản (method, status) → 2) REST nguyên tắc → 3) JSON → 4) URL design (resource) → 5) Query/path/body param → 6) Header, content-type → 7) Auth (Basic, Bearer, JWT) → 8) CORS → 9) Pagination, filter → 10) Versioning → 11) Error format → 12) OpenAPI/Swagger → 13) Rate limit → 14) Webhook',
+      'docker': '1) Khái niệm container vs VM → 2) Image, layer → 3) docker run, ps → 4) Dockerfile → 5) Build & tag → 6) Volume → 7) Network → 8) docker-compose → 9) Multi-stage build → 10) Env, secret → 11) Registry → 12) Best practice (size, cache) → 13) Healthcheck → 14) Deploy',
+      'linux': '1) Cấu trúc thư mục → 2) ls, cd, pwd → 3) cp, mv, rm → 4) chmod, chown → 5) cat, less, grep → 6) Pipe, redirect → 7) find, xargs → 8) Process (ps, kill) → 9) systemd → 10) SSH → 11) Bash variable, condition, loop → 12) Function, script → 13) cron → 14) Package manager (apt/yum)',
+      'dsa': '1) Big-O, độ phức tạp → 2) Array → 3) String → 4) Hash Map/Set → 5) Two pointer → 6) Sliding window → 7) Stack → 8) Queue → 9) Linked list → 10) Recursion → 11) Binary search → 12) Sorting → 13) Tree, BST → 14) Heap → 15) Graph (BFS/DFS) → 16) Dijkstra → 17) Dynamic Programming → 18) Greedy → 19) Backtracking → 20) Trie',
+      'system-design': '1) Client-Server, request flow → 2) Scalability (vertical/horizontal) → 3) Load Balancer → 4) Caching (Redis, CDN) → 5) Database (SQL vs NoSQL) → 6) Sharding, replication → 7) Message Queue (Kafka, RabbitMQ) → 8) CAP theorem → 9) Consistency model → 10) Microservice vs monolith → 11) API gateway → 12) Rate limit → 13) Search (Elasticsearch) → 14) Design URL shortener → 15) Design Twitter → 16) Design chat app → 17) Design YouTube → 18) Design Uber',
+      'oop': '1) Class & object → 2) Encapsulation → 3) Constructor, this → 4) Inheritance → 5) Polymorphism (override, overload) → 6) Abstraction, abstract class → 7) Interface → 8) Composition vs inheritance → 9) SOLID — Single Responsibility → 10) SOLID — Open/Closed → 11) SOLID — Liskov → 12) SOLID — Interface Segregation → 13) SOLID — Dependency Inversion → 14) Coupling vs Cohesion',
+      'design-patterns': '1) Singleton → 2) Factory → 3) Abstract Factory → 4) Builder → 5) Prototype → 6) Adapter → 7) Decorator → 8) Facade → 9) Proxy → 10) Composite → 11) Observer → 12) Strategy → 13) Command → 14) State → 15) Template Method → 16) Iterator → 17) Mediator → 18) MVC, MVVM',
+      'sql-interview': '1) SELECT, WHERE, ORDER BY → 2) JOIN (INNER, LEFT, RIGHT, FULL) → 3) GROUP BY, HAVING → 4) Aggregate (COUNT, SUM, AVG) → 5) Subquery vs JOIN → 6) EXISTS vs IN → 7) UNION vs UNION ALL → 8) Window function (ROW_NUMBER, RANK, LAG) → 9) CTE, recursive CTE → 10) Index, EXPLAIN → 11) Transaction, ACID → 12) Isolation level → 13) N+1 problem → 14) Pivot, unpivot → 15) Tìm bản ghi thứ N',
+      'leetcode': '1) Two Sum (HashMap) → 2) Valid Parentheses (Stack) → 3) Reverse Linked List → 4) Merge Two Sorted Lists → 5) Best Time to Buy Sell Stock → 6) Valid Anagram → 7) Binary Search → 8) Maximum Subarray (Kadane) → 9) Climbing Stairs (DP) → 10) Longest Substring Without Repeating (Sliding Window) → 11) 3Sum (Two Pointer) → 12) Container With Most Water → 13) Group Anagrams → 14) Tree DFS/BFS → 15) Number of Islands (Graph) → 16) Course Schedule (Topo sort) → 17) Coin Change (DP) → 18) Word Break → 19) Trie problems → 20) Backtracking (N-Queens, Permutation)',
+      'behavioral': '1) Tell me about yourself → 2) STAR method (Situation, Task, Action, Result) → 3) Why this company? → 4) Strengths & weaknesses → 5) Conflict với đồng nghiệp → 6) Failure & lesson → 7) Tight deadline → 8) Disagree với sếp → 9) Lead a project → 10) Feedback (cho và nhận) → 11) Why leave current job? → 12) Salary negotiation → 13) Question to ask interviewer → 14) Long-term goal → 15) Khi không đồng ý technical decision',
+    };
+    const roadmap = ROADMAPS[targetTrack];
+    const roadmapHint = roadmap
+      ? `\n\nLỘ TRÌNH ${TRACKS.find(t=>t.id===targetTrack)?.label || targetTrack} (bám sát thứ tự này, mỗi bài tập trung 1 chủ đề nhỏ — đi đúng theo BẢN CHẤT vấn đề từ nền tảng → nâng cao):\n${roadmap}.\n\nNẾU là bài đầu: chọn bước 1. Các bài sau bám sát thứ tự trên, MỖI BÀI CHỈ MỘT CHỦ ĐỀ NHỎ. KHÔNG nhảy cóc.`
+      : '';
+    const curriculumStr = existingTopics.length > 0
+      ? `\n\nNgười học đã học các bài sau theo thứ tự (từ cũ → mới nhất):\n${existingTopics.map((t, i) => `${i + 1}. ${t}`).join('\n')}\n\nHãy chọn CHỦ ĐỀ TIẾP THEO hợp lý theo lộ trình từ cơ bản → nâng cao, nối tiếp kiến thức từ các bài trên. Chủ đề mới phải:\n- Không trùng với bất kỳ bài nào ở trên.\n- Là bước kế tiếp tự nhiên về độ khó.\n- Nếu đã bao quát cơ bản, tiến sang trung cấp/nâng cao.${roadmapHint}`
+      : `\n\nĐây là bài ĐẦU TIÊN của người học. Hãy bắt đầu từ khái niệm cốt lõi, nền tảng nhất của ${TRACKS.find(t=>t.id===targetTrack)?.label || targetTrack}.${roadmapHint}`;
+    const prompt = buildLessonPrompt(targetTrack, curriculumStr);
+    const res = await fetch('/api/ai', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: aiModel, messages: [{ role: 'user', content: prompt }] }),
+    });
+    if (!res.ok) return { error: 'AI không phản hồi' };
+    const data = await res.json();
+    const content = data.choices?.[0]?.message?.content;
+    if (!content) return { error: 'AI trả về rỗng' };
+    const titleMatch = content.match(/^#\s+(.+)/m);
+    const topic = titleMatch ? titleMatch[1].trim() : `${targetTrack} - ${new Date().toISOString().slice(0, 10)}`;
+    const saveRes = await fetch('/api/lessons', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ topic, content, track: targetTrack }),
+    });
+    if (!saveRes.ok) return { error: 'Lỗi lưu bài học' };
+    const saved = await saveRes.json();
+    if (!saved?.content) return { error: 'Lỗi lưu bài' };
+    return { saved, duplicate: !!saved.duplicate };
+  }
+
+  async function genLesson() {
+    setLoading(true); setCurrent(null); setQuizMode(false); setQuizAnswers([]); setUserAnswers([]); setQuizSubmitted(false);
     try {
-      const res = await fetch('/api/ai', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ model: aiModel, messages: [{ role: 'user', content: prompt }] }),
-      });
-      if (!res.ok) { setError('AI không phản hồi'); setLoading(false); return; }
-      const data = await res.json();
-      const content = data.choices?.[0]?.message?.content;
-      if (!content) { setError('AI trả về rỗng'); setLoading(false); return; }
-
-      // Lấy tên chủ đề từ dòng đầu
-      const titleMatch = content.match(/^#\s+(.+)/m);
-      const topic = titleMatch ? titleMatch[1].trim() : `${track} - ${new Date().toISOString().slice(0,10)}`;
-
-      // Lưu vào DB lessons
-      const saveRes = await fetch('/api/lessons', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ topic, content, track }),
-      });
-      if (!saveRes.ok) { setError('Lỗi lưu bài học'); setLoading(false); return; }
-      const saved = await saveRes.json();
-      if (!saved.content) { setError('Lỗi lưu bài'); setLoading(false); return; }
-      if (saved.duplicate) {
-        setError(`⚠️ AI tạo trùng bài "${topic}" - thử lại để tạo bài mới khác`);
-        setCurrent(saved);
-        setLoading(false);
-        return;
+      const r = await buildAndSaveLesson(track, lessons);
+      if (r.error) { setError(r.error); setLoading(false); return; }
+      if (r.saved) {
+        if (r.duplicate) setError(`⚠️ AI tạo trùng bài "${r.saved.topic}" - thử lại để tạo bài mới khác`);
+        else setError(null);
+        setCurrent(r.saved);
+        const answers: string[] = [];
+        for (const m of r.saved.content.matchAll(/ĐÁPÁN:([ABC])/g)) answers.push(m[1]);
+        setQuizAnswers(answers);
+        setUserAnswers(answers.map(() => ''));
+        await load();
       }
-      setCurrent(saved);
-      setError(null);
-
-      // Parse quiz answers
-      const answers: string[] = [];
-      const answerMatches = content.matchAll(/ĐÁPÁN:([ABC])/g);
-      for (const m of answerMatches) answers.push(m[1]);
-      setQuizAnswers(answers);
-      setUserAnswers(answers.map(() => ''));
-
-      await load();
-      setLoading(false);
     } catch (e) {
       setError('Lỗi: ' + String(e));
+    } finally {
       setLoading(false);
     }
+  }
+
+  async function genBatch() {
+    if (batchRunning) { batchStopRef.current = true; return; }
+    setBatchRunning(true);
+    batchStopRef.current = false;
+    setError(null);
+
+    // Lấy snapshot mới nhất từ server để tránh stale state
+    let snapshot: Lesson[] = await fetch('/api/lessons').then(r => r.ok ? r.json() : []).catch(() => []);
+    const MAX = 10;
+    let made = 0;
+    const failures: string[] = [];
+
+    const currentTrack = TRACKS.find(t => t.id === track) || TRACKS[0];
+    let attempts = 0;
+    const MAX_ATTEMPTS = MAX * 3;
+    while (made < MAX && !batchStopRef.current && attempts < MAX_ATTEMPTS) {
+      attempts++;
+      setBatchProgress(`${made + 1}/${MAX} — ${currentTrack.label}`);
+      try {
+        const r = await buildAndSaveLesson(currentTrack.id, snapshot);
+        if (r.saved && !r.duplicate) {
+          snapshot = [...snapshot, r.saved];
+          made++;
+        } else if (r.duplicate) {
+          failures.push(`lần ${attempts}: trùng`);
+        } else if (r.error) {
+          failures.push(`lần ${attempts}: ${r.error}`);
+        }
+      } catch (e) {
+        failures.push(`lần ${attempts}: ${String(e)}`);
+      }
+    }
+
+    await load();
+    setBatchRunning(false);
+    setBatchProgress('');
+    if (batchStopRef.current) setError(`⏸ Đã dừng sau ${made} bài.`);
+    else if (failures.length) setError(`✅ Tạo ${made} bài. ⚠️ Bỏ qua: ${failures.join('; ')}`);
+    else setError(`✅ Đã tạo ${made} bài.`);
   }
 
   function submitQuiz() {
@@ -432,36 +538,159 @@ ${codeInput}` }] }),
     stopReadingRef.current = false;
     const sessionId = ++readingIdRef.current;
 
-    // 1. Chuẩn bị text
+    // 1. Chuẩn bị text — tách code block riêng để đọc từng dòng bằng giọng Anh
+    type TTSChunk = { text: string; lang: 'vi' | 'en' };
     const contentWithoutQuiz = current.content.replace(/## 🧠 Quiz[\s\S]*/, '');
-    const processedText = contentWithoutQuiz
-      .replace(/```(\w*)\n([\s\S]*?)```/g, (_, lang) => ` . Đoạn code ${lang || ''} . `)
+    const stripEmoji = (s: string) => s.replace(/([\u2700-\u27BF]|[\uE000-\uF8FF]|\uD83C[\uDC00-\uDFFF]|\uD83D[\uDC00-\uDFFF]|[\u2011-\u26FF]|\uD83E[\uDD10-\uDDFF])/g, '');
+    const cleanVi = (t: string) => stripEmoji(t)
       .replace(/#{1,6}\s/g, ' . ')
-      .replace(/[`*_\-]/g, ' ')
-      .replace(/([\u2700-\u27BF]|[\uE000-\uF8FF]|\uD83C[\uDC00-\uDFFF]|\uD83D[\uDC00-\uDFFF]|[\u2011-\u26FF]|\uD83E[\uDD10-\uDDFF])/g, '')
+      .replace(/[*_\-]/g, ' ')
       .replace(/\s+/g, ' ')
       .trim();
+    const ensureEnd = (t: string) => /[.!?,:;]$/.test(t) ? t : t + '.';
+    const VI_DIACRITIC = /[àáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđÀÁẠẢÃÂẦẤẬẨẪĂẰẮẶẲẴÈÉẸẺẼÊỀẾỆỂỄÌÍỊỈĨÒÓỌỎÕÔỒỐỘỔỖƠỜỚỢỞỠÙÚỤỦŨƯỪỨỰỬỮỲÝỴỶỸĐ]/;
+    // Wordlist từ Việt không dấu phổ biến — gặp token nào trong đây thì TUYỆT ĐỐI không đọc bằng giọng Anh
+    const VI_BARE_WORDS = new Set([
+      // Đại từ, danh xưng
+      'toi','tao','tau','minh','ban','cau','em','anh','chi','ong','ba','co','chu','cau','cha','me','con','no','ho','chung','nguoi','ai','nao','dau',
+      // Liên từ, giới từ, trạng từ
+      'la','va','thi','hay','hoac','nhung','ma','roi','con','cua','cho','den','di','ve','o','tai','tren','duoi','trong','ngoai','cung','voi','qua','sang','sau','truoc','giua','gan','xa','nhu','neu','khi','luc','hom','hien','nay','do','kia','ay','vay','sao','the','chi','luon','van','da','dang','se','vua','moi','chua','khong','chang','chi','cung','them','nua','rat','hoi','lam','qua','het','ca','moi','tat','mot','nhieu','it','vai',
+      // Động từ
+      'co','duoc','bi','phai','can','muon','nen','hay','lam','noi','doc','viet','nghe','nhin','xem','hoc','choi','an','uong','di','den','ve','ra','vao','len','xuong','nhau','gap','tim','thay','biet','hieu','nho','quen','yeu','thich','ghet','so','cuoi','khoc','song','chet','ngu','thuc','dung','ngoi','nam','chay','nhay','mua',
+      // Số đếm
+      'mot','hai','ba','bon','nam','sau','bay','tam','chin','muoi','tram','ngan','nghin','trieu','ty','von',
+      // Tính từ thường
+      'tot','xau','dep','hay','de','kho','nhanh','cham','lon','nho','cao','thap','rong','hep','dai','ngan','day','mong','nang','nhe','xanh','do','vang','trang','den','hong','tim','nau','xam','sach','ban','moi','cu','gia','tre','giau','ngheo','vui','buon','gian','hien','du','hien','nhieu','it',
+      // Thời gian
+      'gio','phut','giay','tuan','thang','nam','ngay','dem','sang','trua','chieu','toi','hom','nay','mai','kia','qua','xua','sau','truoc',
+      // Danh từ phổ biến
+      'nha','cua','xe','cay','hoa','la','nuoc','com','ban','ghe','sach','but','may','tay','chan','mat','tai','mui','mieng','rang','luoi','dau','co','tim','phoi','bung','da','long','toc','mat','troi','trang','sao','mua','nang','gio','bao','song','nui','bien','song','ho','suoi','duong','pho','xom','lang','xa','huyen','tinh','nuoc','que','viet','nam',
+      // Món ăn / vật phẩm VN
+      'banh','pho','bun','mien','chao','xoi','com','canh','tra','ca','phe','sua','duong','muoi','tieu','ot','toi','hanh','rau','thit','ga','heo','bo','tom','cua','ca','trung',
+      // Liên từ/giới thiệu lesson
+      'vi','du','nghia','cach','cach','khac','tuy','nhien','tuc','la','noi','chung','tom','lai','ket','luan','mat','khac','dieu','kien','tren','duoi','giua','dau','cuoi','phan','chuong','muc','bai',
+    ]);
+    // Whitelist thuật ngữ lập trình phổ biến (chữ thường, tránh nhầm với từ Việt)
+    const EN_WHITELIST = new Set([
+      'docker','container','image','volume','bridge','host','network','port','compose','dockerfile',
+      'kubernetes','pod','node','cluster','deployment','service','ingress','namespace',
+      'javascript','typescript','python','java','react','nextjs','nodejs','express','vue','angular',
+      'function','method','variable','class','object','array','string','boolean','promise','callback',
+      'async','await','import','export','const','let','default','return','null','undefined','true','false',
+      'component','state','props','hook','effect','context','reducer','store','router','route',
+      'api','url','uri','http','https','json','xml','html','css','sql','ssh','tcp','udp','dns','cdn','cli','sdk',
+      'database','table','schema','model','migration','query','select','insert','update','delete',
+      'server','client','backend','frontend','middleware','request','response','header','cookie','session','token',
+      'git','github','gitlab','commit','push','pull','branch','merge','rebase','clone','fork',
+      'terminal','shell','bash','zsh','linux','ubuntu','debian','macos','windows',
+      'null','true','false','pattern','regex','string','number','integer','float','double',
+      'build','deploy','test','debug','log','trace','error','warning','info',
+    ]);
+    const looksEnglish = (w: string): boolean => {
+      if (!w || VI_DIACRITIC.test(w)) return false;
+      if (w.length < 2) return false;
+      const lower = w.toLowerCase();
+      // Từ Việt không dấu → không phải tiếng Anh
+      if (VI_BARE_WORDS.has(lower)) return false;
+      // Dấu hiệu rõ ràng là token kỹ thuật
+      if (/[()._\-]/.test(w)) return true;           // match(), my-network, user_name, v1.0
+      if (/\d/.test(w)) return true;                  // v2, utf8
+      if (/[a-z][A-Z]/.test(w)) return true;          // camelCase
+      if (/^[A-Z]{2,}$/.test(w)) return true;         // API, URL, SQL, HTTP
+      if (EN_WHITELIST.has(lower)) return true;
+      return false;
+    };
+    // Tự động bọc các từ tiếng Anh (ngoài backtick). Nếu token nằm cạnh ký tự có dấu tiếng Việt
+    // (tức là regex đang cắt ngang một từ Việt) thì TUYỆT ĐỐI không wrap.
+    const autoWrapEn = (seg: string) =>
+      seg.replace(/[A-Za-z][A-Za-z0-9_]*(?:\([^)]*\))?(?:[.\-][A-Za-z0-9_]+)*/g,
+        (m, offset: number, src: string) => {
+          const before = src.charAt(offset - 1);
+          const after = src.charAt(offset + m.length);
+          if (before && VI_DIACRITIC.test(before)) return m;
+          if (after && VI_DIACRITIC.test(after)) return m;
+          // 'đ/Đ' không thuộc [A-Za-z] nên không lọt vào match — không cần check thêm.
+          return looksEnglish(m) ? '`' + m + '`' : m;
+        });
+    const pushViProse = (raw: string) => {
+      // Giữ nguyên backtick có sẵn; auto-wrap phần còn lại
+      const preTokens = raw.split(/(`[^`\n]+`)/g);
+      const merged = preTokens.map(s => s.startsWith('`') && s.endsWith('`') ? s : autoWrapEn(s)).join('');
+      // Tách inline code `...` → chunk en, phần còn lại → chunk vi
+      const tokens = merged.split(/(`[^`\n]+`)/g);
+      let viBuf = '';
+      const flushVi = () => {
+        const cleaned = cleanVi(viBuf);
+        viBuf = '';
+        if (!cleaned) return;
+        const sentences = cleaned.split(/(?<=[.!?])\s+/);
+        let buf = '';
+        for (const s of sentences) {
+          if (!s.trim()) continue;
+          if (buf.length + s.length > 1500 && buf) { rawChunks.push({ lang: 'vi', text: ensureEnd(buf.trim()) }); buf = s; }
+          else { buf += (buf ? ' ' : '') + s; }
+        }
+        if (buf.trim()) rawChunks.push({ lang: 'vi', text: ensureEnd(buf.trim()) });
+      };
+      for (const tok of tokens) {
+        if (!tok) continue;
+        if (tok.startsWith('`') && tok.endsWith('`')) {
+          flushVi();
+          const en = tok.slice(1, -1).trim();
+          if (en) rawChunks.push({ lang: 'en', text: en });
+        } else {
+          viBuf += tok;
+        }
+      }
+      flushVi();
+    };
 
-    if (!processedText) { setIsReading(false); return; }
-
-    // 2. Chia text thành các đoạn lớn hơn (1500 ký tự) để giảm số lượng request
-    const chunks: string[] = [];
-    const sentences = processedText.split(/(?<=[.!?])\s+/);
-    let buf = '';
-    for (const s of sentences) {
-      if (!s.trim()) continue;
-      if (buf.length + s.length > 1500 && buf) {
-        chunks.push(buf.trim());
-        buf = s;
+    const rawChunks: TTSChunk[] = [];
+    const parts = contentWithoutQuiz.split(/(```[\w]*\n?[\s\S]*?```)/gm);
+    for (const part of parts) {
+      if (!part || !part.trim()) continue;
+      const codeMatch = part.match(/^```(\w*)\n?([\s\S]*?)```$/);
+      if (codeMatch) {
+        const lines = codeMatch[2].split('\n').map(l => l.replace(/\s+$/, '')).filter(l => l.trim());
+        if (!lines.length) continue;
+        rawChunks.push({ lang: 'vi', text: 'Mình cùng xem đoạn code nhé.' });
+        lines.forEach((line) => {
+          const comments: string[] = [];
+          // Gỡ lần lượt các loại comment, thu thập nội dung Việt
+          let codePart = line;
+          codePart = codePart.replace(/<!--([\s\S]*?)-->/g, (_, c) => { comments.push(c); return ''; }); // HTML
+          codePart = codePart.replace(/\/\*([\s\S]*?)\*\//g, (_, c) => { comments.push(c); return ''; }); // /* */
+          const lineCmt = codePart.match(/^([\s\S]*?)(?:\/\/|#)\s*(.+)$/);
+          if (lineCmt) { comments.push(lineCmt[2]); codePart = lineCmt[1]; }
+          codePart = codePart.trim();
+          // Nếu phần còn lại vẫn dính dấu tiếng Việt → coi là văn Việt (không phát bằng giọng Anh)
+          if (codePart) {
+            if (VI_DIACRITIC.test(codePart)) {
+              const cleaned = cleanVi(codePart);
+              if (cleaned) rawChunks.push({ lang: 'vi', text: ensureEnd(cleaned) });
+            } else {
+              rawChunks.push({ lang: 'en', text: codePart });
+            }
+          }
+          for (const c of comments) {
+            const clean = stripEmoji(c).trim().replace(/[.!?,;]+$/, '');
+            if (clean) rawChunks.push({ lang: 'vi', text: ensureEnd(clean) });
+          }
+        });
       } else {
-        buf += (buf ? ' ' : '') + s;
+        pushViProse(part);
       }
     }
-    if (buf.trim()) chunks.push(buf.trim());
+
+    const chunks = rawChunks;
     if (!chunks.length) { setIsReading(false); return; }
 
     // 3. Hàm fetch audio với cơ chế thử lại mạnh mẽ (Retry 5 lần)
-    const fetchAudio = async (text: string, retries = 5): Promise<string | null> => {
+    const fetchAudio = async (chunk: TTSChunk, retries = 5): Promise<string | null> => {
+      const viVoice = (ttsProvider === 'edge' || ttsProvider === 'luxtts') ? edgeVoice : 'default';
+      const voice = chunk.lang === 'en'
+        ? (ttsProvider === 'edge' ? 'en-US-AvaNeural' : 'default')
+        : viVoice;
       for (let attempt = 0; attempt <= retries; attempt++) {
         try {
           const controller = new AbortController();
@@ -470,10 +699,10 @@ ${codeInput}` }] }),
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              text,
+              text: chunk.text,
               speed: 1.0,
-              voice: (ttsProvider === 'edge' || ttsProvider === 'luxtts') ? edgeVoice : 'default',
-              lang: ttsProvider === 'luxtts' ? 'en' : 'vi',
+              voice,
+              lang: chunk.lang,
               server: ttsProvider === 'edge' ? 'edge' : ttsProvider === 'piper' ? 'piper' : undefined
             }),
             signal: controller.signal
@@ -495,38 +724,61 @@ ${codeInput}` }] }),
       return null;
     };
 
-    // 4. Playback loop
-    let nextUrl: Promise<string | null> | null = null;
-
-    for (let i = 0; i < chunks.length; i++) {
-      if (stopReadingRef.current || sessionId !== readingIdRef.current) break;
-
-      console.log(`[TTS] Đang đọc đoạn ${i + 1}/${chunks.length}`);
-      const url = (i === 0) ? await fetchAudio(chunks[0]) : await nextUrl;
-      
-      if (!url) { 
-        console.error(`[TTS] Không thể tải đoạn ${i + 1}. Dừng đọc.`); 
-        break; // Nếu thử 5 lần vẫn lỗi thì dừng để người dùng biết, không đọc thiếu.
+    // 4. Playback loop — prefetch nhiều chunk song song để giảm độ trễ giữa VI/EN
+    const CONCURRENCY = 6;
+    const urls: (Promise<string | null> | null)[] = new Array(chunks.length).fill(null);
+    let cursor = 0;
+    let inflight = 0;
+    const firePrefetch = () => {
+      while (inflight < CONCURRENCY && cursor < chunks.length) {
+        const idx = cursor++;
+        inflight++;
+        urls[idx] = fetchAudio(chunks[idx]).finally(() => {
+          inflight--;
+          if (!stopReadingRef.current && sessionId === readingIdRef.current) firePrefetch();
+        });
       }
+    };
 
-      if (i + 1 < chunks.length) {
-        nextUrl = fetchAudio(chunks[i + 1]);
+    do {
+      cursor = 0;
+      for (let k = 0; k < urls.length; k++) urls[k] = null;
+      firePrefetch();
+
+      for (let i = 0; i < chunks.length; i++) {
+        if (stopReadingRef.current || sessionId !== readingIdRef.current) break;
+
+        console.log(`[TTS] Đang đọc đoạn ${i + 1}/${chunks.length}`);
+        const url = await urls[i];
+
+        if (!url) {
+          console.warn(`[TTS] Bỏ qua đoạn ${i + 1} (không tải được).`);
+          continue;
+        }
+
+        if (stopReadingRef.current || sessionId !== readingIdRef.current) {
+          URL.revokeObjectURL(url);
+          break;
+        }
+
+        await new Promise<void>((resolve) => {
+          const audio = new Audio();
+          audio.preload = 'auto';
+          audio.src = url;
+          audioRef.current = audio;
+          const done = () => { URL.revokeObjectURL(url); resolve(); };
+          audio.onended = done;
+          audio.onerror = () => { console.error("Audio playback error"); done(); };
+          const startPlay = () => { audio.play().catch((e) => { console.error("Play failed", e); done(); }); };
+          if (audio.readyState >= 3) startPlay();
+          else audio.oncanplay = startPlay;
+        });
       }
-
-      if (stopReadingRef.current || sessionId !== readingIdRef.current) {
-        URL.revokeObjectURL(url);
-        break;
+      // Delay nhỏ trước khi lặp lại bài mới
+      if (isLoopingRef.current && !stopReadingRef.current && sessionId === readingIdRef.current) {
+        await new Promise(r => setTimeout(r, 1000));
       }
-
-      await new Promise<void>((resolve) => {
-        const audio = new Audio(url);
-        audioRef.current = audio;
-        audio.onended = () => { URL.revokeObjectURL(url); resolve(); };
-        audio.onerror = () => { console.error("Audio playback error"); resolve(); };
-        audio.play().catch((e) => { console.error("Play failed", e); resolve(); });
-      });
-      URL.revokeObjectURL(url);
-    }
+    } while (isLoopingRef.current && !stopReadingRef.current && sessionId === readingIdRef.current);
 
     if (sessionId === readingIdRef.current) setIsReading(false);
   }
@@ -542,6 +794,8 @@ ${codeInput}` }] }),
   function renderContent(text: string, baseId: string = 'code') {
     // Bỏ H1 đầu (tránh trùng với title card)
     text = text.replace(/^#\s+.+\n+/, '');
+    // Fix bài cũ: "**Bước N: ...**" (bold inline) → "### Bước N: ..." (heading riêng)
+    text = text.replace(/\*\*(Bước\s*\d+[^*\n]*)\*\*/g, '\n\n### $1\n\n');
     // Tách code blocks ra, escape HTML bên trong, rồi ghép lại
     let blockCount = 0;
     const parts = text.split(/(```[\w]*\n?[\s\S]*?```)/gm);
@@ -636,11 +890,18 @@ ${codeInput}` }] }),
 
   return (
     <div className="fade-in">
-      {error && (
-        <div style={{ background:'#1a0a0a', border:'1px solid #f85149', borderRadius:8, padding:12, marginBottom:16, color:'#f85149', fontSize:13 }}>
-          ⚠️ {error}
-        </div>
-      )}
+      {error && (() => {
+        const isSuccess = error.startsWith('✅');
+        const isPaused = error.startsWith('⏸');
+        const color = isSuccess ? '#3fb950' : isPaused ? '#d29922' : '#f85149';
+        const bg = isSuccess ? '#0a1a0d' : isPaused ? '#1a1408' : '#1a0a0a';
+        const prefix = isSuccess || isPaused ? '' : '⚠️ ';
+        return (
+          <div style={{ background:bg, border:`1px solid ${color}`, borderRadius:8, padding:12, marginBottom:16, color, fontSize:13 }}>
+            {prefix}{error}
+          </div>
+        );
+      })()}
       <div style={{ marginBottom: 20 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
           <h1 className="page-title" style={{ fontSize: 20, fontWeight: 900, margin: 0 }}>🧑‍💻 Bài Học Lập Trình AI</h1>
@@ -696,9 +957,20 @@ ${codeInput}` }] }),
           </div>
         )}
 
-        <button className="btn btn-primary" style={{ width: '100%', marginBottom: 20, height: 56, fontSize: 16, boxShadow: '0 4px 12px rgba(88,166,255,0.2)', touchAction: 'manipulation' }} onClick={genLesson} disabled={loading}>
-          {loading ? '⏳ AI đang soạn bài...' : `🤖 Tạo bài ${trackObj?.label} mới`}
-        </button>
+        <div style={{ display: 'flex', gap: 10, marginBottom: 20 }}>
+          <button className="btn btn-premium" style={{ flex: 1, minWidth: 0, minHeight: 56, padding: '8px 12px', fontSize: 15, lineHeight: 1.25, whiteSpace: 'normal', wordBreak: 'break-word' }} onClick={genLesson} disabled={loading || batchRunning}>
+            {loading ? '⏳ AI đang soạn bài...' : `🤖 Tạo bài ${trackObj?.label} mới`}
+          </button>
+          <button
+            className={`btn ${batchRunning ? 'btn-danger-soft' : 'btn-secondary'}`}
+            style={{ flex: 1, minWidth: 0, minHeight: 56, padding: '8px 12px', fontSize: 14, lineHeight: 1.25, whiteSpace: 'normal', wordBreak: 'break-word' }}
+            onClick={genBatch}
+            disabled={loading && !batchRunning}
+            title="Tạo liên tục 10 bài cho phần học hiện tại"
+          >
+            {batchRunning ? `⏸ Dừng ${batchProgress.split('—')[0].trim()}` : '🚀 Tạo 10 bài AI'}
+          </button>
+        </div>
 
         {/* Mobile-only Info Card */}
         <div className="card-sm" style={{ 
@@ -924,19 +1196,22 @@ ${codeInput}` }] }),
                       )}
                     </div>
                   </div>
-                  <div style={{ display:'flex', gap:6, width: '100%', sm: { width: 'auto' } } as any}>
-                    <button onClick={readContent} style={{ flex: 1, height: 36, borderRadius:8, background: isReading ? 'var(--orange)' : 'var(--surface2)', color: isReading ? '#000' : 'var(--text)', border:'1px solid var(--border)', fontSize:12, fontWeight:700, cursor:'pointer', display:'flex', alignItems:'center', justifyContent: 'center', gap:4 }}>
+                  <div style={{ display:'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap:10, width: '100%' }} className="lesson-actions">
+                    <button onClick={readContent} className="btn btn-secondary" style={{ height: 42, background: isReading ? 'var(--orange)' : undefined, color: isReading ? '#000' : undefined, borderColor: isReading ? 'var(--orange)' : undefined }}>
                       <span>{isReading ? '⏸' : '🔊'}</span> {isReading ? 'Dừng' : 'Đọc'}
                     </button>
-                    <button onClick={() => markComplete(current.id)} style={{ flex: 1.5, height: 36, borderRadius:8, background: current.learnCount > 0 ? '#3fb95022' : '#3fb950', color: current.learnCount > 0 ? '#3fb950' : '#000', border: current.learnCount > 0 ? '1px solid #3fb95044' : 'none', fontSize:12, fontWeight:700, cursor:'pointer', display:'flex', alignItems:'center', justifyContent: 'center', gap:4 }} disabled={current.completed}>
+                    <button onClick={() => { const next = !isLooping; setIsLooping(next); isLoopingRef.current = next; }} className="btn btn-secondary" style={{ height: 42, background: isLooping ? 'var(--accent)22' : undefined, color: isLooping ? 'var(--accent)' : undefined, borderColor: isLooping ? 'var(--accent)' : undefined }} title="Lặp lại">
+                      <span>{isLooping ? '🔂' : '🔁'}</span> Lặp
+                    </button>
+                    <button onClick={() => markComplete(current.id)} className={`btn ${current.learnCount > 0 ? 'btn-secondary' : 'btn-success-premium'}`} style={{ height: 42, color: current.learnCount > 0 ? 'var(--green)' : '#000', borderColor: current.learnCount > 0 ? 'rgba(63,185,80,0.4)' : 'transparent' }} disabled={current.completed}>
                       <span>✅</span> {current.learnCount > 0 ? 'Học lại' : 'Đã học'}
                     </button>
                     <button onClick={async () => {
                         if (!confirm('Xóa bài học này?')) return;
                         await fetch('/api/lessons', { method:'DELETE', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ id: current.id }) });
                         setCurrent(null); setQuizAnswers([]); setUserAnswers([]); await load();
-                    }} style={{ width:36, height:36, borderRadius:8, background:'var(--surface2)', color:'#f85149', border:'1px solid var(--border)', fontSize:14, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', flexShrink: 0 }} title="Xóa">
-                      🗑
+                    }} className="btn btn-danger-soft" style={{ height: 42 }} title="Xóa">
+                      <span>🗑</span> Xóa
                     </button>
                   </div>
                 </div>
@@ -982,7 +1257,7 @@ ${codeInput}` }] }),
                     );
                   })}
                   {!quizSubmitted ? (
-                    <button className="btn btn-green" style={{ width:'100%', height:44 }} onClick={submitQuiz} disabled={userAnswers.some(a=>!a)}>
+                    <button className="btn btn-success-premium" style={{ width:'100%', height:44 }} onClick={submitQuiz} disabled={userAnswers.some(a=>!a)}>
                       Nộp bài
                     </button>
                   ) : (

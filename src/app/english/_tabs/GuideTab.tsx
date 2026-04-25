@@ -6,59 +6,61 @@ export default function GuideTab() {
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
           <section>
+            <h3 style={{ color: 'var(--accent)', fontSize: 16, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span>🗂️</span> Lộ trình & Danh mục (Curriculum)
+            </h3>
+            <p style={{ fontSize: 13.5, color: 'var(--text)', lineHeight: 1.7 }}>
+              • <strong>Nhóm theo Bài:</strong> Các bài học được tổ chức thành từng <strong>Unit (Bài 1, Bài 2...)</strong>. Mỗi bài bao gồm đầy đủ 6 kỹ năng: Nghe, Nói, Đọc, Viết, Từ vựng và Ngữ pháp bám sát cùng một chủ đề.<br/>
+              • <strong>Chuẩn CEFR:</strong> Nội dung được AI biên soạn theo khung tham chiếu Châu Âu từ <strong>A1 đến C1</strong>, đảm bảo từ vựng và ngữ pháp phù hợp với trình độ của bạn.<br/>
+              • <strong>Tiến độ:</strong> Hệ thống sẽ tự động đánh dấu các kỹ năng bạn đã hoàn thành trong mỗi bài học.
+            </p>
+          </section>
+
+          <section>
             <h3 style={{ color: 'var(--green)', fontSize: 16, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span>🎧</span> Luyện Nghe (Listening)
+              <span>🚀</span> Tạo bài tự động (Auto Generation)
             </h3>
             <p style={{ fontSize: 13.5, color: 'var(--text)', lineHeight: 1.7 }}>
-              • Nhấn <strong>&quot;🤖 Tạo đoạn nghe mới&quot;</strong> để AI soạn nội dung theo trình độ (A2-B2).<br/>
-              • Bạn có thể tự nhập văn bản tiếng Anh vào ô trống để AI đọc cho bạn nghe.<br/>
-              • Sử dụng thanh trượt để điều chỉnh tốc độ đọc (0.5x cho người mới bắt đầu).
+              • <strong>Tạo Bài tiếp theo:</strong> AI sẽ tự động phân tích các bài bạn đã học và tạo tiếp một Unit mới với đầy đủ 6 kỹ năng.<br/>
+              • <strong>Tạo 10 bài:</strong> Dành cho người muốn chuẩn bị lộ trình học dài hạn, AI sẽ tạo liên tiếp 10 Unit theo giáo trình.<br/>
+              • <strong>Học ngẫu nhiên:</strong> Các bài học lẻ hoặc tự tạo theo chủ đề riêng sẽ được gom vào nhóm <strong>Học ngẫu nhiên</strong>.
             </p>
           </section>
 
-          <section>
-            <h3 style={{ color: 'var(--purple)', fontSize: 16, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span>🎤</span> Luyện Nói (Speaking)
-            </h3>
-            <p style={{ fontSize: 13.5, color: 'var(--text)', lineHeight: 1.7 }}>
-              • Nhấn giữ biểu tượng Micro để ghi âm câu trả lời của bạn.<br/>
-              • Sau khi nói xong, nhấn <strong>&quot;🤖 AI chấm điểm&quot;</strong>. AI sẽ phân tích phát âm, chỉ ra lỗi ngữ pháp và gợi ý cách diễn đạt tự nhiên hơn như người bản xứ.
-            </p>
-          </section>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '20px' }}>
+            <section>
+              <h3 style={{ color: 'var(--green)', fontSize: 15, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span>🎧</span> Nghe & 🎤 Nói
+              </h3>
+              <p style={{ fontSize: 13, color: 'var(--text)', lineHeight: 1.6 }}>
+                • <strong>Nghe:</strong> Điều chỉnh tốc độ (0.5x - 1.5x) và chọn giọng đọc đa dạng (Nam/Nữ, Anh/Mỹ).<br/>
+                • <strong>Nói:</strong> Ghi âm để AI chấm điểm phát âm và gợi ý cách diễn đạt tự nhiên hơn.
+              </p>
+            </section>
 
-          <section>
-            <h3 style={{ color: 'var(--orange)', fontSize: 16, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span>📖</span> Luyện Đọc & Tra Từ (Reading & Lookup)
-            </h3>
-            <p style={{ fontSize: 13.5, color: 'var(--text)', lineHeight: 1.7 }}>
-              • <strong>Tra từ nhanh:</strong> Trong khi đọc bài, hãy <strong>bôi đen</strong> bất kỳ từ hoặc cụm từ nào. AI sẽ ngay lập tức giải thích nghĩa, phiên âm và cách dùng ngay bên cạnh.<br/>
-              • <strong>Hỏi đáp:</strong> Bạn có thể nhắn tin hỏi AI bất kỳ điều gì về nội dung bài đọc ở khung chat phía dưới.
-            </p>
-          </section>
+            <section>
+              <h3 style={{ color: 'var(--orange)', fontSize: 15, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span>📖</span> Đọc & ✍️ Viết
+              </h3>
+              <p style={{ fontSize: 13, color: 'var(--text)', lineHeight: 1.6 }}>
+                • <strong>Đọc:</strong> Bôi đen từ mới để tra nghĩa tức thì. Trả lời câu hỏi trắc nghiệm để kiểm tra mức độ hiểu bài.<br/>
+                • <strong>Viết:</strong> Luyện viết theo chủ đề và nhận phản hồi chi tiết từ AI về lỗi chính tả, ngữ pháp.
+              </p>
+            </section>
 
-          <section>
-            <h3 style={{ color: 'var(--blue)', fontSize: 16, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span>📚</span> Từ Vựng (Vocabulary)
-            </h3>
-            <p style={{ fontSize: 13.5, color: 'var(--text)', lineHeight: 1.7 }}>
-              • Hệ thống cung cấp thẻ ghi nhớ (Flashcards) thông minh.<br/>
-              • Mỗi từ vựng đều đi kèm phiên âm, ví dụ đặt câu và nghĩa tiếng Việt.<br/>
-              • Bạn nên luyện tập hàng ngày để AI giúp ghi nhớ từ vựng vào bộ nhớ dài hạn.
-            </p>
-          </section>
-
-          <section>
-            <h3 style={{ color: 'var(--red)', fontSize: 16, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span>📐</span> Ngữ Pháp (Grammar)
-            </h3>
-            <p style={{ fontSize: 13.5, color: 'var(--text)', lineHeight: 1.7 }}>
-              • Chọn một chủ đề ngữ pháp bạn muốn học hoặc tự nhập chủ đề riêng.<br/>
-              • AI sẽ giảng giải lý thuyết một cách dễ hiểu và đưa ra <strong>bài tập trắc nghiệm</strong> ngay phía dưới để bạn thực hành và chấm điểm trực tiếp.
-            </p>
-          </section>
+            <section>
+              <h3 style={{ color: 'var(--blue)', fontSize: 15, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span>📚</span> Từ vựng & 📐 Ngữ pháp
+              </h3>
+              <p style={{ fontSize: 13, color: 'var(--text)', lineHeight: 1.6 }}>
+                • <strong>Từ vựng:</strong> Học qua Flashcards thông minh đi kèm ví dụ thực tế trong bài học.<br/>
+                • <strong>Ngữ pháp:</strong> Bài giảng cô đọng đi kèm bài tập thực hành áp dụng ngay vào ngữ cảnh thực tế.
+              </p>
+            </section>
+          </div>
 
           <div style={{ marginTop: 10, padding: '12px 16px', background: 'rgba(88,166,255,0.08)', borderRadius: 12, border: '1px dashed var(--accent)', fontSize: 13, color: 'var(--muted)', lineHeight: 1.6 }}>
-            💡 <strong>Mẹo nhỏ:</strong> Hệ thống NewHat được thiết kế để học tập chủ động. Đừng ngần ngại yêu cầu AI tạo thêm ví dụ hoặc giải thích lại những phần bạn chưa rõ nhé!
+            💡 <strong>Mẹo nhỏ:</strong> Bạn nên chọn <strong>Chế độ luyện tập (Mode)</strong> phù hợp (Coder, Business, Giao tiếp...) ở thanh công cụ phía trên để AI tạo nội dung sát với nhu cầu thực tế của mình nhất.
           </div>
         </div>
       </div>

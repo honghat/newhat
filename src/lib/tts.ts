@@ -19,6 +19,18 @@ export function unlockAudio() {
 }
 
 // Lux TTS → fallback browser TTS
+export function stopTTS() {
+  try {
+    if (sharedAudio) {
+      sharedAudio.pause();
+      sharedAudio.currentTime = 0;
+    }
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+    }
+  } catch {}
+}
+
 export async function speakText(text: string, speed = 1.0, voice = 'en_female', server = 'edge', lang = 'en'): Promise<void> {
   unlockAudio();
   // Thử API trước

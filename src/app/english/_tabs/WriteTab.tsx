@@ -2,7 +2,7 @@
 
 interface EngLesson { id: number; type: string; content: string; metadata: string; completed: boolean; learnCount: number; createdAt: string; }
 
-const READ_LEVELS = [{ id: 'A2', label: 'A2' }, { id: 'B1', label: 'B1' }, { id: 'B2', label: 'B2' }];
+const READ_LEVELS = [{ id: 'A1', label: 'A1' }, { id: 'A2', label: 'A2' }, { id: 'B1', label: 'B1' }, { id: 'B2', label: 'B2' }, { id: 'C1', label: 'C1' }];
 
 interface Props {
   writeTopicLoading: boolean;

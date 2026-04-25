@@ -68,6 +68,16 @@ function subtreeHeight(node: TreeNode): number {
 }
 
 function makeChip(label: string, depth: number, color: string) {
+  let text = label;
+  let isDone = false;
+  if (/^~~.*~~$/.test(text)) {
+    text = text.slice(2, -2);
+    isDone = true;
+  } else if (/^\[x\]\s+/i.test(text)) {
+    text = text.replace(/^\[x\]\s+/i, '');
+    isDone = true;
+  }
+
   return (
     <div style={{
       background: depth === 0
@@ -87,7 +97,9 @@ function makeChip(label: string, depth: number, color: string) {
       textOverflow: 'ellipsis',
       lineHeight: 1.35,
       userSelect: 'none',
-    }}>{label}</div>
+      textDecoration: isDone ? 'line-through' : 'none',
+      opacity: isDone ? 0.6 : 1,
+    }}>{text}</div>
   );
 }
 
@@ -245,7 +257,12 @@ const SAMPLE = `# Chủ đề chính
 
 export default function MindmapPage() {
   const [notes, setNotes] = useState<MindmapNote[]>([]);
-  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [selectedId, _setSelectedId] = useState<number | null>(null);
+  const selectedIdRef = useRef<number | null>(null);
+  const setSelectedId = useCallback((id: number | null) => {
+    selectedIdRef.current = id;
+    _setSelectedId(id);
+  }, []);
   const [title, setTitle] = useState('');
   const [topic, setTopic] = useState('');
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
@@ -254,6 +271,7 @@ export default function MindmapPage() {
   const [filterDate, setFilterDate] = useState('');
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [isDirty, setIsDirty] = useState(false);
   const [zoom, setZoom] = useState(1);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [editorOpen, setEditorOpen] = useState(true);
@@ -323,10 +341,45 @@ export default function MindmapPage() {
     }
     const next = val.slice(0, lineStart) + newLine + val.slice(endIdx);
     setMarkdown(next);
+    setIsDirty(true);
     // Restore caret position at end of prefix
     requestAnimationFrame(() => {
       ta.focus();
       const caret = lineStart + newLine.length;
+      ta.setSelectionRange(caret, caret);
+    });
+  }
+
+  function toggleStrikethroughLine() {
+    const ta = taRef.current;
+    if (!ta) return;
+    const start = ta.selectionStart;
+    const val = ta.value;
+    const lineStart = val.lastIndexOf('\n', start - 1) + 1;
+    const lineEnd = val.indexOf('\n', start);
+    const endIdx = lineEnd === -1 ? val.length : lineEnd;
+    const currentLine = val.slice(lineStart, endIdx);
+
+    const match = /^(\s*(?:[#]{1,6}\s+|[-*+]\s+)?)(.*)$/.exec(currentLine);
+    if (!match) return;
+
+    const prefix = match[1];
+    let content = match[2];
+
+    if (/^~~.*~~$/.test(content)) {
+      content = content.slice(2, -2);
+    } else {
+      content = `~~${content}~~`;
+    }
+
+    const newLine = prefix + content;
+    const next = val.slice(0, lineStart) + newLine + val.slice(endIdx);
+    setMarkdown(next);
+    setIsDirty(true);
+    
+    requestAnimationFrame(() => {
+      ta.focus();
+      const caret = lineStart + prefix.length + content.length;
       ta.setSelectionRange(caret, caret);
     });
   }
@@ -372,6 +425,7 @@ export default function MindmapPage() {
     setTopic('');
     setDate(new Date().toISOString().slice(0, 10));
     setMarkdown(SAMPLE);
+    setIsDirty(false);
   }
 
   function selectNote(n: MindmapNote) {
@@ -380,24 +434,46 @@ export default function MindmapPage() {
     setTopic(n.topic);
     setDate(n.date);
     setMarkdown(n.markdown);
+    setIsDirty(false);
   }
 
+  const isSavingRef = useRef(false);
+
   async function save() {
+    if (isSavingRef.current) return;
     setSaving(true);
-    const body = { id: selectedId, title: title || 'Không tiêu đề', topic, date, markdown };
-    const method = selectedId ? 'PUT' : 'POST';
-    const r = await fetch('/api/mindmap', {
-      method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
-    });
-    if (r.ok && !selectedId) {
-      const created = await r.json();
-      setSelectedId(created.id);
+    isSavingRef.current = true;
+    const currentId = selectedIdRef.current;
+    const body = { id: currentId, title: title || 'Không tiêu đề', topic, date, markdown };
+    const method = currentId ? 'PUT' : 'POST';
+    try {
+      const r = await fetch('/api/mindmap', {
+        method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+      });
+      if (r.ok && !currentId) {
+        const created = await r.json();
+        setSelectedId(created.id);
+      }
+      await load();
+      setSaved(true);
+      setTimeout(() => setSaved(false), 1500);
+      setIsDirty(false);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setSaving(false);
+      isSavingRef.current = false;
     }
-    await load();
-    setSaving(false);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 1500);
   }
+
+  useEffect(() => {
+    if (!isDirty) return;
+    const timer = setTimeout(() => {
+      save();
+    }, 1500);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [markdown, title, topic, date, isDirty]);
 
   async function remove(id: number) {
     await fetch(`/api/mindmap?id=${id}`, { method: 'DELETE' });
@@ -421,7 +497,7 @@ export default function MindmapPage() {
           className="mm-title-input"
           placeholder="Ghi chú không tiêu đề"
           value={title}
-          onChange={e => setTitle(e.target.value)}
+          onChange={e => { setTitle(e.target.value); setIsDirty(true); }}
         />
 
         <div className="mm-head-actions">
@@ -438,7 +514,7 @@ export default function MindmapPage() {
           <span className="mm-chip-label">#</span>
           <input
             value={topic}
-            onChange={e => setTopic(e.target.value)}
+            onChange={e => { setTopic(e.target.value); setIsDirty(true); }}
             placeholder="Chủ đề"
             list="topic-list"
             className="mm-chip-input"
@@ -447,7 +523,7 @@ export default function MindmapPage() {
         </label>
         <label className="mm-chip">
           <span className="mm-chip-label">📅</span>
-          <input type="date" value={date} onChange={e => setDate(e.target.value)} className="mm-chip-input mm-chip-date" />
+          <input type="date" value={date} onChange={e => { setDate(e.target.value); setIsDirty(true); }} className="mm-chip-input mm-chip-date" />
         </label>
         <button onClick={() => setEditorOpen(v => !v)} className="mm-chip mm-chip-toggle">
           <span className="mm-chip-label">{editorOpen ? '▼' : '▶'}</span>
@@ -515,11 +591,13 @@ export default function MindmapPage() {
               <span className="mm-md-sep" />
               <button onClick={() => insertAtLine('- ')} title="Mục">•&nbsp;Mục</button>
               <button onClick={() => insertAtLine('indent')} title="Lùi vào (sub)">→</button>
+              <span className="mm-md-sep" />
+              <button onClick={toggleStrikethroughLine} title="Hoàn thành (Gạch ngang)" style={{ textDecoration: 'line-through' }}>S</button>
             </div>
             <textarea
               ref={taRef}
               value={markdown}
-              onChange={e => setMarkdown(e.target.value)}
+              onChange={e => { setMarkdown(e.target.value); setIsDirty(true); }}
               className="mm-textarea"
               placeholder={'# Chủ đề chính\n## Nhánh 1\n- Mục A\n  - Chi tiết\n## Nhánh 2\n- Mục B'}
             />
