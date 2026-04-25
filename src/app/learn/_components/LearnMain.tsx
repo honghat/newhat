@@ -102,6 +102,7 @@ export default function LearnMain() {
   const [activeCodeMode, setActiveCodeMode] = useState<'explain'|'generate'>('explain');
   const [codeSessions, setCodeSessions] = useState<any[]>([]);
   const contentRef = useRef<HTMLDivElement>(null);
+  const prevTrackRef = useRef<string>('');
   const [aiModel, setAiModel] = useState('default');
   const [batchRunning, setBatchRunning] = useState(false);
   const [batchProgress, setBatchProgress] = useState('');
@@ -164,9 +165,14 @@ export default function LearnMain() {
   useEffect(() => { load(); }, [load]);
   useEffect(() => { if (mode === 'code') { loadCodeSessions(); } }, [mode]);
 
-  // Tự động load bài CHƯA HỌC kế tiếp khi đổi track (fallback: bài mới nhất)
+  // Tự động load bài CHƯA HỌC kế tiếp khi đổi track hoặc lần đầu load
   useEffect(() => {
     if (!lessons.length || mode !== 'lesson') return;
+    const trackChanged = prevTrackRef.current !== track;
+    prevTrackRef.current = track;
+    // Chỉ auto-chọn khi: đổi track, hoặc chưa có bài nào đang mở
+    if (!trackChanged && current !== null) return;
+
     const trackLs = lessons.filter(l => l.track === track);
     const lessonNum = (l: Lesson) => {
       const m = l.topic.match(/B[àa]i\s*(\d+)/i);
@@ -183,7 +189,6 @@ export default function LearnMain() {
 
     if (target) {
       setCurrent(target);
-      // Reset & load quiz
       setQuizMode(false); setQuizSubmitted(false);
       const answers: string[] = [];
       const ms = target.content.matchAll(/ĐÁPÁN:([ABC])/g);

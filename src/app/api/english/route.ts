@@ -47,9 +47,17 @@ export async function PATCH(req: Request) {
     if (completed !== undefined) data.completed = completed;
     if (content !== undefined) data.content = content;
     if (metadata !== undefined) {
-      data.metadata = JSON.stringify(metadata);
-      if (metadata.title) data.title = metadata.title;
-      if (metadata.order !== undefined) data.order = metadata.order;
+      // Merge với metadata cũ để tránh mất field (vd: unit, unitTitle)
+      const existing = await prisma.englishLesson.findUnique({
+        where: { id, userId: user.id },
+        select: { metadata: true },
+      });
+      let prevMeta: any = {};
+      try { prevMeta = JSON.parse(existing?.metadata || '{}'); } catch {}
+      const merged = { ...prevMeta, ...metadata };
+      data.metadata = JSON.stringify(merged);
+      if (merged.title) data.title = merged.title;
+      if (merged.order !== undefined) data.order = merged.order;
     }
     if (incrementLearnCount) data.learnCount = { increment: 1 };
 

@@ -954,6 +954,7 @@ export default function EnglishContent() {
       });
     }
 
+    skipAutoLoadRef.current = true;
     loadHistory();
   }, [history, loadHistory]);
 
@@ -1565,17 +1566,19 @@ Reply with the question ONLY, no explanation.`;
     const fb = await askAI(p);
     if (fb) {
       setSpkFeedback(fb);
+      skipAutoLoadRef.current = true;
       if (spkRecordId) {
         await fetch('/api/english', {
           method: 'PATCH', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ id: spkRecordId, content: transcript, metadata: { topic: spkTopic, feedback: fb, sample: spkSample, mode, level: spkLevel } }),
         });
+        loadHistory();
       } else {
         const d2 = await saveToDb('speak', transcript, { topic: spkTopic, feedback: fb, sample: spkSample, level: spkLevel }, mode);
-        if (d2?.id) setSpkRecordId(d2.id);
+        if (d2?.id) { setSpkRecordId(d2.id); loadHistory(); }
       }
     }
-    setSpkLoading(false); loadHistory();
+    setSpkLoading(false);
   }
 
   // WRITE
@@ -1660,17 +1663,19 @@ Reply in Markdown (concise):
     const fb = await askAI(p);
     if (fb) {
       setWriteFeedback(fb);
+      skipAutoLoadRef.current = true;
       if (writeRecordId) {
         await fetch('/api/english', {
           method: 'PATCH', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ id: writeRecordId, content: writeText, metadata: { prompt: writePrompt, feedback: fb, sample: writeSample, words: writeText.split(/\s+/).filter(Boolean).length, mode, level: writeLevel } }),
         });
+        loadHistory();
       } else {
         const d2 = await saveToDb('writing', writeText, { prompt: writePrompt, feedback: fb, sample: writeSample, words: writeText.split(/\s+/).filter(Boolean).length, level: writeLevel }, mode);
-        if (d2?.id) setWriteRecordId(d2.id);
+        if (d2?.id) { setWriteRecordId(d2.id); loadHistory(); }
       }
     }
-    setWriteLoading(false); loadHistory();
+    setWriteLoading(false);
   }
 
   // VOCAB
@@ -2188,6 +2193,7 @@ Return JSON ONLY (no markdown code blocks, just raw json):
               grammarLoading={grammarLoading}
               grammarLesson={grammarLesson}
               grammarRecordId={grammarRecordId}
+              history={history}
               grammarQuizAnswers={grammarQuizAnswers}
               grammarUserAnswers={grammarUserAnswers} setGrammarUserAnswers={setGrammarUserAnswers}
               grammarSubmitted={grammarSubmitted} setGrammarSubmitted={setGrammarSubmitted}

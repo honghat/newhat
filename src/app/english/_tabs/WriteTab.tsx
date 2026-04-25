@@ -49,14 +49,14 @@ export default function WriteTab({
   parseMarkdown, history,
 }: Props) {
   return (
-    <div className="desktop-2col">
-      <div>
-        <div className="card" style={{ marginBottom: 12, borderLeft: '4px solid var(--orange)', position: 'relative' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
-            <div style={{ flex: 1 }}>
+    <div className="desktop-2col" style={{ width: '100%', maxWidth: '100%' }}>
+      <div style={{ minWidth: 0, maxWidth: '100%', overflow: 'hidden' }}>
+        <div className="card" style={{ marginBottom: 12, borderLeft: '4px solid var(--orange)', position: 'relative', maxWidth: '100%', overflowWrap: 'break-word' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12, gap: 8, flexWrap: 'wrap' }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
               <div className="section-title" style={{ marginBottom: 4 }}>Đề tài viết</div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                <div style={{ fontSize: 14, color: 'var(--orange)', fontWeight: 700, lineHeight: 1.4 }}>
+                <div style={{ fontSize: 14, color: 'var(--orange)', fontWeight: 700, lineHeight: 1.4, wordBreak: 'break-word', overflowWrap: 'break-word' }}>
                   {writeTopicLoading ? getGenMessage(genElapsed, 'soạn bài') : writePrompt}
                   {writeTopicLoading && <button onClick={() => stopTask('writing')} style={{ color: 'var(--red)', background: 'none', border: 'none', fontSize: 10, cursor: 'pointer', fontWeight: 800, marginLeft: 6 }}>[Dừng]</button>}
                 </div>
@@ -136,7 +136,7 @@ export default function WriteTab({
           <div className="card" style={{ marginBottom: 12, borderLeft: '4px solid var(--green)', background: 'var(--surface2)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, gap: 12, flexWrap: 'nowrap' }}>
               <div className="section-title" style={{ color: 'var(--green)', margin: 0, whiteSpace: 'nowrap', flexShrink: 0 }}>💡 Bài viết mẫu AI</div>
-              <div style={{ display: 'flex', gap: 10, flexShrink: 1, flexWrap: 'nowrap' }}>
+              <div style={{ display: 'flex', gap: 10, flexShrink: 1, flexWrap: 'wrap' }}>
                 <button
                   onClick={(e) => {
                     const btn = e.currentTarget;
@@ -207,11 +207,11 @@ export default function WriteTab({
         </div>
       </div>
 
-      <div>
+      <div style={{ minWidth: 0, maxWidth: '100%', overflow: 'hidden' }}>
         {writeFeedback && (
-          <div className="card" style={{ borderLeft: '4px solid var(--accent)', background: 'var(--surface2)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, marginBottom: 16 }}>
-              <div style={{ flex: 1 }}>
+          <div className="card" style={{ borderLeft: '4px solid var(--accent)', background: 'var(--surface2)', maxWidth: '100%', overflowWrap: 'break-word' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, marginBottom: 16, flexWrap: 'wrap' }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
                 <div className="section-title" style={{ color: 'var(--accent)', display: 'flex', alignItems: 'center', gap: 8, margin: 0, fontSize: 16, fontWeight: 800 }}>
                   <span>🔍</span> Chi tiết sửa bài
                 </div>

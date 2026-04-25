@@ -1,6 +1,8 @@
 'use client';
 import type { Dispatch, SetStateAction } from 'react';
 
+interface EngLesson { id: number; type: string; learnCount: number; }
+
 const GRAMMAR_TOPICS_DEFAULT = [
   'Thì hiện tại đơn', 'Thì hiện tại tiếp diễn', 'Thì hiện tại hoàn thành',
   'Thì quá khứ đơn', 'Thì tương lai đơn',
@@ -15,6 +17,7 @@ interface Props {
   grammarLoading: boolean;
   grammarLesson: string | null;
   grammarRecordId: number | null;
+  history: EngLesson[];
   grammarQuizAnswers: string[];
   grammarUserAnswers: string[]; setGrammarUserAnswers: Dispatch<SetStateAction<string[]>>;
   grammarSubmitted: boolean; setGrammarSubmitted: (v: boolean) => void;
@@ -27,7 +30,7 @@ export default function GrammarTab({
   grammarTopics = GRAMMAR_TOPICS_DEFAULT,
   grammarTopic, setGrammarTopic,
   grammarCustomTopic, setGrammarCustomTopic,
-  grammarLoading, grammarLesson, grammarRecordId,
+  grammarLoading, grammarLesson, grammarRecordId, history,
   grammarQuizAnswers, grammarUserAnswers, setGrammarUserAnswers,
   grammarSubmitted, setGrammarSubmitted,
   genGrammarLesson, markLessonLearned, parseMarkdown,
@@ -120,6 +123,15 @@ export default function GrammarTab({
               <div>
                 <div style={{ fontSize: '11px', color: 'var(--accent)', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '4px' }}>Bài giảng chi tiết</div>
                 <div style={{ fontSize: '18px', fontWeight: 900, color: 'var(--text-main)' }}>{grammarTopic}</div>
+                {(() => {
+                  const item = history.find(h => h.id === grammarRecordId);
+                  if (item && item.learnCount > 0) return (
+                    <div style={{ marginTop: 6, display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 8px', borderRadius: 8, background: '#3fb95022', color: '#3fb950', fontSize: 10, fontWeight: 700, border: '1px solid #3fb95044' }}>
+                      ✓ Đã học {item.learnCount} lần
+                    </div>
+                  );
+                  return null;
+                })()}
               </div>
               {grammarRecordId && (
                 <button 

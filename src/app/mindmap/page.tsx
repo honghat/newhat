@@ -839,6 +839,18 @@ export default function MindmapPage() {
           .mm-canvas { padding: 20px 14px; }
           .mm-head-save { padding: 0 14px; font-size: 12px; }
         }
+
+        /* ── IPAD LANDSCAPE (phone-like view) ── */
+        @media (min-width: 900px) and (max-width: 1100px) and (max-height: 800px) {
+          .mm-main-grid {
+            grid-template-columns: ${editorOpen ? '320px 1fr' : '1fr'};
+          }
+          .mm-canvas-wrap {
+            max-width: 430px;
+            margin: 0 auto;
+            height: 100%;
+          }
+        }
       `}</style>
     </div>
   );

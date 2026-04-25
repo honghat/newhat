@@ -10,6 +10,7 @@ interface EngLesson {
   learnCount: number;
   createdAt: string;
   nextReviewAt?: string | null;
+  title?: string;
 }
 
 interface Props {
@@ -78,9 +79,15 @@ export default function CurriculumTab({ history, loadLesson, deleteUnit, history
 
     for (const item of history) {
       const m = parseMeta(item.metadata);
-      const unitNum = m.unit ? Number(m.unit) : 0;
+      // Fallback: extract unit từ title nếu metadata mất unit (do bug PATCH cũ)
+      let unitNum = m.unit ? Number(m.unit) : 0;
+      if (!unitNum) {
+        const titleStr = m.title || item.title || '';
+        const tm = titleStr.match(/B[àa]i\s*(\d+)/i);
+        if (tm) unitNum = Number(tm[1]);
+      }
       const level = m.level || '?';
-      const itemMode = m.mode || 'other';
+      const itemMode = m.mode || 'coder';
 
       if (unitNum === 0) {
         // Vocab đơn lẻ (tra từ) không cần hiện ở danh mục

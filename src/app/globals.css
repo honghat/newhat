@@ -77,6 +77,8 @@ body {
   }
   .main-content {
     margin-left: var(--sidebar-w);
+    width: calc(100% - var(--sidebar-w));
+    min-width: 0;
     padding-bottom: 0;
   }
   .bottom-nav { display: none !important; }
@@ -95,6 +97,7 @@ body {
     gap: 20px;
     align-items: start;
   }
+  .desktop-2col > * { min-width: 0; }
   .desktop-3col {
     display: grid;
     grid-template-columns: 1fr 1fr 1fr;
@@ -231,6 +234,8 @@ body {
 /* ─── Input ─── */
 .input {
   width: 100%;
+  min-width: 0;
+  max-width: 100%;
   background: var(--surface2);
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -240,6 +245,8 @@ body {
   outline: none;
   transition: border-color 0.15s;
 }
+.card { max-width: 100%; overflow-wrap: break-word; word-break: break-word; }
+.card pre, .card code { max-width: 100%; overflow-x: auto; white-space: pre-wrap; word-break: break-word; }
 .input:focus { border-color: var(--accent); }
 textarea.input { resize: vertical; font-family: inherit; line-height: 1.6; }
 
